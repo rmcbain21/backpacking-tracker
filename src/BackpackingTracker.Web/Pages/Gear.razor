@@ -1,0 +1,86 @@
+@page "/"
+@inject AppCore App
+@inject ISnackbar Snackbar
+
+<PageTitle>Gear</PageTitle>
+
+<MudText Typo="Typo.h5" HtmlTag="h1" GutterBottom="true">Gear</MudText>
+
+<MudPaper Class="pa-4 mb-4">
+    <MudForm @ref="_form">
+        <MudTextField @bind-Value="_name" Label="Name" Required="true" RequiredError="Give the gear item a name" />
+        <MudTextField @bind-Value="_brandModel" Label="Brand / model" />
+        <MudNumericField @bind-Value="_weightGrams" Label="Weight" Adornment="Adornment.End" AdornmentText="g"
+                         Min="0m" HideSpinButtons="true" InputMode="@(InputMode.@decimal)"
+                         Required="true" RequiredError="Enter the weight in grams" />
+        <MudButton OnClick="AddAsync" Variant="Variant.Filled" Color="Color.Primary" Class="mt-4"
+                   StartIcon="@Icons.Material.Filled.Add" Disabled="_saving">Add</MudButton>
+    </MudForm>
+</MudPaper>
+
+@if (_items is null)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else if (_items.Count == 0)
+{
+    <MudText Class="mud-text-secondary">No gear yet. Add your first Gear Item above.</MudText>
+}
+else
+{
+    <MudPaper>
+        @foreach (var item in _items)
+        {
+            <div class="d-flex align-center pa-3 gap-3">
+                <div class="flex-grow-1">
+                    <MudText>@item.Name</MudText>
+                    @if (!string.IsNullOrEmpty(item.BrandModel))
+                    {
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">@item.BrandModel</MudText>
+                    }
+                </div>
+                <MudText Class="text-nowrap">@item.WeightGrams.ToString("0.#") g</MudText>
+            </div>
+            <MudDivider />
+        }
+    </MudPaper>
+}
+
+@code {
+    private MudForm _form = default!;
+    private string _name = "";
+    private string _brandModel = "";
+    private decimal? _weightGrams;
+    private bool _saving;
+    private IReadOnlyList<GearItem>? _items;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _items = await App.Gear.ListGearItemsAsync();
+    }
+
+    private async Task AddAsync()
+    {
+        await _form.ValidateAsync();
+        if (!_form.IsValid || _weightGrams is null)
+        {
+            return;
+        }
+
+        _saving = true;
+        try
+        {
+            await App.Gear.AddGearItemAsync(_name, _brandModel, _weightGrams.Value);
+            await _form.ResetAsync();
+            _items = await App.Gear.ListGearItemsAsync();
+        }
+        catch (ArgumentException)
+        {
+            Snackbar.Add("Couldn't add that gear item. Check it has a name and a weight of 0 g or more.", Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/BackpackingTracker.Core/BackpackingTracker.Core.csproj" />
+    <Project Path="src/BackpackingTracker.Web/BackpackingTracker.Web.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/BackpackingTracker.Core.Tests/BackpackingTracker.Core.Tests.csproj" />
+  </Folder>
+</Solution>

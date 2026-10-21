@@ -13,3 +13,7 @@ Note: the repository `rmcbain21/backpacking-tracker` already exists and is the `
 - [ ] The published base path matches the Pages URL, and deep links and reloads work (no 404 on refresh of a sub-page).
 - [ ] The Pages site installs as a PWA on Android Chrome and works offline after the first visit.
 - [ ] The Pages URL is recorded in the repo docs (it is needed later for the Google OAuth client).
+
+## Comments
+
+- From ticket 01: the base path is hard-coded as `/` in two places that both need the Pages subpath: `<base href="/" />` in `src/BackpackingTracker.Web/wwwroot/index.html` and `const base = "/";` in `src/BackpackingTracker.Web/wwwroot/service-worker.published.js`.

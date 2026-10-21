@@ -12,3 +12,7 @@
 - [ ] Hard delete is allowed only when nothing references the Gear Item; otherwise the core refuses and the UI offers Retire. The reference check is built so later tickets (List Entries, Packing Lists) can add their references to it.
 - [ ] Deleting sets the tombstone flag rather than removing the record from storage.
 - [ ] Core tests cover editing, Retire, un-retire, and the delete guard.
+
+## Comments
+
+- From ticket 01: `GearCatalogue.ListGearItemsAsync` doesn't filter out tombstoned (`Deleted`) records yet, because nothing could delete in ticket 01. Hard delete should set the tombstone and listing should skip it, with a test.
