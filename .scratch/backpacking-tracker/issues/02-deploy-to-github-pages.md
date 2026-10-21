@@ -6,9 +6,9 @@
 
 **Status:** ready-for-agent
 
-Note: creating the GitHub repository is outward-facing. Confirm the repository name and visibility with the user before creating it and adding the remote.
+Note: the repository `rmcbain21/backpacking-tracker` already exists and is the `origin` remote. Check its visibility before enabling Pages (Pages on a private repo needs a paid plan).
 
-- [ ] A GitHub repository exists and is the `origin` remote; main is pushed.
+- [x] A GitHub repository exists and is the `origin` remote; main is pushed.
 - [ ] A GitHub Actions workflow builds and publishes the Blazor app to GitHub Pages on push to main.
 - [ ] The published base path matches the Pages URL, and deep links and reloads work (no 404 on refresh of a sub-page).
 - [ ] The Pages site installs as a PWA on Android Chrome and works offline after the first visit.
