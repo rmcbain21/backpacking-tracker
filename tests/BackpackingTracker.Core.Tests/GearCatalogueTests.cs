@@ -1,3 +1,4 @@
+using BackpackingTracker.Core.Gear;
 using BackpackingTracker.Core.Tests.Fakes;
 
 namespace BackpackingTracker.Core.Tests;
@@ -9,12 +10,18 @@ public class GearCatalogueTests
 
     private AppCore CreateApp() => new(_store, _clock);
 
+    private static async Task<GearItem> AddGearItemAsync(AppCore app, string name, string? brandModel, decimal weightGrams)
+    {
+        var shelter = (await app.Gear.ListCategoriesAsync()).First(category => category.Name == "Shelter");
+        return await app.Gear.AddGearItemAsync(new GearItemDetails(name, brandModel, weightGrams, shelter.Id));
+    }
+
     [Fact]
     public async Task An_added_gear_item_appears_when_gear_items_are_listed()
     {
         var app = CreateApp();
 
-        await app.Gear.AddGearItemAsync("Tent", "Durston X-Mid 1", 765m);
+        await AddGearItemAsync(app, "Tent", "Durston X-Mid 1", 765m);
 
         var item = Assert.Single(await app.Gear.ListGearItemsAsync());
         Assert.Equal("Tent", item.Name);
@@ -27,7 +34,7 @@ public class GearCatalogueTests
     {
         var app = CreateApp();
 
-        await app.Gear.AddGearItemAsync("Tent", "Durston X-Mid 1", 765m);
+        await AddGearItemAsync(app, "Tent", "Durston X-Mid 1", 765m);
 
         var item = Assert.Single(await app.Gear.ListGearItemsAsync());
         Assert.True(Guid.TryParse(item.Id, out _));
@@ -40,8 +47,8 @@ public class GearCatalogueTests
     {
         var app = CreateApp();
 
-        var tent = await app.Gear.AddGearItemAsync("Tent", "Durston X-Mid 1", 765m);
-        var quilt = await app.Gear.AddGearItemAsync("Quilt", "EE Revelation 20", 590m);
+        var tent = await AddGearItemAsync(app, "Tent", "Durston X-Mid 1", 765m);
+        var quilt = await AddGearItemAsync(app, "Quilt", "EE Revelation 20", 590m);
 
         Assert.NotEqual(tent.Id, quilt.Id);
     }
@@ -55,7 +62,7 @@ public class GearCatalogueTests
     {
         var app = CreateApp();
 
-        await app.Gear.AddGearItemAsync("Spork", "Toaks Titanium", entered);
+        await AddGearItemAsync(app, "Spork", "Toaks Titanium", entered);
 
         var item = Assert.Single(await app.Gear.ListGearItemsAsync());
         Assert.Equal(stored, item.WeightGrams);
@@ -65,7 +72,7 @@ public class GearCatalogueTests
     public async Task Gear_items_are_still_there_after_the_app_is_reopened()
     {
         var firstSession = CreateApp();
-        await firstSession.Gear.AddGearItemAsync("Tent", "Durston X-Mid 1", 765m);
+        await AddGearItemAsync(firstSession, "Tent", "Durston X-Mid 1", 765m);
 
         var secondSession = CreateApp();
 
@@ -79,9 +86,9 @@ public class GearCatalogueTests
     public async Task Gear_items_are_listed_by_name_ignoring_case()
     {
         var app = CreateApp();
-        await app.Gear.AddGearItemAsync("tent", "Durston X-Mid 1", 765m);
-        await app.Gear.AddGearItemAsync("Quilt", "EE Revelation 20", 590m);
-        await app.Gear.AddGearItemAsync("Backpack", "Gossamer Gear Mariposa", 870m);
+        await AddGearItemAsync(app, "tent", "Durston X-Mid 1", 765m);
+        await AddGearItemAsync(app, "Quilt", "EE Revelation 20", 590m);
+        await AddGearItemAsync(app, "Backpack", "Gossamer Gear Mariposa", 870m);
 
         var names = (await app.Gear.ListGearItemsAsync()).Select(item => item.Name);
 
@@ -95,8 +102,8 @@ public class GearCatalogueTests
     {
         var app = CreateApp();
 
-        await Assert.ThrowsAsync<ArgumentException>(
-            () => app.Gear.AddGearItemAsync(name, "Durston X-Mid 1", 765m));
+        await Assert.ThrowsAsync<RuleViolationException>(
+            () => AddGearItemAsync(app, name, "Durston X-Mid 1", 765m));
 
         Assert.Empty(await app.Gear.ListGearItemsAsync());
     }
@@ -106,8 +113,8 @@ public class GearCatalogueTests
     {
         var app = CreateApp();
 
-        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
-            () => app.Gear.AddGearItemAsync("Tent", "Durston X-Mid 1", -1m));
+        await Assert.ThrowsAsync<RuleViolationException>(
+            () => AddGearItemAsync(app, "Tent", "Durston X-Mid 1", -1m));
 
         Assert.Empty(await app.Gear.ListGearItemsAsync());
     }
@@ -119,10 +126,53 @@ public class GearCatalogueTests
     {
         var app = CreateApp();
 
-        await app.Gear.AddGearItemAsync("Bandana", brandModel, 28m);
+        await AddGearItemAsync(app, "Bandana", brandModel, 28m);
 
         var item = Assert.Single(await app.Gear.ListGearItemsAsync());
         Assert.Equal("", item.BrandModel);
+    }
+
+    [Fact]
+    public async Task A_gear_item_belongs_to_the_category_chosen_for_it()
+    {
+        var app = CreateApp();
+        var cook = (await app.Gear.ListCategoriesAsync()).Single(category => category.Name == "Cook");
+
+        await app.Gear.AddGearItemAsync(new GearItemDetails("Stove", "BRS-3000T", 25m, cook.Id));
+
+        Assert.Equal(cook.Id, Assert.Single(await app.Gear.ListGearItemsAsync()).CategoryId);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("not-a-category")]
+    public async Task A_gear_item_needs_a_category_that_exists(string categoryId)
+    {
+        var app = CreateApp();
+
+        var refused = await Assert.ThrowsAsync<RuleViolationException>(
+            () => app.Gear.AddGearItemAsync(new GearItemDetails("Stove", "BRS-3000T", 25m, categoryId)));
+
+        Assert.Equal("Choose a Category.", refused.Message);
+        Assert.Empty(await app.Gear.ListGearItemsAsync());
+    }
+
+    [Fact]
+    public async Task Gear_items_saved_before_categories_existed_are_in_misc()
+    {
+        // Tickets 01-03 saved Gear Items with no Category, and the API can no longer create one,
+        // so this test writes such a record to the store directly.
+        await _store.SaveAsync("gearItems", new GearItem
+        {
+            Id = Guid.NewGuid().ToString(),
+            UpdatedAt = _clock.UtcNow,
+            Name = "Tent",
+            WeightGrams = 765m,
+        });
+        var app = CreateApp();
+        var misc = (await app.Gear.ListCategoriesAsync()).Single(category => category.Name == "Misc");
+
+        Assert.Equal(misc.Id, Assert.Single(await app.Gear.ListGearItemsAsync()).CategoryId);
     }
 
     [Fact]
@@ -130,7 +180,7 @@ public class GearCatalogueTests
     {
         var app = CreateApp();
 
-        await app.Gear.AddGearItemAsync("  Tent ", " Durston X-Mid 1  ", 765m);
+        await AddGearItemAsync(app, "  Tent ", " Durston X-Mid 1  ", 765m);
 
         var item = Assert.Single(await app.Gear.ListGearItemsAsync());
         Assert.Equal("Tent", item.Name);

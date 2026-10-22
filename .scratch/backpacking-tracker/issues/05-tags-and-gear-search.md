@@ -12,3 +12,7 @@
 - [ ] Search combines with the Category filter once both exist.
 - [ ] Tags never affect any weight figure.
 - [ ] Core tests cover tagging, de-duplication and search matching.
+
+## Comments
+
+- From ticket 04: the Gear page groups Gear Items by Category but has no Category *filter* yet. This ticket owns adding it (story 10, "filter by Category"), alongside search.

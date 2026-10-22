@@ -16,3 +16,4 @@
 ## Comments
 
 - From ticket 01: `GearCatalogue.ListGearItemsAsync` doesn't filter out tombstoned (`Deleted`) records yet, because nothing could delete in ticket 01. Hard delete should set the tombstone and listing should skip it, with a test.
+- From ticket 04: editing a Gear Item must require a Category, as adding does (ticket 04's "Adding or editing a Gear Item requires choosing a Category"). `GearItemDetails` is the shape to reuse for editing.

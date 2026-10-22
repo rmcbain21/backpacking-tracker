@@ -153,7 +153,7 @@ Architecture follows ADR 0001 (offline-first Blazor WebAssembly PWA, no server, 
 - Every stored record has: a string `id` (GUID generated on the device), `updatedAt` (UTC timestamp from the Clock), and `deleted` (tombstone flag; deleted records are kept so deletions sync). These exist from slice 1 even though sync arrives in slice 5, so no data migration is needed.
 - Record types are top-level: Category, Gear Item, Gear List, Food Item, Meal, Trip, Settings. Child data is nested inside its parent and syncs as part of it: List Entries inside a Gear List; Packing List entries and Trip Days (with their meal slots and journal notes) inside a Trip; Meal components inside a Meal.
 - All weights are stored in grams with 0.1 g precision; all distances and elevations in metres (ADR 0002).
-- **Category**: name, sort order.
+- **Category**: name, sort order. The default Categories have fixed ids and an `updatedAt` of the Unix epoch, meaning "never edited", so every device creates identical defaults and sync can tell an untouched default from an edited one. Removed Categories are kept as tombstones, and the last Category cannot be removed.
 - **Gear Item**: name, brand/model, weight, Category, Tags, optional price, optional notes, Retired flag.
 - **Gear List**: name, List Entries.
 - **List Entry**: Gear Item reference, quantity (whole number, at least 1), Carry Mode (base, worn or consumable; defaults to base). On a Packing List it also has a packed flag, and when the Trip is Completed, a frozen weight.
@@ -211,7 +211,7 @@ Architecture follows ADR 0001 (offline-first Blazor WebAssembly PWA, no server, 
 
 ## Testing Decisions
 
-- **One test surface: the app core's public API.** Tests are xUnit tests that call the core the way the UI does and assert on what comes back, such as totals, lists, statuses, import summaries and Sync Conflicts. They never assert on private methods, internal data structures or how records are laid out in storage.
+- **One test surface: the app core's public API.** Tests are xUnit tests that call the core the way the UI does and assert on what comes back, such as totals, lists, statuses, import summaries and Sync Conflicts. They never assert on private methods, internal data structures or how records are laid out in storage. The one exception: a test of data that the API can no longer create (records saved by an older version, or brought in by sync from another device) may write that record to the in-memory store directly, with a comment saying why.
 - **Ports are replaced by in-memory implementations**: an in-memory record store, an in-memory cloud file store and a controllable clock. These fakes live with the tests and are kept simple and trustworthy.
 - **Sync is tested as two devices**: two core instances with separate in-memory record stores share one in-memory cloud file store. Tests edit on both, sync both, and check the outcome: silent merges, tombstones that propagate, identical edits that don't conflict, real Sync Conflicts and settling them, and retrying after a failed write.
 - **What gets tested in the core**: weight calculations (including Carry Mode, quantities, food, water and the Category breakdown); Retire and hard-delete rules; Trip creation copying a Gear List; Trip Status freezing and Reopen; date-change preview and application; stats; Save as Gear List; Meal Plan copying; unit conversion, formatting and input parsing; CSV import (matching, flags, rejected rows, defaults, optional Gear List); and JSON export → import round-trips.

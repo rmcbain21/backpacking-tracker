@@ -14,3 +14,7 @@
 - [ ] The import summary lists created, reused, flagged and rejected rows.
 - [ ] The UI lets me pick a CSV file on my phone or desktop and shows the summary.
 - [ ] Core tests cover matching, flags, defaults, rejected rows and Category creation.
+
+## Comments
+
+- From ticket 04: Category names are unique ignoring case on one device, but sync can still bring in two Categories with the same name (each device added "Big Three" before syncing). Matching a CSV row's Category by name should pick the first in Category order rather than fail.

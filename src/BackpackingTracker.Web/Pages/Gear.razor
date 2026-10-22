@@ -20,37 +20,53 @@
                 }
             </MudSelect>
         </div>
+        <MudSelect T="string" @bind-Value="_categoryId" Label="Category" Required="true" Class="category-select"
+                   RequiredError="Choose a Category">
+            @foreach (var category in _categories)
+            {
+                <MudSelectItem Value="category.Id">@category.Name</MudSelectItem>
+            }
+        </MudSelect>
         <MudButton OnClick="AddAsync" Variant="Variant.Filled" Color="Color.Primary" Class="mt-4"
                    StartIcon="@Icons.Material.Filled.Add" Disabled="_saving">Add</MudButton>
     </MudForm>
 </MudPaper>
 
-@if (_items is null)
+<div class="d-flex justify-end mb-1">
+    <MudButton Href="categories" Variant="Variant.Text" Size="Size.Small"
+               StartIcon="@Icons.Material.Filled.Category">Edit Categories</MudButton>
+</div>
+
+@if (_sections is null)
 {
     <MudProgressLinear Indeterminate="true" />
 }
-else if (_items.Count == 0)
+else if (_sections.Count == 0)
 {
     <MudText Class="mud-text-secondary">No gear yet. Add your first Gear Item above.</MudText>
 }
 else
 {
-    <MudPaper>
-        @foreach (var item in _items)
-        {
-            <div class="d-flex align-center pa-3 gap-3">
-                <div class="flex-grow-1">
-                    <MudText>@item.Name</MudText>
-                    @if (!string.IsNullOrEmpty(item.BrandModel))
-                    {
-                        <MudText Typo="Typo.body2" Class="mud-text-secondary">@item.BrandModel</MudText>
-                    }
+    @foreach (var categorySection in _sections)
+    {
+        <MudText Typo="Typo.subtitle2" HtmlTag="h2" Class="mt-4 mb-1 px-1">@categorySection.Category.Name</MudText>
+        <MudPaper>
+            @foreach (var item in categorySection.GearItems)
+            {
+                <div class="d-flex align-center pa-3 gap-3">
+                    <div class="flex-grow-1">
+                        <MudText>@item.Name</MudText>
+                        @if (!string.IsNullOrEmpty(item.BrandModel))
+                        {
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary">@item.BrandModel</MudText>
+                        }
+                    </div>
+                    <MudText Class="text-nowrap">@UnitFormat.Weight(item.WeightGrams, _unitSystem)</MudText>
                 </div>
-                <MudText Class="text-nowrap">@UnitFormat.Weight(item.WeightGrams, _unitSystem)</MudText>
-            </div>
-            <MudDivider />
-        }
-    </MudPaper>
+                <MudDivider />
+            }
+        </MudPaper>
+    }
 }
 
 @code {
@@ -59,16 +75,19 @@ else
     private string? _name;
     private string? _brandModel;
     private string? _weightText;
+    private string? _categoryId;
     private WeightUnit _weightUnit;
     private UnitSystem _unitSystem;
     private bool _saving;
-    private IReadOnlyList<GearItem>? _items;
+    private IReadOnlyList<Category> _categories = [];
+    private IReadOnlyList<CategorySection>? _sections;
 
     protected override async Task OnInitializedAsync()
     {
         _unitSystem = (await App.Settings.GetAsync()).UnitSystem;
         _weightUnit = WeightInput.DefaultUnit(_unitSystem);
-        _items = await App.Gear.ListGearItemsAsync();
+        _categories = await App.Gear.ListCategoriesAsync();
+        _sections = await App.Gear.ListGearItemsByCategoryAsync();
     }
 
     private string? ValidateWeight(string? text) => WeightInput.Parse(text, _weightUnit).Error;
@@ -85,14 +104,18 @@ else
         _saving = true;
         try
         {
-            await App.Gear.AddGearItemAsync(_name ?? "", _brandModel, weight.Grams.Value);
+            var categoryId = _categoryId ?? "";
+            await App.Gear.AddGearItemAsync(new GearItemDetails(_name ?? "", _brandModel, weight.Grams.Value, categoryId));
             await _form.ResetAsync();
+
+            // Keep the unit and Category, so adding several items in a row is quick.
             _weightUnit = WeightInput.DefaultUnit(_unitSystem);
-            _items = await App.Gear.ListGearItemsAsync();
+            _categoryId = categoryId;
+            _sections = await App.Gear.ListGearItemsByCategoryAsync();
         }
-        catch (ArgumentException)
+        catch (RuleViolationException ex)
         {
-            Snackbar.Add("Couldn't add that gear item. Check it has a name and a weight of 0 or more.", Severity.Error);
+            Snackbar.Add(ex.Message, Severity.Warning);
         }
         finally
         {

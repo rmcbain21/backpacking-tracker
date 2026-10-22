@@ -1,3 +1,4 @@
+using BackpackingTracker.Core.Gear;
 using BackpackingTracker.Core.Tests.Fakes;
 using BackpackingTracker.Core.Units;
 
@@ -57,7 +58,8 @@ public class SettingsTests
     public async Task Changing_units_leaves_stored_gear_weights_alone()
     {
         var app = CreateApp();
-        await app.Gear.AddGearItemAsync("Tent", "Durston X-Mid 1", 765.4m);
+        var shelter = (await app.Gear.ListCategoriesAsync())[0];
+        await app.Gear.AddGearItemAsync(new GearItemDetails("Tent", "Durston X-Mid 1", 765.4m, shelter.Id));
 
         await app.Settings.SetUnitSystemAsync(UnitSystem.Metric);
 

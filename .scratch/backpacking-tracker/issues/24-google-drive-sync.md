@@ -13,3 +13,9 @@
 - [ ] A failed write leaves bookkeeping unchanged so the next sync retries.
 - [ ] The Settings page has Connect, Disconnect, "Sync now" and a "last synced" indicator.
 - [ ] Tests simulate two devices (two core instances, separate in-memory record stores, one shared in-memory cloud file store) covering propagation of adds, edits and tombstones in both directions, and retry after a failed write.
+
+## Comments
+
+- From ticket 04: the default Categories (and the Settings record, ticket 03) have fixed ids so every device creates the same records. Defaults are created with `updatedAt` = Unix epoch, meaning "never edited": when a record has no base yet, a side whose `updatedAt` is the epoch should be treated as unchanged, so a new device's untouched defaults never conflict with edits made elsewhere.
+- From ticket 04: after a merge, a Gear Item can point at a Category another device removed. The Gear page shows such items under "No Category"; consider whether the merge should instead move them somewhere.
+- From ticket 04: reordering Categories rewrites `SortOrder` on every Category whose position changed, so reordering on two devices before syncing can produce several Sync Conflicts at once.

@@ -1,0 +1,34 @@
+@* Asks for a Category's new name. Returns the name typed, or cancels. *@
+<MudDialog>
+    <DialogContent>
+        <MudTextField @bind-Value="_name" Label="Name" AutoFocus="true" Immediate="true" OnKeyUp="OnKeyUp" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Save">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public string CurrentName { get; set; } = "";
+
+    private string? _name;
+
+    protected override void OnInitialized() => _name = CurrentName;
+
+    private void OnKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            Save();
+        }
+    }
+
+    private void Save() => MudDialog.Close(DialogResult.Ok(_name ?? ""));
+
+    private void Cancel() => MudDialog.Cancel();
+}

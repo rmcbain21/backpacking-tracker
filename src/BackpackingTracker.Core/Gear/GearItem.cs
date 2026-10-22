@@ -8,4 +8,6 @@ public sealed record GearItem : StoredRecord
 
     /// <summary>Measured weight in grams, to 0.1 g (ADR 0002).</summary>
     public required decimal WeightGrams { get; init; }
+
+    public string CategoryId { get; init; } = "";
 }

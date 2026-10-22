@@ -1,0 +1,127 @@
+@page "/categories"
+@inject AppCore App
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>Categories</PageTitle>
+
+<MudText Typo="Typo.h5" HtmlTag="h1" GutterBottom="true">Categories</MudText>
+
+<MudPaper Class="pa-4 mb-4">
+    <div class="d-flex align-center gap-3">
+        <MudTextField @bind-Value="_newName" Label="New Category" Class="flex-grow-1" Immediate="true"
+                      OnKeyUp="OnNewNameKeyUp" />
+        <MudButton OnClick="AddAsync" Variant="Variant.Filled" Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.Add">Add</MudButton>
+    </div>
+</MudPaper>
+
+@if (_categories is null)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else
+{
+    <MudPaper>
+        @for (var position = 0; position < _categories.Count; position++)
+        {
+            var category = _categories[position];
+            var index = position;
+            <div class="d-flex align-center pl-3 pr-1 py-1">
+                <MudText Class="flex-grow-1">@category.Name</MudText>
+                <MudIconButton Icon="@Icons.Material.Filled.ArrowUpward" Size="Size.Small" Disabled="index == 0"
+                               aria-label="@($"Move {category.Name} up")" OnClick="() => MoveAsync(category, index - 1)" />
+                <MudIconButton Icon="@Icons.Material.Filled.ArrowDownward" Size="Size.Small"
+                               Disabled="index == _categories.Count - 1"
+                               aria-label="@($"Move {category.Name} down")" OnClick="() => MoveAsync(category, index + 1)" />
+                <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
+                               aria-label="@($"Rename {category.Name}")" OnClick="() => RenameAsync(category)" />
+                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small"
+                               aria-label="@($"Remove {category.Name}")" OnClick="() => RemoveAsync(category)" />
+            </div>
+            <MudDivider />
+        }
+    </MudPaper>
+}
+
+@code {
+    private string? _newName;
+    private IReadOnlyList<Category>? _categories;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync() => _categories = await App.Gear.ListCategoriesAsync();
+
+    private async Task OnNewNameKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await AddAsync();
+        }
+    }
+
+    private async Task AddAsync()
+    {
+        if (await TryAsync(() => App.Gear.AddCategoryAsync(_newName ?? "")))
+        {
+            _newName = null;
+        }
+    }
+
+    private Task MoveAsync(Category category, int newPosition) =>
+        TryAsync(() => App.Gear.MoveCategoryAsync(category.Id, newPosition));
+
+    private async Task RenameAsync(Category category)
+    {
+        var parameters = new DialogParameters<RenameCategoryDialog> { { d => d.CurrentName, category.Name } };
+        var dialog = await DialogService.ShowAsync<RenameCategoryDialog>("Rename Category", parameters);
+        var result = await dialog.Result;
+        if (result is { Canceled: false, Data: string newName })
+        {
+            await TryAsync(() => App.Gear.RenameCategoryAsync(category.Id, newName));
+        }
+    }
+
+    private async Task RemoveAsync(Category category)
+    {
+        var plan = await App.Gear.PlanCategoryRemovalAsync(category.Id);
+        if (!plan.NeedsMoveTarget)
+        {
+            var confirmed = await DialogService.ShowMessageBoxAsync(
+                "Remove Category", plan.Message, yesText: "Remove", cancelText: "Cancel");
+            if (confirmed == true)
+            {
+                await TryAsync(() => App.Gear.RemoveCategoryAsync(category.Id));
+            }
+
+            return;
+        }
+
+        var parameters = new DialogParameters<RemoveCategoryDialog> { { d => d.Plan, plan } };
+        var dialog = await DialogService.ShowAsync<RemoveCategoryDialog>("Remove Category", parameters);
+        var result = await dialog.Result;
+        if (result is { Canceled: false, Data: string targetId })
+        {
+            await TryAsync(() => App.Gear.RemoveCategoryAsync(category.Id, moveGearItemsToCategoryId: targetId));
+        }
+    }
+
+    /// <summary>Runs a change, shows the reason if the core refuses it, and reloads the list.</summary>
+    private async Task<bool> TryAsync(Func<Task> change)
+    {
+        try
+        {
+            await change();
+            return true;
+        }
+        catch (RuleViolationException ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Warning);
+            return false;
+        }
+        finally
+        {
+            await LoadAsync();
+        }
+    }
+}
