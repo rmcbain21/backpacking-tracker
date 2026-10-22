@@ -112,6 +112,19 @@ public class GearCatalogueTests
         Assert.Empty(await app.Gear.ListGearItemsAsync());
     }
 
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public async Task Brand_model_is_optional(string? brandModel)
+    {
+        var app = CreateApp();
+
+        await app.Gear.AddGearItemAsync("Bandana", brandModel, 28m);
+
+        var item = Assert.Single(await app.Gear.ListGearItemsAsync());
+        Assert.Equal("", item.BrandModel);
+    }
+
     [Fact]
     public async Task Names_and_brand_models_are_trimmed()
     {

@@ -15,7 +15,7 @@ public sealed class GearCatalogue
         _clock = clock;
     }
 
-    public async Task<GearItem> AddGearItemAsync(string name, string brandModel, decimal weightGrams)
+    public async Task<GearItem> AddGearItemAsync(string name, string? brandModel, decimal weightGrams)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentOutOfRangeException.ThrowIfNegative(weightGrams);
@@ -25,7 +25,7 @@ public sealed class GearCatalogue
             Id = Guid.NewGuid().ToString(),
             UpdatedAt = _clock.UtcNow,
             Name = name.Trim(),
-            BrandModel = brandModel.Trim(),
+            BrandModel = brandModel?.Trim() ?? "",
             WeightGrams = Math.Round(weightGrams, 1, MidpointRounding.AwayFromZero),
         };
 

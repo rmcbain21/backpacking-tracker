@@ -10,9 +10,16 @@
     <MudForm @ref="_form">
         <MudTextField @bind-Value="_name" Label="Name" Required="true" RequiredError="Give the gear item a name" />
         <MudTextField @bind-Value="_brandModel" Label="Brand / model" />
-        <MudNumericField @bind-Value="_weightGrams" Label="Weight" Adornment="Adornment.End" AdornmentText="g"
-                         Min="0m" HideSpinButtons="true" InputMode="@(InputMode.@decimal)"
-                         Required="true" RequiredError="Enter the weight in grams" />
+        <div class="d-flex gap-3">
+            <MudTextField @bind-Value="_weightText" Label="Weight" InputMode="@(InputMode.@decimal)"
+                          Validation="@(new Func<string?, string?>(ValidateWeight))" Class="flex-grow-1" />
+            <MudSelect T="WeightUnit" @bind-Value="_weightUnit" Label="Unit" Class="weight-unit">
+                @foreach (var unit in Enum.GetValues<WeightUnit>())
+                {
+                    <MudSelectItem Value="unit">@WeightInput.Label(unit)</MudSelectItem>
+                }
+            </MudSelect>
+        </div>
         <MudButton OnClick="AddAsync" Variant="Variant.Filled" Color="Color.Primary" Class="mt-4"
                    StartIcon="@Icons.Material.Filled.Add" Disabled="_saving">Add</MudButton>
     </MudForm>
@@ -39,7 +46,7 @@ else
                         <MudText Typo="Typo.body2" Class="mud-text-secondary">@item.BrandModel</MudText>
                     }
                 </div>
-                <MudText Class="text-nowrap">@item.WeightGrams.ToString("0.#") g</MudText>
+                <MudText Class="text-nowrap">@UnitFormat.Weight(item.WeightGrams, _unitSystem)</MudText>
             </div>
             <MudDivider />
         }
@@ -48,21 +55,29 @@ else
 
 @code {
     private MudForm _form = default!;
-    private string _name = "";
-    private string _brandModel = "";
-    private decimal? _weightGrams;
+    // MudForm.ResetAsync sets these back to null.
+    private string? _name;
+    private string? _brandModel;
+    private string? _weightText;
+    private WeightUnit _weightUnit;
+    private UnitSystem _unitSystem;
     private bool _saving;
     private IReadOnlyList<GearItem>? _items;
 
     protected override async Task OnInitializedAsync()
     {
+        _unitSystem = (await App.Settings.GetAsync()).UnitSystem;
+        _weightUnit = WeightInput.DefaultUnit(_unitSystem);
         _items = await App.Gear.ListGearItemsAsync();
     }
+
+    private string? ValidateWeight(string? text) => WeightInput.Parse(text, _weightUnit).Error;
 
     private async Task AddAsync()
     {
         await _form.ValidateAsync();
-        if (!_form.IsValid || _weightGrams is null)
+        var weight = WeightInput.Parse(_weightText, _weightUnit);
+        if (!_form.IsValid || weight.Grams is null)
         {
             return;
         }
@@ -70,13 +85,14 @@ else
         _saving = true;
         try
         {
-            await App.Gear.AddGearItemAsync(_name, _brandModel, _weightGrams.Value);
+            await App.Gear.AddGearItemAsync(_name ?? "", _brandModel, weight.Grams.Value);
             await _form.ResetAsync();
+            _weightUnit = WeightInput.DefaultUnit(_unitSystem);
             _items = await App.Gear.ListGearItemsAsync();
         }
         catch (ArgumentException)
         {
-            Snackbar.Add("Couldn't add that gear item. Check it has a name and a weight of 0 g or more.", Severity.Error);
+            Snackbar.Add("Couldn't add that gear item. Check it has a name and a weight of 0 or more.", Severity.Error);
         }
         finally
         {

@@ -129,3 +129,8 @@ code {
 h1:focus {
     outline: none;
 }
+
+/* Unit picker beside the weight field on the Gear page */
+.weight-unit {
+    flex: 0 0 88px;
+}

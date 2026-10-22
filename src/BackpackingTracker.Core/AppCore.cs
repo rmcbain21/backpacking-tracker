@@ -1,5 +1,6 @@
 using BackpackingTracker.Core.Gear;
 using BackpackingTracker.Core.Ports;
+using BackpackingTracker.Core.Preferences;
 
 namespace BackpackingTracker.Core;
 
@@ -11,7 +12,10 @@ public sealed class AppCore
     public AppCore(IRecordStore store, IClock clock)
     {
         Gear = new GearCatalogue(store, clock);
+        Settings = new UserSettings(store, clock);
     }
 
     public GearCatalogue Gear { get; }
+
+    public UserSettings Settings { get; }
 }

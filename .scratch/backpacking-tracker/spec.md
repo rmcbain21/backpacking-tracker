@@ -161,7 +161,7 @@ Architecture follows ADR 0001 (offline-first Blazor WebAssembly PWA, no server, 
 - **Meal**: name, components (Food Item reference and number of servings), Tags, Retired flag.
 - **Trip**: name, start date, end date, Trip Status (Planned or Completed), Packing List, optional water carried, Trip Days.
 - **Trip Day**: date, start, end, campsite, planned distance, actual distance, elevation gain, journal notes, and four meal slots (Breakfast, Lunch, Dinner, Snacks). Each slot holds zero or more slot entries: either a Meal or a Food Item reference with a quantity. When the Trip is Completed, each slot entry also holds frozen weight and nutrition.
-- **Settings**: display unit system (imperial by default). Device-local sync bookkeeping (see Sync) is stored separately and never synced.
+- **Settings**: display unit system (imperial by default). Device-local sync bookkeeping (see Sync) is stored separately and never synced. There is exactly one Settings record, with the fixed id `00000000-0000-0000-0000-000000000001` instead of a device-generated GUID, so every device edits the same record and sync merges it rather than creating one per device.
 
 ### Behaviour rules
 

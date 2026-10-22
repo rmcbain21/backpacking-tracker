@@ -1,0 +1,32 @@
+@page "/settings"
+@inject AppCore App
+
+<PageTitle>Settings</PageTitle>
+
+<MudText Typo="Typo.h5" HtmlTag="h1" GutterBottom="true">Settings</MudText>
+
+<MudPaper Class="pa-4">
+    <MudText Typo="Typo.subtitle1">Units</MudText>
+    <MudRadioGroup T="UnitSystem" Value="_unitSystem" ValueChanged="SetUnitSystemAsync">
+        <MudRadio Value="UnitSystem.Imperial" Color="Color.Primary">Imperial (oz, lb, miles, feet)</MudRadio>
+        <MudRadio Value="UnitSystem.Metric" Color="Color.Primary">Metric (g, kg, km, metres)</MudRadio>
+    </MudRadioGroup>
+    <MudText Typo="Typo.body2" Class="mud-text-secondary mt-2">
+        Changes how values are shown. Stored weights and distances are not changed.
+    </MudText>
+</MudPaper>
+
+@code {
+    private UnitSystem _unitSystem;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _unitSystem = (await App.Settings.GetAsync()).UnitSystem;
+    }
+
+    private async Task SetUnitSystemAsync(UnitSystem unitSystem)
+    {
+        _unitSystem = unitSystem;
+        await App.Settings.SetUnitSystemAsync(unitSystem);
+    }
+}
