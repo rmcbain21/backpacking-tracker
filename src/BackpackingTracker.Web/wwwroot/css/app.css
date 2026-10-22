@@ -144,3 +144,26 @@ h1:focus {
 .gear-tags .mud-chip {
     margin: 2px 4px 0 0;
 }
+
+/* Add button on the Gear page: above the bottom navigation on phones */
+.add-fab {
+    position: fixed;
+    right: 16px;
+    bottom: calc(80px + env(safe-area-inset-bottom));
+    z-index: var(--mud-zindex-appbar);
+}
+
+@media (min-width: 600px) {
+    .add-fab {
+        bottom: 24px;
+    }
+}
+
+/* A Gear Item row opens it for editing */
+.gear-row {
+    cursor: pointer;
+}
+
+    .gear-row:hover {
+        background-color: var(--mud-palette-action-default-hover);
+    }

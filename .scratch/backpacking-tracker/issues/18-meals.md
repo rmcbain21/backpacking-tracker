@@ -12,3 +12,7 @@
 - [ ] The Food Item hard-delete guard counts Meal components as references.
 - [ ] Meals can be Retired, un-retired and hard-deleted when unreferenced.
 - [ ] Core tests cover Meal totals, the extended Food Item delete guard and Meal Retire/delete.
+
+## Comments
+
+- From ticket 06: Food Items and Meals follow the same Retire and delete rules as Gear Items (story 69). The Gear catalogue's pattern to copy: a Retired flag hidden from catalogue views but found by id, a deletion plan gathered from registered reference checks (Meals and Meal Plans use Food Items; Meal Plans use Meals), a tombstone on delete. `IGearItemReferences` is Gear-specific, so Food needs its own.

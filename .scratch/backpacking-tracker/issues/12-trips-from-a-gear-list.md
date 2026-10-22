@@ -13,3 +13,7 @@
 - [ ] New Trips have Trip Status Planned; the Trips page lists upcoming and past Trips.
 - [ ] The Gear Item hard-delete guard counts Packing List entries as references.
 - [ ] Core tests cover the copy independence in both directions, Packing List edits, Trip totals and the delete guard.
+
+## Comments
+
+- From ticket 06: Trips (Packing Lists) must also implement `IGearItemReferences` and register in `AppCore`, so a Gear Item on a Trip can't be deleted (Retire is offered instead). As with Gear Lists, a Packing List entry may point at a Gear Item deleted on another device before a sync.

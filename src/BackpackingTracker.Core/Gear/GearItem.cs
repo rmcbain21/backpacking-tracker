@@ -13,4 +13,13 @@ public sealed record GearItem : StoredRecord
 
     /// <summary>Free-form labels used to find gear, such as "winter". Never affect weight.</summary>
     public IReadOnlyList<string> Tags { get; init; } = [];
+
+    /// <summary>What the backpacker paid, if recorded.</summary>
+    public decimal? Price { get; init; }
+
+    /// <summary>Anything worth remembering, such as the manufacturer's stated weight.</summary>
+    public string Notes { get; init; } = "";
+
+    /// <summary>No longer owned: hidden from the catalogue and pickers, but still found by id.</summary>
+    public bool Retired { get; init; }
 }

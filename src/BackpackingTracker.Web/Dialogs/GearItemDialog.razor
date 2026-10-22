@@ -1,0 +1,188 @@
+@* Adds a Gear Item, or edits one (with Retire and Delete). Saves through the core and stays open if it refuses. *@
+@inject AppCore App
+@inject IDialogService DialogService
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="_form">
+            <MudTextField @bind-Value="_name" Label="Name" Required="true" RequiredError="Give the Gear Item a name" />
+            <MudTextField @bind-Value="_brandModel" Label="Brand / model" />
+            <div class="d-flex gap-3">
+                <MudTextField @bind-Value="_weightText" Label="Weight" InputMode="@(InputMode.@decimal)"
+                              Validation="@(new Func<string?, string?>(ValidateWeight))" Class="flex-grow-1" />
+                <MudSelect T="WeightUnit" Value="_weightUnit" ValueChanged="ChangeWeightUnit" Label="Unit" Class="weight-unit">
+                    @foreach (var unit in Enum.GetValues<WeightUnit>())
+                    {
+                        <MudSelectItem Value="unit">@WeightInput.Label(unit)</MudSelectItem>
+                    }
+                </MudSelect>
+            </div>
+            <MudSelect T="string" @bind-Value="_categoryId" Label="Category" Required="true" Class="category-select"
+                       RequiredError="Choose a Category">
+                @foreach (var category in _categories)
+                {
+                    <MudSelectItem Value="category.Id">@category.Name</MudSelectItem>
+                }
+            </MudSelect>
+            <TagEditor @ref="_tagEditor" @bind-Tags="_tags" TagsInUse="_tagsInUse" />
+            <MudTextField @bind-Value="_priceText" Label="Price (optional)" InputMode="@(InputMode.@decimal)"
+                          Adornment="Adornment.Start" AdornmentText="$"
+                          Validation="@(new Func<string?, string?>(text => PriceInput.Parse(text).Error))" />
+            <MudTextField @bind-Value="_notes" Label="Notes (optional)" Lines="3" Sizing="InputSizing.Auto" />
+        </MudForm>
+        @if (_problem is not null)
+        {
+            <MudAlert Severity="Severity.Warning" Class="mt-3" Dense="true">@_problem</MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        @if (GearItem is not null)
+        {
+            <MudButton Color="Color.Error" OnClick="DeleteAsync" Disabled="_busy">Delete</MudButton>
+            <MudButton OnClick="RetireAsync" Disabled="_busy">Retire</MudButton>
+            <MudSpacer />
+        }
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SaveAsync" Disabled="_busy">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    /// <summary>The Gear Item to edit, or null to add a new one.</summary>
+    [Parameter]
+    public GearItem? GearItem { get; set; }
+
+    [Parameter]
+    public UnitSystem UnitSystem { get; set; }
+
+    /// <summary>The Category a new Gear Item starts in.</summary>
+    [Parameter]
+    public string? DefaultCategoryId { get; set; }
+
+    private MudForm _form = default!;
+    private TagEditor _tagEditor = default!;
+    private string? _name;
+    private string? _brandModel;
+    private string? _weightText;
+    private WeightUnit _weightUnit;
+    private string? _categoryId;
+    private IReadOnlyList<string> _tags = [];
+    private string? _priceText;
+    private string? _notes;
+    private IReadOnlyList<Category> _categories = [];
+    private IReadOnlyList<string> _tagsInUse = [];
+    private string? _problem;
+    private bool _busy;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _categories = await App.Gear.ListCategoriesAsync();
+        _tagsInUse = await App.Gear.ListTagsAsync();
+        _weightUnit = WeightInput.DefaultUnit(UnitSystem);
+
+        if (GearItem is null)
+        {
+            _categoryId = DefaultCategoryId;
+            return;
+        }
+
+        _name = GearItem.Name;
+        _brandModel = GearItem.BrandModel;
+        _weightText = WeightInput.TextForEditing(GearItem.WeightGrams, _weightUnit);
+        _categoryId = GearItem.CategoryId;
+        _tags = GearItem.Tags;
+        _priceText = PriceInput.TextForEditing(GearItem.Price);
+        _notes = GearItem.Notes;
+    }
+
+    private WeightParseResult ParseWeight(string? text) => GearItem is null
+        ? WeightInput.Parse(text, _weightUnit)
+        : WeightInput.ParseEdited(text, _weightUnit, GearItem.WeightGrams);
+
+    private string? ValidateWeight(string? text) => ParseWeight(text).Error;
+
+    /// <summary>Switching unit on an untouched weight shows the same weight in the new unit.</summary>
+    private void ChangeWeightUnit(WeightUnit unit)
+    {
+        if (GearItem is not null && WeightInput.IsUnchanged(_weightText, _weightUnit, GearItem.WeightGrams))
+        {
+            _weightText = WeightInput.TextForEditing(GearItem.WeightGrams, unit);
+        }
+
+        _weightUnit = unit;
+    }
+
+    private async Task SaveAsync()
+    {
+        await _form.ValidateAsync();
+        var weight = ParseWeight(_weightText);
+        var price = PriceInput.Parse(_priceText);
+        if (!_form.IsValid || weight.Grams is null || price.Error is not null)
+        {
+            return;
+        }
+
+        var details = new GearItemDetails(
+            _name ?? "", _brandModel, weight.Grams.Value, _categoryId ?? "",
+            _tagEditor.TagsIncludingTyped(), price.Price, _notes);
+
+        await RunAsync(async () =>
+        {
+            var saved = GearItem is null
+                ? await App.Gear.AddGearItemAsync(details)
+                : await App.Gear.UpdateGearItemAsync(GearItem.Id, details);
+            MudDialog.Close(DialogResult.Ok(saved));
+        });
+    }
+
+    private Task RetireAsync() => RunAsync(async () =>
+    {
+        await App.Gear.RetireGearItemAsync(GearItem!.Id);
+        MudDialog.Close(DialogResult.Ok(GearItem));
+    });
+
+    private async Task DeleteAsync()
+    {
+        var plan = await App.Gear.PlanGearItemDeletionAsync(GearItem!.Id);
+        if (!await DialogService.ConfirmGearItemDeletionAsync(plan))
+        {
+            return;
+        }
+
+        await RunAsync(async () =>
+        {
+            if (plan.CanDelete)
+            {
+                await App.Gear.DeleteGearItemAsync(GearItem.Id);
+            }
+            else
+            {
+                await App.Gear.RetireGearItemAsync(GearItem.Id);
+            }
+
+            MudDialog.Close(DialogResult.Ok(GearItem));
+        });
+    }
+
+    /// <summary>Runs a change; if the core refuses it, shows why and keeps the dialog open.</summary>
+    private async Task RunAsync(Func<Task> change)
+    {
+        _busy = true;
+        _problem = null;
+        try
+        {
+            await change();
+        }
+        catch (RuleViolationException ex)
+        {
+            _problem = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

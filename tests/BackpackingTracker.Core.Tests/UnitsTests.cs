@@ -106,6 +106,50 @@ public class UnitsTests
         Assert.Equal(expected, WeightInput.Label(unit));
     }
 
+    [Theory]
+    [InlineData(765.0, WeightUnit.Ounces, "27.0")]
+    [InlineData(765.0, WeightUnit.Pounds, "1.69")]
+    [InlineData(765.0, WeightUnit.Grams, "765")]
+    [InlineData(765.4, WeightUnit.Grams, "765.4")]
+    public void A_stored_weight_is_shown_for_editing_in_the_chosen_unit(decimal grams, WeightUnit unit, string expected)
+    {
+        Assert.Equal(expected, WeightInput.TextForEditing(grams, unit));
+    }
+
+    [Theory]
+    [InlineData(WeightUnit.Ounces)]
+    [InlineData(WeightUnit.Pounds)]
+    [InlineData(WeightUnit.Grams)]
+    public void An_unchanged_weight_keeps_the_exact_stored_grams(WeightUnit unit)
+    {
+        // 765.0 g shows as "27.0" oz, which would parse back as 765.4 g.
+        var text = WeightInput.TextForEditing(765.0m, unit);
+
+        Assert.Equal(765.0m, WeightInput.ParseEdited($" {text} ", unit, originalGrams: 765.0m).Grams);
+    }
+
+    [Theory]
+    [InlineData("27.0", true)]
+    [InlineData(" 27.0 ", true)]
+    [InlineData("27", false)]
+    [InlineData("27.1", false)]
+    public void A_weight_is_unchanged_while_it_reads_as_it_was_shown(string text, bool expected)
+    {
+        Assert.Equal(expected, WeightInput.IsUnchanged(text, WeightUnit.Ounces, originalGrams: 765.0m));
+    }
+
+    [Fact]
+    public void A_changed_weight_is_parsed_as_typed()
+    {
+        Assert.Equal(768.3m, WeightInput.ParseEdited("27.1", WeightUnit.Ounces, originalGrams: 765.0m).Grams);
+    }
+
+    [Fact]
+    public void An_invalid_edited_weight_is_rejected()
+    {
+        Assert.Equal("Enter a number, like 4.3.", WeightInput.ParseEdited("abc", WeightUnit.Ounces, 765.0m).Error);
+    }
+
     public static TheoryData<int> TenthsOfAnOunceUpTo80Ounces() => new(Enumerable.Range(0, 801));
 
     [Theory]

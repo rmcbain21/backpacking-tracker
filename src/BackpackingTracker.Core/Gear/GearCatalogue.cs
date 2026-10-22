@@ -9,6 +9,7 @@ public sealed class GearCatalogue
 
     private readonly IRecordStore _store;
     private readonly IClock _clock;
+    private readonly List<IGearItemReferences> _references = [];
 
     public GearCatalogue(IRecordStore store, IClock clock)
     {
@@ -17,6 +18,28 @@ public sealed class GearCatalogue
     }
 
     public async Task<GearItem> AddGearItemAsync(GearItemDetails details)
+    {
+        var item = await ApplyDetailsAsync(
+            new GearItem { Id = Guid.NewGuid().ToString(), UpdatedAt = _clock.UtcNow, Name = "", WeightGrams = 0 },
+            details);
+
+        await _store.SaveAsync(Table, item);
+        return item;
+    }
+
+    /// <summary>Replaces every field the backpacker can edit, applying the same rules as adding.</summary>
+    public async Task<GearItem> UpdateGearItemAsync(string gearItemId, GearItemDetails details)
+    {
+        var existing = await GetExistingGearItemAsync(gearItemId);
+
+        var item = await ApplyDetailsAsync(existing with { UpdatedAt = _clock.UtcNow }, details);
+
+        await _store.SaveAsync(Table, item);
+        return item;
+    }
+
+    /// <summary>Checks the details and copies them, cleaned up, onto the Gear Item.</summary>
+    private async Task<GearItem> ApplyDetailsAsync(GearItem item, GearItemDetails details)
     {
         if (string.IsNullOrWhiteSpace(details.Name))
         {
@@ -28,31 +51,64 @@ public sealed class GearCatalogue
             throw new RuleViolationException("A weight can't be negative.");
         }
 
+        if (details.Price < 0)
+        {
+            throw new RuleViolationException("A price can't be negative.");
+        }
+
         var categories = await ListCategoriesAsync();
         if (!categories.Any(category => category.Id == details.CategoryId))
         {
             throw new RuleViolationException("Choose a Category.");
         }
 
-        var item = new GearItem
+        return item with
         {
-            Id = Guid.NewGuid().ToString(),
-            UpdatedAt = _clock.UtcNow,
             Name = details.Name.Trim(),
             BrandModel = details.BrandModel?.Trim() ?? "",
             WeightGrams = Math.Round(details.WeightGrams, 1, MidpointRounding.AwayFromZero),
             CategoryId = details.CategoryId,
             Tags = await CleanUpTagsAsync(details.Tags),
+            Price = details.Price is { } price ? Math.Round(price, 2, MidpointRounding.AwayFromZero) : null,
+            Notes = details.Notes?.Trim() ?? "",
         };
-
-        await _store.SaveAsync(Table, item);
-        return item;
     }
 
-    public async Task<IReadOnlyList<GearItem>> ListGearItemsAsync()
+    /// <summary>The catalogue: Gear Items the backpacker owns, by name. Leaves out Retired and deleted ones.</summary>
+    public async Task<IReadOnlyList<GearItem>> ListGearItemsAsync() =>
+        (await LoadGearItemsAsync()).Where(item => !item.Retired).ToList();
+
+    public async Task<IReadOnlyList<GearItem>> ListRetiredGearItemsAsync() =>
+        (await LoadGearItemsAsync()).Where(item => item.Retired).ToList();
+
+    /// <summary>
+    /// A Gear Item by id, Retired or not, so anything that refers to it can still show it.
+    /// Null if it doesn't exist or was deleted.
+    /// </summary>
+    public async Task<GearItem?> GetGearItemAsync(string gearItemId) =>
+        (await LoadGearItemsAsync()).SingleOrDefault(item => item.Id == gearItemId);
+
+    /// <summary>A Gear Item by id, Retired or not; refuses if it doesn't exist or was deleted.</summary>
+    private async Task<GearItem> GetExistingGearItemAsync(string gearItemId) =>
+        await GetGearItemAsync(gearItemId) ?? throw new RuleViolationException("That Gear Item no longer exists.");
+
+    public Task RetireGearItemAsync(string gearItemId) => SetRetiredAsync(gearItemId, retired: true);
+
+    public Task UnretireGearItemAsync(string gearItemId) => SetRetiredAsync(gearItemId, retired: false);
+
+    private async Task SetRetiredAsync(string gearItemId, bool retired)
+    {
+        var item = await GetExistingGearItemAsync(gearItemId);
+
+        await _store.SaveAsync(Table, item with { Retired = retired, UpdatedAt = _clock.UtcNow });
+    }
+
+    /// <summary>Every Gear Item that hasn't been deleted, Retired or not, by name.</summary>
+    private async Task<IReadOnlyList<GearItem>> LoadGearItemsAsync()
     {
         var items = await _store.ListAsync<GearItem>(Table);
         return items
+            .Where(item => !item.Deleted)
             // Gear Items saved before Categories existed have none; they belong in Misc.
             .Select(item => string.IsNullOrEmpty(item.CategoryId) ? item with { CategoryId = DefaultCategories.MiscId } : item)
             .OrderBy(item => item.Name, StringComparer.OrdinalIgnoreCase)
@@ -172,7 +228,7 @@ public sealed class GearCatalogue
     {
         var categories = await ListCategoriesAsync();
         var category = FindCategory(categories, categoryId);
-        var gearItemCount = (await ListGearItemsAsync()).Count(item => item.CategoryId == categoryId);
+        var gearItemCount = (await LoadGearItemsAsync()).Count(item => item.CategoryId == categoryId);
 
         return new CategoryRemovalPlan(category, gearItemCount, categories.Where(c => c.Id != categoryId).ToList());
     }
@@ -202,7 +258,7 @@ public sealed class GearCatalogue
             }
 
             var target = FindCategory(plan.MoveTargets, moveGearItemsToCategoryId);
-            var items = (await ListGearItemsAsync()).Where(item => item.CategoryId == categoryId);
+            var items = (await LoadGearItemsAsync()).Where(item => item.CategoryId == categoryId);
             foreach (var item in items)
             {
                 await _store.SaveAsync(Table, item with { CategoryId = target.Id, UpdatedAt = _clock.UtcNow });
@@ -273,5 +329,36 @@ public sealed class GearCatalogue
         }
 
         return cleaned;
+    }
+
+    /// <summary>Lets an area that refers to Gear Items (Gear Lists, Trips) take part in the delete check.</summary>
+    internal void AddReferences(IGearItemReferences references) => _references.Add(references);
+
+    public async Task<GearItemDeletionPlan> PlanGearItemDeletionAsync(string gearItemId)
+    {
+        var item = await GetExistingGearItemAsync(gearItemId);
+
+        var usedBy = new List<string>();
+        foreach (var references in _references)
+        {
+            usedBy.AddRange(await references.FindUsesAsync(gearItemId));
+        }
+
+        return new GearItemDeletionPlan(item, usedBy);
+    }
+
+    /// <summary>
+    /// Deletes a Gear Item that nothing uses; otherwise refuses, suggesting Retire.
+    /// The record is kept as a tombstone so the deletion syncs to other devices.
+    /// </summary>
+    public async Task DeleteGearItemAsync(string gearItemId)
+    {
+        var plan = await PlanGearItemDeletionAsync(gearItemId);
+        if (!plan.CanDelete)
+        {
+            throw new RuleViolationException(plan.Message);
+        }
+
+        await _store.SaveAsync(Table, plan.GearItem with { Deleted = true, UpdatedAt = _clock.UtcNow });
     }
 }

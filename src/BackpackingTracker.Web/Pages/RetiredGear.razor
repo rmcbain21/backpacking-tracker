@@ -1,0 +1,67 @@
+@page "/gear/retired"
+@inject AppCore App
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>Retired gear</PageTitle>
+
+<MudText Typo="Typo.h5" HtmlTag="h1" GutterBottom="true">Retired gear</MudText>
+<MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">
+    Gear you no longer own. It stays on anything that used it, but is hidden from your gear and pickers.
+</MudText>
+
+@if (_items is null)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else if (_items.Count == 0)
+{
+    <MudText Class="mud-text-secondary">No retired gear.</MudText>
+}
+else
+{
+    <MudPaper>
+        @foreach (var item in _items)
+        {
+            <div class="d-flex align-center pl-3 pr-1 py-2 gap-2">
+                <div class="flex-grow-1">
+                    <MudText>@item.Name</MudText>
+                    @if (!string.IsNullOrEmpty(item.BrandModel))
+                    {
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">@item.BrandModel</MudText>
+                    }
+                </div>
+                <MudButton Size="Size.Small" OnClick="() => UnretireAsync(item)">Un-retire</MudButton>
+                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small"
+                               aria-label="@($"Delete {item.Name}")" OnClick="() => DeleteAsync(item)" />
+            </div>
+            <MudDivider />
+        }
+    </MudPaper>
+}
+
+@code {
+    private IReadOnlyList<GearItem>? _items;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync() => _items = await App.Gear.ListRetiredGearItemsAsync();
+
+    private async Task UnretireAsync(GearItem item)
+    {
+        await App.Gear.UnretireGearItemAsync(item.Id);
+        Snackbar.Add($"{item.Name} is back in your gear.", Severity.Success);
+        await LoadAsync();
+    }
+
+    private async Task DeleteAsync(GearItem item)
+    {
+        // A Retired Gear Item is never offered Retire, so confirming always means delete.
+        var plan = await App.Gear.PlanGearItemDeletionAsync(item.Id);
+        if (await DialogService.ConfirmGearItemDeletionAsync(plan))
+        {
+            await App.Gear.DeleteGearItemAsync(item.Id);
+            await LoadAsync();
+        }
+    }
+}

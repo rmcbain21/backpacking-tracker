@@ -12,3 +12,7 @@
 - [ ] Retire, un-retire and the hard-delete guard work as for Gear Items, reusing the same reference-check approach.
 - [ ] The Food page lists Food Items and works on phone widths.
 - [ ] Core tests cover Calorie Density, Retire and the delete guard.
+
+## Comments
+
+- From ticket 06: Food Items and Meals follow the same Retire and delete rules as Gear Items (story 69). The Gear catalogue's pattern to copy: a Retired flag hidden from catalogue views but found by id, a deletion plan gathered from registered reference checks (Meals and Meal Plans use Food Items; Meal Plans use Meals), a tombstone on delete. `IGearItemReferences` is Gear-specific, so Food needs its own.
