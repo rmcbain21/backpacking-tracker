@@ -1,0 +1,73 @@
+@* Edits a Gear Item's Tags: type a new one, or tap one already in use. The rules live in TagRules. *@
+<div class="tag-editor">
+    <div class="d-flex align-center gap-2">
+        <MudTextField @bind-Value="_newTag" Label="Add Tag" Immediate="true" Class="flex-grow-1"
+                      OnKeyUp="OnKeyUp" />
+        <MudIconButton Icon="@Icons.Material.Filled.Add" aria-label="Add Tag" OnClick="AddTypedTag"
+                       Disabled="string.IsNullOrWhiteSpace(_newTag)" />
+    </div>
+
+    @if (Tags.Count > 0)
+    {
+        <div class="mt-2">
+            @foreach (var tag in Tags)
+            {
+                <MudChip T="string" Size="Size.Small" Color="Color.Primary" OnClose="() => RemoveTag(tag)">@tag</MudChip>
+            }
+        </div>
+    }
+
+    @if (Suggestions.Count > 0)
+    {
+        <div class="mt-1">
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">Tap to add:</MudText>
+            @foreach (var tag in Suggestions)
+            {
+                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" OnClick="() => AddTag(tag)">@tag</MudChip>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public IReadOnlyList<string> Tags { get; set; } = [];
+
+    [Parameter]
+    public EventCallback<IReadOnlyList<string>> TagsChanged { get; set; }
+
+    /// <summary>Tags already in use on other Gear Items.</summary>
+    [Parameter]
+    public IReadOnlyList<string> TagsInUse { get; set; } = [];
+
+    private string? _newTag;
+
+    private IReadOnlyList<string> Suggestions => TagRules.Suggest(TagsInUse, Tags, _newTag);
+
+    /// <summary>
+    /// The Tags plus anything typed but not yet added, for saving. The form calls this rather than
+    /// the field adding on blur, which would move the form's buttons in the middle of a tap.
+    /// </summary>
+    public IReadOnlyList<string> TagsIncludingTyped() => TagRules.Add(Tags, _newTag ?? "");
+
+    private async Task OnKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await AddTypedTag();
+        }
+    }
+
+    private async Task AddTypedTag()
+    {
+        if (!string.IsNullOrWhiteSpace(_newTag))
+        {
+            await AddTag(_newTag);
+            _newTag = null;
+        }
+    }
+
+    private Task AddTag(string tag) => TagsChanged.InvokeAsync(TagRules.Add(Tags, tag));
+
+    private Task RemoveTag(string tag) => TagsChanged.InvokeAsync(Tags.Where(t => t != tag).ToList());
+}

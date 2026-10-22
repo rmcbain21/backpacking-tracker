@@ -27,12 +27,26 @@
                 <MudSelectItem Value="category.Id">@category.Name</MudSelectItem>
             }
         </MudSelect>
+        <TagEditor @ref="_tagEditor" @bind-Tags="_tags" TagsInUse="_tagsInUse" />
         <MudButton OnClick="AddAsync" Variant="Variant.Filled" Color="Color.Primary" Class="mt-4"
                    StartIcon="@Icons.Material.Filled.Add" Disabled="_saving">Add</MudButton>
     </MudForm>
 </MudPaper>
 
-<div class="d-flex justify-end mb-1">
+<div class="d-flex align-end gap-3">
+    <MudTextField T="string" Value="_searchText" ValueChanged="SearchAsync" Label="Search gear" Immediate="true"
+                  DebounceInterval="200" Clearable="true" Adornment="Adornment.Start"
+                  AdornmentIcon="@Icons.Material.Filled.Search" Class="flex-grow-1 gear-search" />
+    <MudSelect T="string" Value="_filterCategoryId" ValueChanged="FilterByCategoryAsync" Label="Category"
+               Class="category-filter" Clearable="true" Placeholder="All">
+        @foreach (var category in _categories)
+        {
+            <MudSelectItem Value="category.Id">@category.Name</MudSelectItem>
+        }
+    </MudSelect>
+</div>
+
+<div class="d-flex justify-end mt-1">
     <MudButton Href="categories" Variant="Variant.Text" Size="Size.Small"
                StartIcon="@Icons.Material.Filled.Category">Edit Categories</MudButton>
 </div>
@@ -43,7 +57,9 @@
 }
 else if (_sections.Count == 0)
 {
-    <MudText Class="mud-text-secondary">No gear yet. Add your first Gear Item above.</MudText>
+    <MudText Class="mud-text-secondary">
+        @(!Filter.IsEmpty ? "No Gear Items match." : "No gear yet. Add your first Gear Item above.")
+    </MudText>
 }
 else
 {
@@ -59,6 +75,15 @@ else
                         @if (!string.IsNullOrEmpty(item.BrandModel))
                         {
                             <MudText Typo="Typo.body2" Class="mud-text-secondary">@item.BrandModel</MudText>
+                        }
+                        @if (item.Tags.Count > 0)
+                        {
+                            <div class="gear-tags">
+                                @foreach (var tag in item.Tags)
+                                {
+                                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@tag</MudChip>
+                                }
+                            </div>
                         }
                     </div>
                     <MudText Class="text-nowrap">@UnitFormat.Weight(item.WeightGrams, _unitSystem)</MudText>
@@ -76,18 +101,43 @@ else
     private string? _brandModel;
     private string? _weightText;
     private string? _categoryId;
+    private TagEditor _tagEditor = default!;
+    private IReadOnlyList<string> _tags = [];
     private WeightUnit _weightUnit;
     private UnitSystem _unitSystem;
     private bool _saving;
     private IReadOnlyList<Category> _categories = [];
+    private IReadOnlyList<string> _tagsInUse = [];
     private IReadOnlyList<CategorySection>? _sections;
+    private string? _searchText;
+    private string? _filterCategoryId;
+
+    private GearFilter Filter => new(_searchText, _filterCategoryId);
 
     protected override async Task OnInitializedAsync()
     {
         _unitSystem = (await App.Settings.GetAsync()).UnitSystem;
         _weightUnit = WeightInput.DefaultUnit(_unitSystem);
         _categories = await App.Gear.ListCategoriesAsync();
-        _sections = await App.Gear.ListGearItemsByCategoryAsync();
+        _tagsInUse = await App.Gear.ListTagsAsync();
+        await LoadGearAsync();
+    }
+
+    private async Task LoadGearAsync()
+    {
+        _sections = await App.Gear.ListGearItemsByCategoryAsync(Filter);
+    }
+
+    private async Task SearchAsync(string? searchText)
+    {
+        _searchText = searchText;
+        await LoadGearAsync();
+    }
+
+    private async Task FilterByCategoryAsync(string? categoryId)
+    {
+        _filterCategoryId = categoryId;
+        await LoadGearAsync();
     }
 
     private string? ValidateWeight(string? text) => WeightInput.Parse(text, _weightUnit).Error;
@@ -105,13 +155,16 @@ else
         try
         {
             var categoryId = _categoryId ?? "";
-            await App.Gear.AddGearItemAsync(new GearItemDetails(_name ?? "", _brandModel, weight.Grams.Value, categoryId));
+            await App.Gear.AddGearItemAsync(
+                new GearItemDetails(_name ?? "", _brandModel, weight.Grams.Value, categoryId, _tagEditor.TagsIncludingTyped()));
             await _form.ResetAsync();
 
             // Keep the unit and Category, so adding several items in a row is quick.
             _weightUnit = WeightInput.DefaultUnit(_unitSystem);
             _categoryId = categoryId;
-            _sections = await App.Gear.ListGearItemsByCategoryAsync();
+            _tags = [];
+            _tagsInUse = await App.Gear.ListTagsAsync();
+            await LoadGearAsync();
         }
         catch (RuleViolationException ex)
         {

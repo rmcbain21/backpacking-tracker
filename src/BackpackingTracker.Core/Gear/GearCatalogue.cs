@@ -42,6 +42,7 @@ public sealed class GearCatalogue
             BrandModel = details.BrandModel?.Trim() ?? "",
             WeightGrams = Math.Round(details.WeightGrams, 1, MidpointRounding.AwayFromZero),
             CategoryId = details.CategoryId,
+            Tags = await CleanUpTagsAsync(details.Tags),
         };
 
         await _store.SaveAsync(Table, item);
@@ -216,12 +217,14 @@ public sealed class GearCatalogue
     /// Gear Items under their Category, in Category order, leaving out empty Categories. Gear Items whose
     /// Category no longer exists (removed on another device before a sync) come last, under "No Category".
     /// </summary>
-    public async Task<IReadOnlyList<CategorySection>> ListGearItemsByCategoryAsync()
+    public async Task<IReadOnlyList<CategorySection>> ListGearItemsByCategoryAsync(GearFilter? filter = null)
     {
+        filter ??= new GearFilter();
         var categories = await ListCategoriesAsync();
-        var items = await ListGearItemsAsync();
+        var items = (await ListGearItemsAsync()).Where(filter.Matches).ToList();
 
         var sections = categories
+            .Where(category => filter.OnlyCategoryId is null || category.Id == filter.OnlyCategoryId)
             .Select(category => new CategorySection(
                 category,
                 items.Where(item => item.CategoryId == category.Id).ToList()))
@@ -230,12 +233,45 @@ public sealed class GearCatalogue
 
         var liveCategoryIds = categories.Select(category => category.Id).ToHashSet();
         var withoutCategory = items.Where(item => !liveCategoryIds.Contains(item.CategoryId)).ToList();
-        if (withoutCategory.Count > 0)
+        if (filter.OnlyCategoryId is null && withoutCategory.Count > 0)
         {
             var noCategory = new Category { Id = "", UpdatedAt = DateTimeOffset.UnixEpoch, Name = "No Category", SortOrder = int.MaxValue };
             sections.Add(new CategorySection(noCategory, withoutCategory));
         }
 
         return sections;
+    }
+
+    /// <summary>Every Tag in use on a Gear Item, once each, in alphabetical order; used for suggestions.</summary>
+    public async Task<IReadOnlyList<string>> ListTagsAsync()
+    {
+        var items = await ListGearItemsAsync();
+        return items
+            .SelectMany(item => item.Tags)
+            .Distinct(TagRules.Comparer)
+            .Order(TagRules.Comparer)
+            .ToList();
+    }
+
+    /// <summary>
+    /// Trims Tags, drops blank and repeated ones (ignoring case), and gives a Tag the spelling it
+    /// already has elsewhere, so "Winter" and "winter" don't become two Tags.
+    /// </summary>
+    private async Task<IReadOnlyList<string>> CleanUpTagsAsync(IReadOnlyList<string>? tags)
+    {
+        if (tags is null || tags.Count == 0)
+        {
+            return [];
+        }
+
+        var tagsInUse = await ListTagsAsync();
+        IReadOnlyList<string> cleaned = [];
+        foreach (var tag in tags)
+        {
+            var spelling = tagsInUse.FirstOrDefault(t => TagRules.Comparer.Equals(t, tag.Trim())) ?? tag;
+            cleaned = TagRules.Add(cleaned, spelling);
+        }
+
+        return cleaned;
     }
 }

@@ -17,3 +17,5 @@
 
 - From ticket 01: `GearCatalogue.ListGearItemsAsync` doesn't filter out tombstoned (`Deleted`) records yet, because nothing could delete in ticket 01. Hard delete should set the tombstone and listing should skip it, with a test.
 - From ticket 04: editing a Gear Item must require a Category, as adding does (ticket 04's "Adding or editing a Gear Item requires choosing a Category"). `GearItemDetails` is the shape to reuse for editing.
+- From ticket 05: editing a Gear Item's Tags should reuse the same clean-up as adding (`CleanUpTagsAsync` in `GearCatalogue`, built on `TagRules`) and the `TagEditor` component, including `TagsIncludingTyped()` when saving.
+- From ticket 05: `ListTagsAsync` (Tag suggestions and spelling) and search read every Gear Item. Once delete and Retire exist, deleted (tombstoned) Gear Items must be left out everywhere, and Retired ones left out of suggestions and the catalogue views.

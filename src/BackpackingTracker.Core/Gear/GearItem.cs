@@ -10,4 +10,7 @@ public sealed record GearItem : StoredRecord
     public required decimal WeightGrams { get; init; }
 
     public string CategoryId { get; init; } = "";
+
+    /// <summary>Free-form labels used to find gear, such as "winter". Never affect weight.</summary>
+    public IReadOnlyList<string> Tags { get; init; } = [];
 }

@@ -134,3 +134,13 @@ h1:focus {
 .weight-unit {
     flex: 0 0 88px;
 }
+
+/* Category filter beside the gear search box */
+.category-filter {
+    flex: 0 0 132px;
+}
+
+/* Tags under a Gear Item in the list */
+.gear-tags .mud-chip {
+    margin: 2px 4px 0 0;
+}
