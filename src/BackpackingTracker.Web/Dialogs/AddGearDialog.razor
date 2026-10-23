@@ -1,9 +1,17 @@
-@* Picks Gear Items to add to a Gear List: search, then tap to add (tapping again adds one more). Retired gear isn't offered. *@
+@using BackpackingTracker.Core.Lists
+@* Picks Gear Items to add to a Gear List, into the chosen Category: search, then tap to add (tapping again
+   adds one more). Retired gear isn't offered. *@
 @inject AppCore App
 @inject ISnackbar Snackbar
 
 <MudDialog ContentClass="add-gear-content">
     <DialogContent>
+        <MudSelect T="string" @bind-Value="_categoryId" Label="Add into Category" Class="add-into-category mb-1">
+            @foreach (var category in Categories)
+            {
+                <MudSelectItem Value="category.Id">@category.Name</MudSelectItem>
+            }
+        </MudSelect>
         <MudTextField T="string" Value="_searchText" ValueChanged="SearchAsync" Label="Search gear" Immediate="true"
                       DebounceInterval="200" Clearable="true" Adornment="Adornment.Start"
                       AdornmentIcon="@Icons.Material.Filled.Search" Class="mb-2" />
@@ -46,6 +54,15 @@
     [Parameter, EditorRequired]
     public string GearListId { get; set; } = "";
 
+    /// <summary>The list's Categories, for the dropdown.</summary>
+    [Parameter, EditorRequired]
+    public IReadOnlyList<Category> Categories { get; set; } = [];
+
+    /// <summary>The Category the dropdown starts on.</summary>
+    [Parameter, EditorRequired]
+    public string CategoryId { get; set; } = "";
+
+    private string _categoryId = "";
     private string? _searchText;
     private IReadOnlyList<GearItem>? _items;
 
@@ -54,6 +71,7 @@
 
     protected override async Task OnInitializedAsync()
     {
+        _categoryId = CategoryId;
         await LoadAsync();
         await LoadListAsync();
     }
@@ -79,7 +97,7 @@
     {
         try
         {
-            await App.Lists.AddEntryAsync(GearListId, item.Id);
+            await App.Lists.AddEntryAsync(GearListId, item.Id, _categoryId);
             await LoadListAsync();
         }
         catch (RuleViolationException ex)

@@ -1,4 +1,5 @@
 using BackpackingTracker.Core.Gear;
+using BackpackingTracker.Core.Lists;
 using BackpackingTracker.Core.Units;
 using BackpackingTracker.Core.Weight;
 
@@ -6,14 +7,15 @@ namespace BackpackingTracker.Core.Tests;
 
 public class CategoryBreakdownTests
 {
-    private static Category NewCategory(string name, int sortOrder) =>
-        new() { Id = $"{name}-id", UpdatedAt = DateTimeOffset.UnixEpoch, Name = name, SortOrder = sortOrder };
+    private static Category NewCategory(string name) => new() { Id = $"{name}-id", Name = name };
 
-    private static readonly Category Shelter = NewCategory("Shelter", 0);
-    private static readonly Category Sleep = NewCategory("Sleep", 1);
-    private static readonly Category Cook = NewCategory("Cook", 3);
-    private static readonly Category Clothing = NewCategory("Clothing", 5);
-    private static readonly Category[] Categories = [Clothing, Cook, Shelter, Sleep];
+    private static readonly Category Shelter = NewCategory("Shelter");
+    private static readonly Category Sleep = NewCategory("Sleep");
+    private static readonly Category Cook = NewCategory("Cook");
+    private static readonly Category Clothing = NewCategory("Clothing");
+
+    // A list's Categories, in the list's order.
+    private static readonly Category[] Categories = [Shelter, Sleep, Cook, Clothing];
 
     private static (string Category, decimal Grams)[] Lines(PackWeight weight) =>
         weight.ByCategory.Select(line => (line.Category.Name, line.Grams)).ToArray();

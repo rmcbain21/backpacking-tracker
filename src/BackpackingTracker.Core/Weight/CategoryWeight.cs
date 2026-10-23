@@ -1,4 +1,4 @@
-using BackpackingTracker.Core.Gear;
+using BackpackingTracker.Core.Lists;
 
 namespace BackpackingTracker.Core.Weight;
 

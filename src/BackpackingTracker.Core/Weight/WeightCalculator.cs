@@ -1,4 +1,5 @@
 using BackpackingTracker.Core.Gear;
+using BackpackingTracker.Core.Lists;
 
 namespace BackpackingTracker.Core.Weight;
 
@@ -13,7 +14,7 @@ public static class WeightCalculator
     public static decimal EntryWeight(WeighedEntry entry) => entry.ItemWeightGrams * entry.Quantity;
 
     /// <param name="entries">The entries, with their Gear Items' weights and Categories.</param>
-    /// <param name="categories">The backpacker's Categories, in their order, for the breakdown.</param>
+    /// <param name="categories">The list's Categories, in the list's order, for the breakdown.</param>
     public static PackWeight Calculate(IEnumerable<WeighedEntry> entries, IReadOnlyList<Category> categories)
     {
         var all = entries.ToList();
@@ -53,7 +54,6 @@ public static class WeightCalculator
         }
 
         var lines = categories
-            .OrderBy(category => category.SortOrder)
             .Select(category => LineFor(category, inPack.Where(entry => entry.CategoryId == category.Id)))
             .Append(LineFor(Category.None, inPack.Where(entry => !known.Contains(entry.CategoryId!))));
 

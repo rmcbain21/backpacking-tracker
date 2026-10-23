@@ -173,11 +173,11 @@ public sealed class GearCatalogue
 
 
     /// <summary>
-    /// The Categories in the backpacker's chosen order. On first run this also creates the defaults.
+    /// The Default Categories in the backpacker's chosen order. On first run this also creates them.
     /// </summary>
-    public async Task<IReadOnlyList<Category>> ListCategoriesAsync()
+    public async Task<IReadOnlyList<DefaultCategory>> ListDefaultCategoriesAsync()
     {
-        var categories = await _store.ListAsync<Category>(CategoryTable);
+        var categories = await _store.ListAsync<DefaultCategory>(CategoryTable);
 
         // Only on first run: once any Category has existed, its tombstone stays in the store.
         if (categories.Count == 0)
@@ -193,10 +193,10 @@ public sealed class GearCatalogue
             .ToList();
     }
 
-    private async Task<IReadOnlyList<Category>> CreateDefaultCategoriesAsync()
+    private async Task<IReadOnlyList<DefaultCategory>> CreateDefaultCategoriesAsync()
     {
         var categories = DefaultCategories.All
-            .Select((category, index) => new Category
+            .Select((category, index) => new DefaultCategory
             {
                 Id = category.Id,
                 // Every device creates these same records. The epoch marks them as never edited,
@@ -215,10 +215,10 @@ public sealed class GearCatalogue
         return categories;
     }
 
-    public async Task<Category> AddCategoryAsync(string name)
+    public async Task<DefaultCategory> AddDefaultCategoryAsync(string name)
     {
-        var categories = await ListCategoriesAsync();
-        var category = new Category
+        var categories = await ListDefaultCategoriesAsync();
+        var category = new DefaultCategory
         {
             Id = Guid.NewGuid().ToString(),
             UpdatedAt = _clock.UtcNow,
@@ -231,7 +231,7 @@ public sealed class GearCatalogue
     }
 
     /// <summary>Returns the trimmed name, or refuses a blank name or one another Category already has.</summary>
-    private static string TrimAndCheckCategoryName(string name, IReadOnlyList<Category> categories, string? renamingId)
+    private static string TrimAndCheckCategoryName(string name, IReadOnlyList<DefaultCategory> categories, string? renamingId)
     {
         var trimmed = name.Trim();
         if (trimmed.Length == 0)
@@ -249,23 +249,23 @@ public sealed class GearCatalogue
         return trimmed;
     }
 
-    public async Task RenameCategoryAsync(string categoryId, string newName)
+    public async Task RenameDefaultCategoryAsync(string categoryId, string newName)
     {
-        var categories = await ListCategoriesAsync();
+        var categories = await ListDefaultCategoriesAsync();
         var category = FindCategory(categories, categoryId);
         var name = TrimAndCheckCategoryName(newName, categories, renamingId: categoryId);
 
         await _store.SaveAsync(CategoryTable, category with { Name = name, UpdatedAt = _clock.UtcNow });
     }
 
-    private static Category FindCategory(IReadOnlyList<Category> categories, string categoryId) =>
+    private static DefaultCategory FindCategory(IReadOnlyList<DefaultCategory> categories, string categoryId) =>
         categories.SingleOrDefault(c => c.Id == categoryId)
             ?? throw new RuleViolationException("That Category no longer exists.");
 
     /// <summary>Moves a Category to a new position (0 is the top); positions past either end stop there.</summary>
-    public async Task MoveCategoryAsync(string categoryId, int newPosition)
+    public async Task MoveDefaultCategoryAsync(string categoryId, int newPosition)
     {
-        var ordered = (await ListCategoriesAsync()).ToList();
+        var ordered = (await ListDefaultCategoriesAsync()).ToList();
         var category = FindCategory(ordered, categoryId);
 
         ordered.Remove(category);
@@ -281,9 +281,9 @@ public sealed class GearCatalogue
     }
 
     /// <summary>Removes a Category; at least one must stay. Kept as a tombstone so the removal syncs.</summary>
-    public async Task RemoveCategoryAsync(string categoryId)
+    public async Task RemoveDefaultCategoryAsync(string categoryId)
     {
-        var categories = await ListCategoriesAsync();
+        var categories = await ListDefaultCategoriesAsync();
         var category = FindCategory(categories, categoryId);
         if (categories.Count == 1)
         {

@@ -1,6 +1,9 @@
 namespace BackpackingTracker.Core.Gear;
 
-/// <summary>How Tags are compared and edited: trimmed, never blank, and matched ignoring case.</summary>
+/// <summary>
+/// How Tags are compared and edited: trimmed, never blank, and matched ignoring case. Gear Types follow
+/// the same rules (Comparer for spelling, Suggest for suggestions).
+/// </summary>
 public static class TagRules
 {
     public static readonly StringComparer Comparer = StringComparer.OrdinalIgnoreCase;

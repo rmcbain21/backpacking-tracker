@@ -15,7 +15,7 @@ public class CategoryTests
     private AppCore CreateApp() => new(_store, _clock);
 
     private static async Task<string[]> CategoryNamesAsync(AppCore app) =>
-        (await app.Gear.ListCategoriesAsync()).Select(category => category.Name).ToArray();
+        (await app.Gear.ListDefaultCategoriesAsync()).Select(category => category.Name).ToArray();
 
     [Fact]
     public async Task On_first_run_the_default_categories_exist_in_order()
@@ -40,8 +40,8 @@ public class CategoryTests
         var phone = new AppCore(new InMemoryRecordStore(), _clock);
         var tablet = new AppCore(new InMemoryRecordStore(), _clock);
 
-        var phoneIds = (await phone.Gear.ListCategoriesAsync()).Select(category => category.Id);
-        var tabletIds = (await tablet.Gear.ListCategoriesAsync()).Select(category => category.Id);
+        var phoneIds = (await phone.Gear.ListDefaultCategoriesAsync()).Select(category => category.Id);
+        var tabletIds = (await tablet.Gear.ListDefaultCategoriesAsync()).Select(category => category.Id);
 
         Assert.Equal(phoneIds, tabletIds);
         Assert.All(phoneIds, id => Assert.True(Guid.TryParse(id, out _)));
@@ -52,7 +52,7 @@ public class CategoryTests
     {
         var app = CreateApp();
 
-        var added = await app.Gear.AddCategoryAsync("  Big Three ");
+        var added = await app.Gear.AddDefaultCategoryAsync("  Big Three ");
 
         Assert.Equal("Big Three", added.Name);
         string[] expected = [.. DefaultNames, "Big Three"];
@@ -66,7 +66,7 @@ public class CategoryTests
     {
         var app = CreateApp();
 
-        await Assert.ThrowsAsync<RuleViolationException>(() => app.Gear.AddCategoryAsync(name));
+        await Assert.ThrowsAsync<RuleViolationException>(() => app.Gear.AddDefaultCategoryAsync(name));
 
         Assert.Equal(DefaultNames, await CategoryNamesAsync(app));
     }
@@ -76,14 +76,14 @@ public class CategoryTests
     {
         var app = CreateApp();
 
-        var refused = await Assert.ThrowsAsync<RuleViolationException>(() => app.Gear.AddCategoryAsync("shelter"));
+        var refused = await Assert.ThrowsAsync<RuleViolationException>(() => app.Gear.AddDefaultCategoryAsync("shelter"));
 
         Assert.Equal("There is already a Category called Shelter.", refused.Message);
         Assert.Equal(DefaultNames, await CategoryNamesAsync(app));
     }
 
-    private static async Task<Category> CategoryNamedAsync(AppCore app, string name) =>
-        (await app.Gear.ListCategoriesAsync()).Single(category => category.Name == name);
+    private static async Task<DefaultCategory> CategoryNamedAsync(AppCore app, string name) =>
+        (await app.Gear.ListDefaultCategoriesAsync()).Single(category => category.Name == name);
 
     [Fact]
     public async Task A_renamed_category_keeps_its_place_and_is_stamped_with_the_current_time()
@@ -93,7 +93,7 @@ public class CategoryTests
         var later = new DateTimeOffset(2026, 5, 2, 8, 0, 0, TimeSpan.Zero);
         _clock.UtcNow = later;
 
-        await app.Gear.RenameCategoryAsync(shelter.Id, " Big Three ");
+        await app.Gear.RenameDefaultCategoryAsync(shelter.Id, " Big Three ");
 
         Assert.Equal("Big Three", (await CategoryNamesAsync(CreateApp()))[0]);
         Assert.Equal(later, (await CategoryNamedAsync(app, "Big Three")).UpdatedAt);
@@ -105,7 +105,7 @@ public class CategoryTests
         var app = CreateApp();
         var firstAid = await CategoryNamedAsync(app, "First Aid");
 
-        await app.Gear.RenameCategoryAsync(firstAid.Id, "First aid");
+        await app.Gear.RenameDefaultCategoryAsync(firstAid.Id, "First aid");
 
         Assert.Contains("First aid", await CategoryNamesAsync(app));
     }
@@ -119,7 +119,7 @@ public class CategoryTests
         var shelter = await CategoryNamedAsync(app, "Shelter");
 
         var refused = await Assert.ThrowsAsync<RuleViolationException>(
-            () => app.Gear.RenameCategoryAsync(shelter.Id, newName));
+            () => app.Gear.RenameDefaultCategoryAsync(shelter.Id, newName));
 
         Assert.Equal(expectedMessage, refused.Message);
         Assert.Equal(DefaultNames, await CategoryNamesAsync(app));
@@ -131,7 +131,7 @@ public class CategoryTests
         var app = CreateApp();
         var water = await CategoryNamedAsync(app, "Water");
 
-        await app.Gear.MoveCategoryAsync(water.Id, 0);
+        await app.Gear.MoveDefaultCategoryAsync(water.Id, 0);
 
         Assert.Equal(
             ["Water", "Shelter", "Sleep", "Pack", "Cook", "Clothing", "Electronics", "Hygiene", "First Aid", "Misc"],
@@ -144,7 +144,7 @@ public class CategoryTests
         var app = CreateApp();
         var shelter = await CategoryNamedAsync(app, "Shelter");
 
-        await app.Gear.MoveCategoryAsync(shelter.Id, 1);
+        await app.Gear.MoveDefaultCategoryAsync(shelter.Id, 1);
 
         Assert.Equal(["Sleep", "Shelter", "Pack"], (await CategoryNamesAsync(app))[..3]);
     }
@@ -155,7 +155,7 @@ public class CategoryTests
         var app = CreateApp();
         var cook = await CategoryNamedAsync(app, "Cook");
 
-        await app.Gear.MoveCategoryAsync(cook.Id, -1);
+        await app.Gear.MoveDefaultCategoryAsync(cook.Id, -1);
 
         Assert.Equal(["Cook", "Shelter", "Sleep"], (await CategoryNamesAsync(app))[..3]);
     }
@@ -166,7 +166,7 @@ public class CategoryTests
         var app = CreateApp();
         var cook = await CategoryNamedAsync(app, "Cook");
 
-        await app.Gear.MoveCategoryAsync(cook.Id, 99);
+        await app.Gear.MoveDefaultCategoryAsync(cook.Id, 99);
 
         Assert.Equal(["First Aid", "Misc", "Cook"], (await CategoryNamesAsync(app))[^3..]);
     }
@@ -177,7 +177,7 @@ public class CategoryTests
         var app = CreateApp();
         var hygiene = await CategoryNamedAsync(app, "Hygiene");
 
-        await app.Gear.RemoveCategoryAsync(hygiene.Id);
+        await app.Gear.RemoveDefaultCategoryAsync(hygiene.Id);
 
         Assert.DoesNotContain("Hygiene", await CategoryNamesAsync(CreateApp()));
     }
@@ -186,9 +186,9 @@ public class CategoryTests
     public async Task Removed_default_categories_do_not_come_back()
     {
         var app = CreateApp();
-        foreach (var category in (await app.Gear.ListCategoriesAsync()).Where(c => c.Name != "Misc"))
+        foreach (var category in (await app.Gear.ListDefaultCategoriesAsync()).Where(c => c.Name != "Misc"))
         {
-            await app.Gear.RemoveCategoryAsync(category.Id);
+            await app.Gear.RemoveDefaultCategoryAsync(category.Id);
         }
 
         Assert.Equal(["Misc"], await CategoryNamesAsync(CreateApp()));
@@ -198,14 +198,14 @@ public class CategoryTests
     public async Task The_last_category_cannot_be_removed()
     {
         var app = CreateApp();
-        var categories = await app.Gear.ListCategoriesAsync();
+        var categories = await app.Gear.ListDefaultCategoriesAsync();
         foreach (var category in categories.Skip(1))
         {
-            await app.Gear.RemoveCategoryAsync(category.Id);
+            await app.Gear.RemoveDefaultCategoryAsync(category.Id);
         }
 
         var refused = await Assert.ThrowsAsync<RuleViolationException>(
-            () => app.Gear.RemoveCategoryAsync(categories[0].Id));
+            () => app.Gear.RemoveDefaultCategoryAsync(categories[0].Id));
 
         Assert.Equal("Keep at least one Category.", refused.Message);
         Assert.Equal(["Shelter"], await CategoryNamesAsync(app));
@@ -216,7 +216,7 @@ public class CategoryTests
     {
         // Every device creates the same defaults; an epoch timestamp lets sync tell an
         // untouched default from one the backpacker renamed or moved on another device.
-        var categories = await CreateApp().Gear.ListCategoriesAsync();
+        var categories = await CreateApp().Gear.ListDefaultCategoriesAsync();
 
         Assert.All(categories, category => Assert.Equal(DateTimeOffset.UnixEpoch, category.UpdatedAt));
     }
@@ -225,9 +225,9 @@ public class CategoryTests
     public async Task The_name_of_a_removed_category_can_be_used_again()
     {
         var app = CreateApp();
-        await app.Gear.RemoveCategoryAsync((await CategoryNamedAsync(app, "Pack")).Id);
+        await app.Gear.RemoveDefaultCategoryAsync((await CategoryNamedAsync(app, "Pack")).Id);
 
-        await app.Gear.AddCategoryAsync("Pack");
+        await app.Gear.AddDefaultCategoryAsync("Pack");
 
         Assert.Equal("Pack", (await CategoryNamesAsync(app))[^1]);
     }
@@ -238,9 +238,9 @@ public class CategoryTests
         var app = CreateApp();
         var sleep = await CategoryNamedAsync(app, "Sleep");
 
-        await app.Gear.MoveCategoryAsync(sleep.Id, 0);
+        await app.Gear.MoveDefaultCategoryAsync(sleep.Id, 0);
 
-        var categories = await app.Gear.ListCategoriesAsync();
+        var categories = await app.Gear.ListDefaultCategoriesAsync();
         Assert.Equal(_clock.UtcNow, categories.Single(c => c.Name == "Sleep").UpdatedAt);
         Assert.Equal(_clock.UtcNow, categories.Single(c => c.Name == "Shelter").UpdatedAt);
         Assert.Equal(DateTimeOffset.UnixEpoch, categories.Single(c => c.Name == "Pack").UpdatedAt);

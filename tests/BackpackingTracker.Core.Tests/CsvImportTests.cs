@@ -42,11 +42,11 @@ public class CsvImportTests
     [Fact]
     public async Task Importing_does_not_change_the_default_categories()
     {
-        var before = (await _app.Gear.ListCategoriesAsync()).Select(category => category.Name).ToList();
+        var before = (await _app.Gear.ListDefaultCategoriesAsync()).Select(category => category.Name).ToList();
 
         await _app.Import.ImportCsvAsync(Csv("Big Three,Tent,Durston X-Mid 1,765,,"));
 
-        Assert.Equal(before, (await _app.Gear.ListCategoriesAsync()).Select(category => category.Name));
+        Assert.Equal(before, (await _app.Gear.ListDefaultCategoriesAsync()).Select(category => category.Name));
     }
 
     [Theory]

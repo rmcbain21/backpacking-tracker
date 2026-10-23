@@ -3,9 +3,13 @@
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
 
-<PageTitle>Categories</PageTitle>
+<PageTitle>Default Categories</PageTitle>
 
-<MudText Typo="Typo.h5" HtmlTag="h1" GutterBottom="true">Categories</MudText>
+<MudText Typo="Typo.h5" HtmlTag="h1" GutterBottom="true">Default Categories</MudText>
+<MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">
+    Each new Gear List starts with a copy of these. Changing them doesn't change lists you already have;
+    edit a list's own Categories on the list.
+</MudText>
 
 <MudPaper Class="pa-4 mb-4">
     <div class="d-flex align-center gap-3">
@@ -46,11 +50,11 @@ else
 
 @code {
     private string? _newName;
-    private IReadOnlyList<Category>? _categories;
+    private IReadOnlyList<DefaultCategory>? _categories;
 
     protected override async Task OnInitializedAsync() => await LoadAsync();
 
-    private async Task LoadAsync() => _categories = await App.Gear.ListCategoriesAsync();
+    private async Task LoadAsync() => _categories = await App.Gear.ListDefaultCategoriesAsync();
 
     private async Task OnNewNameKeyUp(KeyboardEventArgs e)
     {
@@ -62,33 +66,33 @@ else
 
     private async Task AddAsync()
     {
-        if (await TryAsync(() => App.Gear.AddCategoryAsync(_newName ?? "")))
+        if (await TryAsync(() => App.Gear.AddDefaultCategoryAsync(_newName ?? "")))
         {
             _newName = null;
         }
     }
 
-    private Task MoveAsync(Category category, int newPosition) =>
-        TryAsync(() => App.Gear.MoveCategoryAsync(category.Id, newPosition));
+    private Task MoveAsync(DefaultCategory category, int newPosition) =>
+        TryAsync(() => App.Gear.MoveDefaultCategoryAsync(category.Id, newPosition));
 
-    private async Task RenameAsync(Category category)
+    private async Task RenameAsync(DefaultCategory category)
     {
         var parameters = new DialogParameters<NameDialog> { { d => d.CurrentName, category.Name } };
         var dialog = await DialogService.ShowAsync<NameDialog>("Rename Category", parameters);
         var result = await dialog.Result;
         if (result is { Canceled: false, Data: string newName })
         {
-            await TryAsync(() => App.Gear.RenameCategoryAsync(category.Id, newName));
+            await TryAsync(() => App.Gear.RenameDefaultCategoryAsync(category.Id, newName));
         }
     }
 
-    private async Task RemoveAsync(Category category)
+    private async Task RemoveAsync(DefaultCategory category)
     {
         var confirmed = await DialogService.ShowMessageBoxAsync(
             "Remove Category", $"Remove {category.Name}?", yesText: "Remove", cancelText: "Cancel");
         if (confirmed == true)
         {
-            await TryAsync(() => App.Gear.RemoveCategoryAsync(category.Id));
+            await TryAsync(() => App.Gear.RemoveDefaultCategoryAsync(category.Id));
         }
     }
 

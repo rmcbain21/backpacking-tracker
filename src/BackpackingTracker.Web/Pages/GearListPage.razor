@@ -56,16 +56,36 @@ else if (_view is not null)
         </MudPaper>
     }
 
-    @if (_view.Entries.Count == 0)
+    @foreach (var categorySection in _view.Sections)
     {
-        <MudText Class="mud-text-secondary">Nothing on this list yet. Tap + to add gear.</MudText>
-    }
-    else
-    {
+        var category = categorySection.Category;
+        var isOnList = categorySection.IsOnList;
+        var position = categorySection.Position;
+        <div class="d-flex align-center mt-4 mb-1 pl-1 category-heading" data-category="@category.Name">
+            <MudText Typo="Typo.subtitle2" HtmlTag="h2" Class="flex-grow-1">@category.Name</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary text-nowrap category-subtotal">
+                @(categorySection.Entries.Count == 0 ? "Empty" : Weight(categorySection.SubtotalGrams))
+            </MudText>
+            @if (isOnList)
+            {
+                <MudIconButton Icon="@Icons.Material.Filled.Add" Size="Size.Small" aria-label="@($"Add gear to {category.Name}")"
+                               OnClick="() => AddGearAsync(category.Id)" />
+                <MudMenu Icon="@Icons.Material.Filled.MoreVert" Size="Size.Small" Dense="true" AriaLabel="@($"Options for {category.Name}")">
+                    <MudMenuItem OnClick="() => RenameCategoryAsync(category)">Rename</MudMenuItem>
+                    <MudMenuItem OnClick="() => MoveCategoryAsync(category, position - 1)" Disabled="position == 0">Move up</MudMenuItem>
+                    <MudMenuItem OnClick="() => MoveCategoryAsync(category, position + 1)"
+                                 Disabled="position == _view.GearList.Categories.Count - 1">Move down</MudMenuItem>
+                    <MudMenuItem OnClick="() => RemoveCategoryAsync(category)">Remove</MudMenuItem>
+                </MudMenu>
+            }
+        </div>
+        @if (categorySection.Entries.Count > 0)
+        {
         <MudPaper>
-            @foreach (var entryView in _view.Entries)
+            @foreach (var entryView in categorySection.Entries)
             {
                 var entry = entryView.Entry;
+                var entryName = entryView.GearItem?.Name ?? "Deleted Gear Item";
                 <div class="pa-3 list-entry">
                     <div class="d-flex align-center gap-2">
                         <div class="flex-grow-1">
@@ -98,6 +118,13 @@ else if (_view is not null)
                             }
                         </MudSelect>
                         <MudSpacer />
+                        <MudMenu Icon="@Icons.Material.Filled.DriveFileMove" Size="Size.Small" Dense="true"
+                                 AriaLabel="@($"Move {entryName} to another Category")">
+                            @foreach (var target in _view.GearList.Categories.Where(c => c.Id != entry.CategoryId))
+                            {
+                                <MudMenuItem OnClick="() => MoveEntryAsync(entry, target)">@target.Name</MudMenuItem>
+                            }
+                        </MudMenu>
                         <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small"
                                        aria-label="Remove from list" OnClick="() => RemoveAsync(entry)" />
                     </div>
@@ -105,10 +132,17 @@ else if (_view is not null)
                 <MudDivider />
             }
         </MudPaper>
+        }
     }
 
+    <div class="d-flex justify-center mt-4">
+        <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.CreateNewFolder" OnClick="AddCategoryAsync">
+            Add Category
+        </MudButton>
+    </div>
+
     <MudFab Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Class="add-fab" aria-label="Add gear to list"
-            OnClick="AddGearAsync" />
+            OnClick="() => AddGearAsync(null)" />
 }
 
 @code {
@@ -133,15 +167,77 @@ else if (_view is not null)
     private Task UpdateAsync(ListEntry entry, int quantity, CarryMode carryMode) =>
         TryAsync(() => App.Lists.UpdateEntryAsync(GearListId, entry.Id, quantity, carryMode));
 
+    private Task MoveEntryAsync(ListEntry entry, Category target) =>
+        TryAsync(() => App.Lists.MoveEntryAsync(GearListId, entry.Id, target.Id));
+
     private Task RemoveAsync(ListEntry entry) => TryAsync(() => App.Lists.RemoveEntryAsync(GearListId, entry.Id));
 
-    private async Task AddGearAsync()
+    /// <summary>Opens the picker; from a Category's + it starts on that Category, otherwise on the first.</summary>
+    private async Task AddGearAsync(string? categoryId)
     {
-        var parameters = new DialogParameters<AddGearDialog> { { d => d.GearListId, GearListId } };
+        var parameters = new DialogParameters<AddGearDialog>
+        {
+            { d => d.GearListId, GearListId },
+            { d => d.Categories, _view!.GearList.Categories },
+            { d => d.CategoryId, categoryId ?? _view.GearList.Categories[0].Id },
+        };
         var options = new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Small };
         var dialog = await DialogService.ShowAsync<AddGearDialog>("Add gear", parameters, options);
         await dialog.Result;
         await LoadAsync();
+    }
+
+    private async Task AddCategoryAsync()
+    {
+        var name = await AskForNameAsync("New Category", "", "Add");
+        if (name is not null)
+        {
+            await TryAsync(() => App.Lists.AddCategoryAsync(GearListId, name));
+        }
+    }
+
+    private async Task RenameCategoryAsync(Category category)
+    {
+        var name = await AskForNameAsync("Rename Category", category.Name, "Save");
+        if (name is not null)
+        {
+            await TryAsync(() => App.Lists.RenameCategoryAsync(GearListId, category.Id, name));
+        }
+    }
+
+    private Task MoveCategoryAsync(Category category, int newPosition) =>
+        TryAsync(() => App.Lists.MoveCategoryAsync(GearListId, category.Id, newPosition));
+
+    private async Task RemoveCategoryAsync(Category category)
+    {
+        var plan = await App.Lists.PlanCategoryRemovalAsync(GearListId, category.Id);
+        if (!plan.NeedsMoveTarget)
+        {
+            var confirmed = await DialogService.ShowMessageBoxAsync(
+                "Remove Category", plan.Message, yesText: "Remove", cancelText: "Cancel");
+            if (confirmed == true)
+            {
+                await TryAsync(() => App.Lists.RemoveCategoryAsync(GearListId, category.Id));
+            }
+
+            return;
+        }
+
+        var parameters = new DialogParameters<RemoveCategoryDialog> { { d => d.Plan, plan } };
+        var dialog = await DialogService.ShowAsync<RemoveCategoryDialog>("Remove Category", parameters);
+        var result = await dialog.Result;
+        if (result is { Canceled: false, Data: string targetId })
+        {
+            await TryAsync(() => App.Lists.RemoveCategoryAsync(GearListId, category.Id, moveEntriesToCategoryId: targetId));
+        }
+    }
+
+    private async Task<string?> AskForNameAsync(string title, string currentName, string saveText)
+    {
+        var parameters = new DialogParameters<NameDialog> { { d => d.CurrentName, currentName }, { d => d.SaveText, saveText } };
+        var dialog = await DialogService.ShowAsync<NameDialog>(title, parameters);
+        var result = await dialog.Result;
+        return result is { Canceled: false, Data: string name } ? name : null;
     }
 
     /// <summary>Runs a change, shows the reason if the core refuses it, and reloads the list.</summary>
