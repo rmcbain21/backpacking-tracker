@@ -102,13 +102,6 @@ public class RetireAndDeleteTests
         Assert.Equal(["solo"], await app.Gear.ListTagsAsync());
     }
 
-    /// <summary>Stands in for Gear Lists and Trips, which will report the Gear Items they use.</summary>
-    private sealed class FakeReferences(string gearItemId, params string[] uses) : IGearItemReferences
-    {
-        public Task<IReadOnlyList<string>> FindUsesAsync(string id) =>
-            Task.FromResult<IReadOnlyList<string>>(id == gearItemId ? uses : []);
-    }
-
     [Fact]
     public async Task An_unused_gear_item_can_be_deleted()
     {
@@ -155,23 +148,59 @@ public class RetireAndDeleteTests
         Assert.Equal(later, stored.UpdatedAt);
     }
 
+    private static async Task<string> PutOnGearListAsync(AppCore app, string listName, GearItem item)
+    {
+        var list = (await app.Lists.ListGearListsAsync()).FirstOrDefault(view => view.GearList.Name == listName)?.GearList
+            ?? await app.Lists.CreateGearListAsync(listName);
+        await app.Lists.AddEntryAsync(list.Id, item.Id);
+        return list.Id;
+    }
+
     [Fact]
-    public async Task A_gear_item_that_something_uses_cannot_be_deleted_and_retire_is_offered()
+    public async Task A_gear_item_on_a_gear_list_cannot_be_deleted_and_retire_is_offered()
     {
         var app = CreateApp();
         var tent = await AddAsync(app, "Tent");
-        app.Gear.AddReferences(new FakeReferences(tent.Id, "Gear List \"Summer kit\"", "Trip \"Sierra 2026\""));
+        await PutOnGearListAsync(app, "Summer kit", tent);
 
         var plan = await app.Gear.PlanGearItemDeletionAsync(tent.Id);
         var refused = await Assert.ThrowsAsync<RuleViolationException>(() => app.Gear.DeleteGearItemAsync(tent.Id));
 
         Assert.False(plan.CanDelete);
-        Assert.Equal(["Gear List \"Summer kit\"", "Trip \"Sierra 2026\""], plan.UsedBy);
-        Assert.Equal(
-            "Tent can't be deleted because Gear List \"Summer kit\" and Trip \"Sierra 2026\" use it. Retire it instead?",
-            plan.Message);
+        Assert.Equal(["Gear List \"Summer kit\""], plan.UsedBy);
+        Assert.Equal("Tent can't be deleted because Gear List \"Summer kit\" uses it. Retire it instead?", plan.Message);
         Assert.Equal(plan.Message, refused.Message);
         Assert.Equal(["Tent"], await CatalogueNamesAsync(app));
+    }
+
+    [Fact]
+    public async Task Every_gear_list_using_a_gear_item_is_named_once()
+    {
+        var app = CreateApp();
+        var socks = await AddAsync(app, "Socks");
+        await PutOnGearListAsync(app, "Winter kit", socks);
+        await PutOnGearListAsync(app, "Summer kit", socks);
+        await PutOnGearListAsync(app, "Summer kit", socks);
+
+        var plan = await app.Gear.PlanGearItemDeletionAsync(socks.Id);
+
+        Assert.Equal(["Gear List \"Summer kit\"", "Gear List \"Winter kit\""], plan.UsedBy);
+        Assert.Equal(
+            "Socks can't be deleted because Gear List \"Summer kit\" and Gear List \"Winter kit\" use it. Retire it instead?",
+            plan.Message);
+    }
+
+    [Fact]
+    public async Task A_gear_item_can_be_deleted_once_no_gear_list_uses_it()
+    {
+        var app = CreateApp();
+        var tent = await AddAsync(app, "Tent");
+        var listId = await PutOnGearListAsync(app, "Summer kit", tent);
+        var entry = Assert.Single((await app.Lists.GetGearListAsync(listId))!.Entries);
+
+        await app.Lists.RemoveEntryAsync(listId, entry.Entry.Id);
+
+        Assert.True((await app.Gear.PlanGearItemDeletionAsync(tent.Id)).CanDelete);
     }
 
     [Fact]
@@ -179,12 +208,12 @@ public class RetireAndDeleteTests
     {
         var app = CreateApp();
         var tent = await AddAsync(app, "Tent");
+        await PutOnGearListAsync(app, "Summer kit", tent);
         await app.Gear.RetireGearItemAsync(tent.Id);
-        app.Gear.AddReferences(new FakeReferences(tent.Id, "Trip \"Sierra 2026\""));
 
         var plan = await app.Gear.PlanGearItemDeletionAsync(tent.Id);
 
-        Assert.Equal("Tent can't be deleted because Trip \"Sierra 2026\" uses it.", plan.Message);
+        Assert.Equal("Tent can't be deleted because Gear List \"Summer kit\" uses it.", plan.Message);
     }
 
     [Fact]
@@ -194,9 +223,9 @@ public class RetireAndDeleteTests
         var unused = await AddAsync(app, "Stakes");
         var used = await AddAsync(app, "Tent");
         var usedAndRetired = await AddAsync(app, "Tarp");
+        await PutOnGearListAsync(app, "Summer kit", used);
+        await PutOnGearListAsync(app, "Summer kit", usedAndRetired);
         await app.Gear.RetireGearItemAsync(usedAndRetired.Id);
-        app.Gear.AddReferences(new FakeReferences(used.Id, "Trip \"Sierra 2026\""));
-        app.Gear.AddReferences(new FakeReferences(usedAndRetired.Id, "Trip \"Sierra 2026\""));
 
         var canDelete = await app.Gear.PlanGearItemDeletionAsync(unused.Id);
         var offersRetire = await app.Gear.PlanGearItemDeletionAsync(used.Id);
@@ -205,20 +234,6 @@ public class RetireAndDeleteTests
         Assert.Equal(("Delete Gear Item", "Delete"), (canDelete.Title, canDelete.ConfirmButton));
         Assert.Equal(("Can't delete", "Retire"), (offersRetire.Title, offersRetire.ConfirmButton));
         Assert.Equal(("Can't delete", null), (cannotDelete.Title, cannotDelete.ConfirmButton));
-    }
-
-    [Fact]
-    public async Task Uses_reported_by_every_area_are_combined()
-    {
-        var app = CreateApp();
-        var tent = await AddAsync(app, "Tent");
-        app.Gear.AddReferences(new FakeReferences(tent.Id, "Gear List \"Summer kit\""));
-        app.Gear.AddReferences(new FakeReferences(tent.Id, "Trip \"Sierra 2026\""));
-        app.Gear.AddReferences(new FakeReferences("another-gear-item", "Gear List \"Winter kit\""));
-
-        var plan = await app.Gear.PlanGearItemDeletionAsync(tent.Id);
-
-        Assert.Equal(["Gear List \"Summer kit\"", "Trip \"Sierra 2026\""], plan.UsedBy);
     }
 
     [Fact]

@@ -1,0 +1,94 @@
+@* Picks Gear Items to add to a Gear List: search, then tap to add (tapping again adds one more). Retired gear isn't offered. *@
+@inject AppCore App
+@inject ISnackbar Snackbar
+
+<MudDialog ContentClass="add-gear-content">
+    <DialogContent>
+        <MudTextField T="string" Value="_searchText" ValueChanged="SearchAsync" Label="Search gear" Immediate="true"
+                      DebounceInterval="200" Clearable="true" Adornment="Adornment.Start"
+                      AdornmentIcon="@Icons.Material.Filled.Search" Class="mb-2" />
+        @if (_sections is { Count: 0 })
+        {
+            <MudText Class="mud-text-secondary">@(string.IsNullOrWhiteSpace(_searchText) ? "No gear yet." : "No Gear Items match.")</MudText>
+        }
+        @foreach (var categorySection in _sections ?? [])
+        {
+            <MudText Typo="Typo.subtitle2" Class="mt-3 mb-1">@categorySection.Category.Name</MudText>
+            @foreach (var item in categorySection.GearItems)
+            {
+                <div class="d-flex align-center py-2 gap-2 pick-row" role="button" tabindex="0"
+                     aria-label="@($"Add {item.Name}")" @onclick="() => AddAsync(item)">
+                    <div class="flex-grow-1">
+                        <MudText>@item.Name</MudText>
+                        @if (!string.IsNullOrEmpty(item.BrandModel))
+                        {
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary">@item.BrandModel</MudText>
+                        }
+                    </div>
+                    @if (_onList.TryGetValue(item.Id, out var quantity))
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Success">On list @(quantity > 1 ? $"×{quantity}" : "")</MudChip>
+                    }
+                    else
+                    {
+                        <MudIcon Icon="@Icons.Material.Filled.AddCircleOutline" Color="Color.Primary" />
+                    }
+                </div>
+                <MudDivider />
+            }
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="() => MudDialog.Close()">Done</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter, EditorRequired]
+    public string GearListId { get; set; } = "";
+
+    private string? _searchText;
+    private IReadOnlyList<CategorySection>? _sections;
+
+    // How many of each Gear Item the list holds, so gear already on it is marked.
+    private Dictionary<string, int> _onList = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+        await LoadListAsync();
+    }
+
+    private async Task LoadListAsync()
+    {
+        var list = await App.Lists.GetGearListAsync(GearListId);
+        _onList = (list?.Entries ?? [])
+            .GroupBy(entry => entry.Entry.GearItemId)
+            .ToDictionary(group => group.Key, group => group.Sum(entry => entry.Entry.Quantity));
+    }
+
+    private async Task LoadAsync() =>
+        _sections = await App.Gear.ListGearItemsByCategoryAsync(new GearFilter(_searchText));
+
+    private async Task SearchAsync(string? searchText)
+    {
+        _searchText = searchText;
+        await LoadAsync();
+    }
+
+    private async Task AddAsync(GearItem item)
+    {
+        try
+        {
+            await App.Lists.AddEntryAsync(GearListId, item.Id);
+            await LoadListAsync();
+        }
+        catch (RuleViolationException ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Warning);
+        }
+    }
+}

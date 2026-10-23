@@ -12,3 +12,7 @@
 - [ ] A conflict view shows both versions side by side, with the differing fields highlighted, in display units.
 - [ ] Choosing a version writes it with a new `updatedAt`, clears the conflict, and wins on the next sync on every device.
 - [ ] Two-device tests cover detection, identical edits, a conflict on a tombstone versus an edit, settling on either device, and propagation after settling.
+
+## Comments
+
+- From ticket 08: List Entries live inside the Gear List record, so every quantity or Carry Mode change rewrites the whole list. Edits to different entries of the same list on two devices before syncing become one Sync Conflict for the whole list. Showing the two versions side by side should make the entry-level differences easy to see.

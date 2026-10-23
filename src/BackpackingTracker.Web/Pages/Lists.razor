@@ -1,6 +1,72 @@
 @page "/lists"
+@using BackpackingTracker.Core.Lists
+@inject AppCore App
+@inject IDialogService DialogService
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
 
-<PageTitle>Lists</PageTitle>
+<PageTitle>Gear Lists</PageTitle>
 
-<MudText Typo="Typo.h5" HtmlTag="h1" GutterBottom="true">Lists</MudText>
-<MudText Class="mud-text-secondary">Coming soon.</MudText>
+<MudText Typo="Typo.h5" HtmlTag="h1" GutterBottom="true">Gear Lists</MudText>
+
+@if (_lists is null)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else if (_lists.Count == 0)
+{
+    <MudText Class="mud-text-secondary">No Gear Lists yet. Tap + to make one, such as "Summer kit".</MudText>
+}
+else
+{
+    <MudPaper>
+        @foreach (var view in _lists)
+        {
+            <a class="d-flex align-center pa-3 gap-3 list-row" href="@($"lists/{view.GearList.Id}")">
+                <div class="flex-grow-1">
+                    <MudText>@view.GearList.Name</MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                        @(view.Entries.Count == 1 ? "1 entry" : $"{view.Entries.Count} entries")
+                    </MudText>
+                </div>
+                <MudText Class="text-nowrap">@UnitFormat.Weight(view.Weight.StartingPackGrams, _unitSystem)</MudText>
+            </a>
+            <MudDivider />
+        }
+    </MudPaper>
+}
+
+<MudFab Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Class="add-fab" aria-label="New Gear List"
+        OnClick="CreateAsync" />
+
+@code {
+    private UnitSystem _unitSystem;
+    private IReadOnlyList<GearListView>? _lists;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _unitSystem = (await App.Settings.GetAsync()).UnitSystem;
+        _lists = await App.Lists.ListGearListsAsync();
+    }
+
+    private async Task CreateAsync()
+    {
+        var parameters = new DialogParameters<NameDialog> { { d => d.SaveText, "Create" } };
+        var dialog = await DialogService.ShowAsync<NameDialog>("New Gear List", parameters);
+        var result = await dialog.Result;
+        if (result is not { Canceled: false, Data: string name })
+        {
+            return;
+        }
+
+        try
+        {
+            var list = await App.Lists.CreateGearListAsync(name);
+            Navigation.NavigateTo($"lists/{list.Id}");
+        }
+        catch (RuleViolationException ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Warning);
+        }
+    }
+}

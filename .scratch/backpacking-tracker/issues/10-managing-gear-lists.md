@@ -11,3 +11,7 @@
 - [ ] Deleting a Gear List tombstones it after confirmation.
 - [ ] The Gear Item hard-delete guard counts List Entries on Gear Lists as references.
 - [ ] Core tests cover rename, duplicate, delete, and the extended delete guard.
+
+## Comments
+
+- From ticket 08: "The Gear Item hard-delete guard counts List Entries on Gear Lists as references" is already done (Gear Lists implement `IGearItemReferences`, registered in `AppCore`, with tests in `RetireAndDeleteTests`). Duplicating a Gear List should give the copied List Entries new ids.

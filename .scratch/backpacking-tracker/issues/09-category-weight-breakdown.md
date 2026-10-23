@@ -10,3 +10,7 @@
 - [ ] Categories with no entries on the list are omitted.
 - [ ] The Gear List page shows the breakdown (a simple table or bar is fine on phone).
 - [ ] Core tests cover the breakdown sums and shares.
+
+## Comments
+
+- From ticket 08: `WeighedEntry` (in `Core/Weight`) has no Category yet; add it, and give `PackWeight` a breakdown. An entry whose Gear Item was deleted on another device has no Category: give it its own breakdown line rather than dropping its (zero) weight silently.

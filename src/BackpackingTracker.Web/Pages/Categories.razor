@@ -73,8 +73,8 @@ else
 
     private async Task RenameAsync(Category category)
     {
-        var parameters = new DialogParameters<RenameCategoryDialog> { { d => d.CurrentName, category.Name } };
-        var dialog = await DialogService.ShowAsync<RenameCategoryDialog>("Rename Category", parameters);
+        var parameters = new DialogParameters<NameDialog> { { d => d.CurrentName, category.Name } };
+        var dialog = await DialogService.ShowAsync<NameDialog>("Rename Category", parameters);
         var result = await dialog.Result;
         if (result is { Canceled: false, Data: string newName })
         {

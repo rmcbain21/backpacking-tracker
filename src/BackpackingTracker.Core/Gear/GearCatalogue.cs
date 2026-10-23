@@ -88,6 +88,18 @@ public sealed class GearCatalogue
     public async Task<GearItem?> GetGearItemAsync(string gearItemId) =>
         (await LoadGearItemsAsync()).SingleOrDefault(item => item.Id == gearItemId);
 
+    /// <summary>
+    /// The Gear Items with these ids, Retired or not, keyed by id, loading the catalogue once.
+    /// Ids of deleted or unknown Gear Items are left out.
+    /// </summary>
+    public async Task<IReadOnlyDictionary<string, GearItem>> GetGearItemsAsync(IEnumerable<string> gearItemIds)
+    {
+        var wanted = gearItemIds.ToHashSet();
+        return (await LoadGearItemsAsync())
+            .Where(item => wanted.Contains(item.Id))
+            .ToDictionary(item => item.Id);
+    }
+
     /// <summary>A Gear Item by id, Retired or not; refuses if it doesn't exist or was deleted.</summary>
     private async Task<GearItem> GetExistingGearItemAsync(string gearItemId) =>
         await GetGearItemAsync(gearItemId) ?? throw new RuleViolationException("That Gear Item no longer exists.");
@@ -331,7 +343,7 @@ public sealed class GearCatalogue
         return cleaned;
     }
 
-    /// <summary>Lets an area that refers to Gear Items (Gear Lists, Trips) take part in the delete check.</summary>
+    /// <summary>Lets an area that refers to Gear Items (Gear Lists, Trips) take part in the delete check. Called by AppCore.</summary>
     internal void AddReferences(IGearItemReferences references) => _references.Add(references);
 
     public async Task<GearItemDeletionPlan> PlanGearItemDeletionAsync(string gearItemId)

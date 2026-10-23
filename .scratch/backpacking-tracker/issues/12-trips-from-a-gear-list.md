@@ -17,3 +17,4 @@
 ## Comments
 
 - From ticket 06: Trips (Packing Lists) must also implement `IGearItemReferences` and register in `AppCore`, so a Gear Item on a Trip can't be deleted (Retire is offered instead). As with Gear Lists, a Packing List entry may point at a Gear Item deleted on another device before a sync.
+- From ticket 08: when copying a Gear List's entries into a Packing List, give each copied entry a new id. Totals should come from `WeightCalculator` in `Core/Weight` (shared with Gear Lists).

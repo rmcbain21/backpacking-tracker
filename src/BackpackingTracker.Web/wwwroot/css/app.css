@@ -114,14 +114,14 @@ code {
         color: var(--mud-palette-primary);
     }
 
-/* Keep the last rows clear of the bottom navigation on phones */
+/* Keep the last rows clear of the bottom navigation and the + button, so they can scroll above both */
 .main-content {
-    padding-bottom: 88px;
+    padding-bottom: 160px;
 }
 
 @media (min-width: 600px) {
     .main-content {
-        padding-bottom: 16px;
+        padding-bottom: 96px;
     }
 }
 
@@ -175,4 +175,33 @@ h1:focus {
     border-radius: 4px;
     background-color: var(--mud-palette-background-gray);
     white-space: normal;
+}
+
+/* Gear Lists: a list row links to the list; entry controls sit under the name */
+.list-row {
+    color: inherit;
+    text-decoration: none;
+}
+
+    .list-row:hover,
+    .pick-row:hover {
+        background-color: var(--mud-palette-action-default-hover);
+    }
+
+.pick-row {
+    cursor: pointer;
+}
+
+.entry-quantity {
+    min-width: 1.5em;
+    text-align: center;
+}
+
+.carry-mode {
+    flex: 0 0 130px;
+}
+
+.add-gear-content {
+    max-height: 70vh;
+    overflow-y: auto;
 }
