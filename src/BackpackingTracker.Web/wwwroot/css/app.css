@@ -167,3 +167,12 @@ h1:focus {
     .gear-row:hover {
         background-color: var(--mud-palette-action-default-hover);
     }
+
+/* The CSV column names on the Import page */
+.import-columns {
+    display: block;
+    padding: 8px;
+    border-radius: 4px;
+    background-color: var(--mud-palette-background-gray);
+    white-space: normal;
+}

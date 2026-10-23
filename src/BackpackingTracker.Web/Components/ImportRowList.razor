@@ -1,0 +1,21 @@
+@using BackpackingTracker.Core.Import
+@* A collapsible list of import rows, by row number and name. *@
+@if (Rows.Count > 0)
+{
+    <MudExpansionPanels Class="mt-4" Elevation="1">
+        <MudExpansionPanel Text="@($"{Title} ({Rows.Count})")">
+            @foreach (var row in Rows)
+            {
+                <MudText Typo="Typo.body2">Row @row.RowNumber: @row.Name</MudText>
+            }
+        </MudExpansionPanel>
+    </MudExpansionPanels>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public string Title { get; set; } = "";
+
+    [Parameter, EditorRequired]
+    public IReadOnlyList<CsvRowResult> Rows { get; set; } = [];
+}

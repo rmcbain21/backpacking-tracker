@@ -10,3 +10,7 @@
 - [ ] Each List Entry uses the row's Gear Item (created or reused), Qty (default 1) and Carry Mode (default base).
 - [ ] The import summary names the created Gear List.
 - [ ] Core tests cover Gear List creation from rows, including reused Gear Items and defaults.
+
+## Comments
+
+- From ticket 07: `CsvImportSummary.Rows` already carries, for every created, reused and flagged row, the `GearItem`, `Quantity` (default 1) and `CarryMode` (default base). Rejected rows have no `GearItem` and should get no List Entry. A row that matched a Retired Gear Item reuses it; decide whether a new Gear List should include it.

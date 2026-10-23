@@ -1,0 +1,122 @@
+@page "/gear/import"
+@using System.Text
+@using BackpackingTracker.Core.Import
+@inject AppCore App
+
+<PageTitle>Import gear</PageTitle>
+
+<MudText Typo="Typo.h5" HtmlTag="h1" GutterBottom="true">Import gear</MudText>
+
+<MudPaper Class="pa-4 mb-4">
+    <MudText Typo="Typo.body2" Class="mb-2">
+        Import Gear Items from a spreadsheet saved as CSV (in Excel: Save As, "CSV UTF-8"). The first row must
+        be these column names, in this order:
+    </MudText>
+    <code class="import-columns">@string.Join(", ", GearImport.Columns)</code>
+    <MudText Typo="Typo.body2" Class="mud-text-secondary mt-2">
+        Gear you already have (same name and brand/model) is reused and never changed. Blank Qty means 1;
+        blank Carry Mode means base.
+    </MudText>
+
+    <MudButton HtmlTag="label" for="csv-file" Variant="Variant.Filled" Color="Color.Primary" Class="mt-4"
+               StartIcon="@Icons.Material.Filled.UploadFile" Disabled="_importing">Choose CSV file</MudButton>
+    <InputFile id="csv-file" OnChange="ImportAsync" accept=".csv,text/csv" hidden />
+</MudPaper>
+
+@if (_importing)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+
+@if (_problem is not null)
+{
+    <MudAlert Severity="Severity.Error" Class="mb-4">@_problem</MudAlert>
+}
+
+@if (_summary is not null)
+{
+    <MudText Typo="Typo.h6" HtmlTag="h2">@_fileName</MudText>
+    <MudText Class="mb-2 import-counts">
+        @_summary.Created.Count created · @_summary.Reused.Count reused · @_summary.Flagged.Count flagged ·
+        @_summary.Rejected.Count rejected
+    </MudText>
+
+    @if (_summary.CreatedCategories.Count > 0)
+    {
+        <MudText Typo="Typo.body2" Class="mb-2">New Categories: @string.Join(", ", _summary.CreatedCategories)</MudText>
+    }
+
+    @if (_summary.Rejected.Count > 0)
+    {
+        <MudText Typo="Typo.subtitle2" HtmlTag="h3" Class="mt-4 mb-1">Rejected</MudText>
+        <MudPaper Class="import-rejected">
+            @foreach (var row in _summary.Rejected)
+            {
+                <div class="pa-3"><b>Row @row.RowNumber</b>@(row.Name.Length > 0 ? $" ({row.Name})" : ""): @row.Reason</div>
+                <MudDivider />
+            }
+        </MudPaper>
+    }
+
+    @if (_summary.Flagged.Count > 0)
+    {
+        <MudText Typo="Typo.subtitle2" HtmlTag="h3" Class="mt-4 mb-1">Flagged: weight differs (kept as it was)</MudText>
+        <MudPaper Class="import-flagged">
+            @foreach (var row in _summary.Flagged)
+            {
+                <div class="pa-3">
+                    <b>Row @row.RowNumber</b> @row.Name: CSV says @UnitFormat.Weight(row.CsvWeightGrams!.Value, _unitSystem),
+                    saved weight is @UnitFormat.Weight(row.GearItem!.WeightGrams, _unitSystem)
+                </div>
+                <MudDivider />
+            }
+        </MudPaper>
+    }
+
+    <ImportRowList Title="Created" Rows="_summary.Created" />
+    <ImportRowList Title="Reused" Rows="_summary.Reused" />
+}
+
+@code {
+    // A trip sheet is a few kilobytes; this is generous.
+    private const long MaxFileBytes = 1_000_000;
+
+    private UnitSystem _unitSystem;
+    private bool _importing;
+    private string? _problem;
+    private string? _fileName;
+    private CsvImportSummary? _summary;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _unitSystem = (await App.Settings.GetAsync()).UnitSystem;
+    }
+
+    private async Task ImportAsync(InputFileChangeEventArgs e)
+    {
+        _importing = true;
+        _problem = null;
+        _summary = null;
+        _fileName = e.File.Name;
+        try
+        {
+            if (e.File.Size > MaxFileBytes)
+            {
+                _problem = "That file is too big to be a gear spreadsheet (over 1 MB).";
+                return;
+            }
+
+            using var reader = new StreamReader(e.File.OpenReadStream(MaxFileBytes), Encoding.UTF8);
+            var csv = await reader.ReadToEndAsync();
+            _summary = await App.Import.ImportCsvAsync(csv);
+        }
+        catch (RuleViolationException ex)
+        {
+            _problem = ex.Message;
+        }
+        finally
+        {
+            _importing = false;
+        }
+    }
+}

@@ -1,4 +1,5 @@
 using BackpackingTracker.Core.Gear;
+using BackpackingTracker.Core.Import;
 using BackpackingTracker.Core.Ports;
 using BackpackingTracker.Core.Preferences;
 
@@ -13,9 +14,12 @@ public sealed class AppCore
     {
         Gear = new GearCatalogue(store, clock);
         Settings = new UserSettings(store, clock);
+        Import = new GearImport(Gear);
     }
 
     public GearCatalogue Gear { get; }
 
     public UserSettings Settings { get; }
+
+    public GearImport Import { get; }
 }
