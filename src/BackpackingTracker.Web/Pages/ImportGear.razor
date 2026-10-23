@@ -9,13 +9,18 @@
 
 <MudPaper Class="pa-4 mb-4">
     <MudText Typo="Typo.body2" Class="mb-2">
-        Import Gear Items from a spreadsheet saved as CSV (in Excel: Save As, "CSV UTF-8"). The first row must
-        be these column names, in this order:
+        Import Gear Items from a spreadsheet saved as CSV (in Excel: Save As, "CSV UTF-8"). Either a trip sheet,
+        whose first row includes these columns (others, like lb and oz, are ignored):
+    </MudText>
+    <code class="import-columns">@string.Join(", ", GearImport.TripSheetColumns)</code>
+    <MudText Typo="Typo.body2" Class="mt-2 mb-2">
+        with each Category as a section-header row, Item as the gear's name, Name as its brand/model, and the
+        weight in g. Or one row per Gear Item, with exactly these columns in order:
     </MudText>
     <code class="import-columns">@string.Join(", ", GearImport.Columns)</code>
     <MudText Typo="Typo.body2" Class="mud-text-secondary mt-2">
-        Gear you already have (same name and brand/model) is reused and never changed. Blank Qty means 1;
-        blank Carry Mode means base.
+        Gear you already have (same name and brand/model) is reused and never changed. Rows with no weight,
+        or 0 g, are listed so you can weigh them and add them by hand.
     </MudText>
 
     <MudButton HtmlTag="label" for="csv-file" Variant="Variant.Filled" Color="Color.Primary" Class="mt-4"

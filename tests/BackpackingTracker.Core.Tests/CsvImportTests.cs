@@ -46,7 +46,7 @@ public class CsvImportTests
             () => _app.Import.ImportCsvAsync(header + "\nShelter,Tent,,765,,"));
 
         Assert.Equal(
-            "The first row must be the column names: Category, Name, Brand/Model, Weight (g), Qty, Carry Mode.",
+            "The first row must be the column names: Category, Name, Brand/Model, Weight (g), Qty, Carry Mode (or, for a trip sheet: Category, Item, Name, g).",
             refused.Message);
         Assert.Empty(await _app.Gear.ListGearItemsAsync());
     }
@@ -171,6 +171,7 @@ public class CsvImportTests
     [InlineData("Shelter,Tent,,,,", "Weight (g) is missing.")]
     [InlineData("Shelter,Tent,,abc,,", "Weight (g) \"abc\" isn't a number.")]
     [InlineData("Shelter,Tent,,-5,,", "Weight (g) can't be negative.")]
+    [InlineData("Shelter,Tent,,0,,", "Weight (g) is 0.")]
     [InlineData("Shelter,Tent,,765,0,", "Qty \"0\" isn't a whole number of 1 or more.")]
     [InlineData("Shelter,Tent,,765,1.5,", "Qty \"1.5\" isn't a whole number of 1 or more.")]
     [InlineData("Shelter,Tent,,765,,packed", "Carry Mode \"packed\" isn't base, worn or consumable.")]

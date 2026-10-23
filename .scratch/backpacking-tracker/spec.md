@@ -178,6 +178,8 @@ Architecture follows ADR 0001 (offline-first Blazor WebAssembly PWA, no server, 
 ### CSV import
 
 - Fixed header row: Category, Name, Brand/Model, Weight (g), Qty, Carry Mode. Blank Qty means 1, blank Carry Mode means base.
+- The import also reads a trip sheet as kept in Excel, recognised by its header (Category, Item, Name and g, in any order; other columns such as lb and oz are ignored; Qty and Type are used if present): each Category is a section-header row, Item is the Gear Item's name, Name is its brand/model, and subtotal ("Total:") and spacer rows are skipped.
+- A row with no weight, or a weight of 0 (not weighed yet), is rejected so the backpacker can weigh it and add it by hand.
 - For each row, an unknown Category is created. A Gear Item matching on name + brand/model (case-insensitive, trimmed) is reused and never modified; a weight difference is reported as a flag. Otherwise a new Gear Item is created.
 - Optionally, the import also creates a named Gear List with one List Entry per row, using that row's Qty and Carry Mode.
 - The result is an import summary: created, reused, flagged (with both weights) and rejected rows (with row number and reason, such as a missing name or an invalid weight). Rejected rows don't stop the rest.
