@@ -22,3 +22,4 @@
 - The Category filter has no option for the "No Category" section (which only appears after sync).
 - Found while testing: a Tag typed but not yet added would have been lost when tapping Add; committing it on blur instead moved the Add button mid-tap. The form now asks the Tag editor for its Tags including any typed text when Add is tapped.
 - Verified with a headless Edge test against the Release publish at phone width, using real clicks.
+- Rethink (ADR 0003): Categories now belong to each Gear List and a Gear Item has a Gear Type and Name instead of a Category and Brand/Model. Tickets 27, 28 and 29 rework the parts of this ticket that used the Gear Item's Category or Brand/Model.

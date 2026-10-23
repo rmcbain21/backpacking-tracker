@@ -4,7 +4,7 @@
 
 **Blocked by:** 07 (CSV gear import), 08 (Gear Lists and weight totals)
 
-**Status:** ready-for-agent
+**Status:** wontfix
 
 - [ ] The import offers an optional Gear List name; when given, a Gear List is created with one List Entry per imported (non-rejected) row.
 - [ ] Each List Entry uses the row's Gear Item (created or reused), Qty (default 1) and Carry Mode (default base).
@@ -15,3 +15,4 @@
 
 - From ticket 07: `CsvImportSummary.Rows` already carries, for every created, reused and flagged row, the `GearItem`, `Quantity` (default 1) and `CarryMode` (default base). Rejected rows have no `GearItem` and should get no List Entry. A row that matched a Retired Gear Item reuses it; decide whether a new Gear List should include it.
 - From ticket 07: trip sheets usually have no Qty column, and list two identical items as two rows (the user's sheet has two "Power Bank, 10000 Flextail"). The second row reuses the first's Gear Item, so creating a Gear List should add up such rows into one List Entry with Qty 2 rather than two entries.
+- Replaced by ticket 29 (import with preview and an optional Gear List) after the Category rethink (ADR 0003): the Gear List is now how a trip sheet's sections are kept, so it moved into the main import work.

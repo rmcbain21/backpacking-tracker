@@ -14,16 +14,16 @@ A personal, phone-first app that installs from the browser on my Android phone (
 
 ### Gear
 
-1. As a backpacker, I want to add a Gear Item with a name, brand/model and weight, so that my gear catalogue reflects what I own.
+1. As a backpacker, I want to add a Gear Item with a Name, a Gear Type and a weight, so that my gear catalogue reflects what I own.
 2. As a backpacker, I want to enter a Gear Item's weight in ounces, pounds or grams, so that I can type whatever my scale shows.
 3. As a backpacker, I want the weight I store to be my measured weight, with a notes field for the manufacturer's figure, so that my pack totals are realistic.
 4. As a backpacker, I want to optionally record a price and notes on a Gear Item, so that I remember what I paid and anything worth knowing about it.
-5. As a backpacker, I want to assign each Gear Item to exactly one Category, so that my pack weight can be broken down by Category.
-6. As a backpacker, I want a sensible default set of Categories (such as Shelter, Sleep, Pack, Cook, Water, Clothing, Electronics, Hygiene, First Aid, Misc) on first run, so that I can start without setup.
-7. As a backpacker, I want to add, rename, reorder and remove my own Categories, so that the grouping matches how I think about gear (for example "Big Three + Sleeping Pad").
-8. As a backpacker, I want to be prevented from removing a Category that Gear Items still use (or be asked where to move them), so that no Gear Item is left without a Category.
+5. As a backpacker, I want to arrange each Gear List's List Entries under that list's own Categories, so that my pack weight is broken down the way I group gear for that trip.
+6. As a backpacker, I want a set of Default Categories (such as Shelter, Sleep, Pack, Cook, Water, Clothing, Electronics, Hygiene, First Aid, Misc on first run) that each new Gear List starts with, so that I can start without setup.
+7. As a backpacker, I want to add, rename, reorder and remove Categories, both my Default Categories and on each Gear List, without changes on one list affecting another, so that each list is grouped how I think about that trip (for example "Big Three + Sleeping Pad").
+8. As a backpacker, I want to be prevented from removing a Category that List Entries still use (or be asked where to move them), so that no List Entry is left without a Category.
 9. As a backpacker, I want to add many free-form Tags to a Gear Item (such as "winter" or "bear country"), so that I can find gear by situation.
-10. As a backpacker, I want to search my Gear Items by name, brand/model and Tag, and filter by Category, so that I can find a piece of gear quickly on my phone.
+10. As a backpacker, I want to search my Gear Items by Name, Gear Type and Tag, and filter by Gear Type, so that I can find a piece of gear quickly on my phone.
 11. As a backpacker, I want to edit any field of a Gear Item, so that I can correct mistakes or record a new measured weight.
 12. As a backpacker, I want to Retire a Gear Item I no longer own, so that it disappears from my catalogue and new lists but stays on past Trips that used it.
 13. As a backpacker, I want to see my Retired Gear Items and un-retire one, so that I can undo a mistake.
@@ -51,13 +51,13 @@ A personal, phone-first app that installs from the browser on my Android phone (
 
 ### Import and export
 
-29. As a backpacker, I want to import Gear Items from a CSV file with fixed columns (Category, Name, Brand/Model, Weight in grams, Qty, Carry Mode), so that I don't have to type in my existing spreadsheet gear.
-30. As a backpacker, I want the import to create any Categories it doesn't recognise, so that my spreadsheet's grouping comes across.
-31. As a backpacker, I want a CSV row that matches an existing Gear Item (same name and brand/model, ignoring case) to reuse it rather than create a duplicate, so that importing several trip sheets doesn't double my catalogue.
+29. As a backpacker, I want to import Gear Items from a CSV file, either my trip sheet as I keep it or fixed columns (Category, Gear Type, Name, Weight in grams, Qty, Carry Mode), so that I don't have to type in my existing spreadsheet gear.
+30. As a backpacker, I want a sheet's sections to become the Categories of a Gear List the import can create, and optionally to be added to my Default Categories, so that my spreadsheet's grouping comes across.
+31. As a backpacker, I want a CSV row that matches an existing Gear Item (same Gear Type and Name, ignoring case) to reuse it rather than create a duplicate, so that importing several trip sheets doesn't double my catalogue.
 32. As a backpacker, I want the import never to overwrite an existing Gear Item, and to flag rows whose weight differs from the stored one, so that I decide which weight is right.
 33. As a backpacker, I want a blank Carry Mode in the CSV to mean base, and a blank Qty to mean 1, so that my partially filled sheets import cleanly.
 34. As a backpacker, I want the option to also create a Gear List from the imported rows, so that my first trip sheet becomes my first Gear List in one step.
-35. As a backpacker, I want an import summary listing created, reused, flagged and rejected rows (with the reason), so that I know exactly what happened.
+35. As a backpacker, I want a preview listing what will be created, reused, flagged and rejected (with the reason), and the Gear List it will make, before anything is saved, so that I know exactly what will happen.
 36. As a backpacker, I want to export my whole database as a JSON file I can download, so that I have a backup that doesn't depend on Google.
 37. As a backpacker, I want to import a JSON export, merged with my existing data using the same rules as sync, so that I can restore a backup or move providers.
 
@@ -134,8 +134,8 @@ Architecture follows ADR 0001 (offline-first Blazor WebAssembly PWA, no server, 
 ### Modules
 
 - **App core**: a plain C# class library with no Blazor or JavaScript dependency. It holds the domain model and all behaviour, and exposes one application-level API used by the UI. Sub-areas:
-  - **Gear catalogue**: Gear Items, Categories, Tags, Retired state, retire/delete rules.
-  - **Lists**: Gear Lists and List Entries.
+  - **Gear catalogue**: Gear Items (Name and Gear Type), Tags, Retired state, retire/delete rules, and the Default Categories.
+  - **Lists**: Gear Lists, each with its own Categories (copied from the Default Categories when created) and List Entries (ADR 0003).
   - **Weight**: a pure calculator that, given List Entries, resolved item weights, Meal Plan food and water, returns Base Weight, Worn Weight, Consumable Weight, Starting Pack Weight and the Category breakdown. Used by both Gear Lists and Trips.
   - **Food**: Food Items, Meals, Calorie Density.
   - **Trips**: Trips, Packing List, Trip Days, Meal Plan slots, Trip Status transitions, freezing, date changes, stats, "Save as Gear List", copying a Meal Plan.
@@ -151,12 +151,12 @@ Architecture follows ADR 0001 (offline-first Blazor WebAssembly PWA, no server, 
 ### Records and schema
 
 - Every stored record has: a string `id` (GUID generated on the device), `updatedAt` (UTC timestamp from the Clock), and `deleted` (tombstone flag; deleted records are kept so deletions sync). These exist from slice 1 even though sync arrives in slice 5, so no data migration is needed.
-- Record types are top-level: Category, Gear Item, Gear List, Food Item, Meal, Trip, Settings. Child data is nested inside its parent and syncs as part of it: List Entries inside a Gear List; Packing List entries and Trip Days (with their meal slots and journal notes) inside a Trip; Meal components inside a Meal.
+- Record types are top-level: Category (the Default Categories), Gear Item, Gear List, Food Item, Meal, Trip, Settings. Child data is nested inside its parent and syncs as part of it: a Gear List's own Categories and List Entries inside it; the Packing List's Categories and entries, and Trip Days (with their meal slots and journal notes) inside a Trip; Meal components inside a Meal.
 - All weights are stored in grams with 0.1 g precision; all distances and elevations in metres (ADR 0002).
-- **Category**: name, sort order. The default Categories have fixed ids and an `updatedAt` of the Unix epoch, meaning "never edited", so every device creates identical defaults and sync can tell an untouched default from an edited one. Removed Categories are kept as tombstones, and the last Category cannot be removed.
-- **Gear Item**: name, brand/model, weight, Category, Tags, optional price, optional notes, Retired flag.
-- **Gear List**: name, List Entries.
-- **List Entry**: Gear Item reference, quantity (whole number, at least 1), Carry Mode (base, worn or consumable; defaults to base). A list has one entry per Gear Item: adding a Gear Item already on the list adds one to that entry's quantity. On a Packing List it also has a packed flag, and when the Trip is Completed, a frozen weight.
+- **Category**: name, sort order. A top-level Category record is one of the Default Categories; each Gear List and Packing List holds its own Categories (id, name, sort order) inside it (ADR 0003). The first-run Default Categories have fixed ids and an `updatedAt` of the Unix epoch, meaning "never edited", so every device creates identical defaults and sync can tell an untouched default from an edited one. Removed Categories are kept as tombstones, and the last Category (of the defaults, or of a list) cannot be removed.
+- **Gear Item**: Name, Gear Type (free text, cleaned up like a Tag), weight, Tags, optional price, optional notes, Retired flag. Records saved before ticket 27 (name, brand/model, Category) are read with the old name as the Gear Type and the old brand/model as the Name (the old name when there was no brand/model).
+- **Gear List**: name, its own Categories, List Entries.
+- **List Entry**: Gear Item reference, the id of one of its list's Categories, quantity (whole number, at least 1), Carry Mode (base, worn or consumable; defaults to base). A list has one entry per Gear Item: adding a Gear Item already on the list adds one to that entry's quantity. On a Packing List it also has a packed flag, and when the Trip is Completed, a frozen weight.
 - **Food Item**: name, serving weight, calories per serving, optional protein per serving, optional cost per serving, Tags, Retired flag.
 - **Meal**: name, components (Food Item reference and number of servings), Tags, Retired flag.
 - **Trip**: name, start date, end date, Trip Status (Planned or Completed), Packing List, optional water carried, Trip Days.
@@ -165,7 +165,7 @@ Architecture follows ADR 0001 (offline-first Blazor WebAssembly PWA, no server, 
 
 ### Behaviour rules
 
-- **Weight**: an entry's weight is item weight × quantity. Base Weight, Worn Weight and Consumable Weight sum entries by Carry Mode. Consumable Weight also includes Meal Plan food (each slot entry's weight × quantity) and water carried. Starting Pack Weight = Base Weight + Consumable Weight. The Category breakdown groups entries by their Gear Item's Category; Meal Plan food and water appear as their own breakdown lines.
+- **Weight**: an entry's weight is item weight × quantity. Base Weight, Worn Weight and Consumable Weight sum entries by Carry Mode. Consumable Weight also includes Meal Plan food (each slot entry's weight × quantity) and water carried. Starting Pack Weight = Base Weight + Consumable Weight. The Category breakdown splits the Starting Pack Weight by the List Entries' Categories on that list (worn entries left out); Meal Plan food and water appear as their own breakdown lines.
 - **Retired and delete**: Retiring hides an item from catalogue views and pickers but keeps it resolvable everywhere it is referenced. Hard delete is allowed only when nothing references the item (no List Entry, slot entry or Meal component); otherwise the core refuses and offers Retire.
 - **Creating a Trip from a Gear List** deep-copies its List Entries into the Packing List. No link back to the Gear List is kept beyond an optional "created from" name for display.
 - **Trip Status**: Planned → Completed copies the current weight of every Packing List entry and the current weight, calories, protein and cost of every slot entry (resolving Meals through their components) onto the Trip. Completed Trips compute all stats from frozen values. Reopen (Completed → Planned) clears the frozen values. On a Completed Trip, journal notes, route fields, distances, elevation and water carried stay editable; Packing List and Meal Plan composition are locked until Reopen.
@@ -177,11 +177,11 @@ Architecture follows ADR 0001 (offline-first Blazor WebAssembly PWA, no server, 
 
 ### CSV import
 
-- Fixed header row: Category, Name, Brand/Model, Weight (g), Qty, Carry Mode. Blank Qty means 1, blank Carry Mode means base.
-- The import also reads a trip sheet as kept in Excel, recognised by its header (Category, Item, Name and g, in any order; other columns such as lb and oz are ignored; Qty and Type are used if present): each Category is a section-header row, Item is the Gear Item's name, Name is its brand/model, and subtotal ("Total:") and spacer rows are skipped.
+- Fixed header row: Category, Gear Type, Name, Weight (g), Qty, Carry Mode. Blank Qty means 1, blank Carry Mode means base.
+- The import also reads a trip sheet as kept in Excel, recognised by its header (Category, Item, Name and g, in any order; other columns such as lb and oz are ignored; Qty and Type are used if present): each Category is a section-header row, Item is the Gear Item's Gear Type, Name is its Name, and subtotal ("Total:") and spacer rows are skipped.
 - A row with no weight, or a weight of 0 (not weighed yet), is rejected so the backpacker can weigh it and add it by hand.
-- For each row, an unknown Category is created. A Gear Item matching on name + brand/model (case-insensitive, trimmed) is reused and never modified; a weight difference is reported as a flag. Otherwise a new Gear Item is created.
-- Optionally, the import also creates a named Gear List with one List Entry per row, using that row's Qty and Carry Mode.
+- A Gear Item matching on Gear Type + Name (case-insensitive, trimmed; Retired gear included) is reused and never modified; a weight difference is reported as a flag. Otherwise a new Gear Item is created.
+- Choosing a file shows a preview of everything the import will do, and nothing is saved until the backpacker confirms; then it is saved all at once. Optionally (on by default) the import creates a named Gear List whose Categories are the sheet's sections, with one List Entry per Gear Item per section (repeated rows add up into its quantity), using the rows' Qty and Carry Mode; and optionally (on by default) adds the sections to the Default Categories.
 - The result is an import summary: created, reused, flagged (with both weights) and rejected rows (with row number and reason, such as a missing name or an invalid weight). Rejected rows don't stop the rest.
 
 ### Sync
@@ -238,7 +238,7 @@ Architecture follows ADR 0001 (offline-first Blazor WebAssembly PWA, no server, 
 
 ## Further Notes
 
-- The user's existing gear is in Excel, one sheet per trip. Columns are Category (as section header rows), Item, Name, oz, lb, g, Qty and Type (mostly blank). Rearranging one sheet into the fixed CSV columns (section header → Category, Item → Name, Name → Brand/Model, g → Weight) seeds the Gear Items and the first Gear List. Later sheets add only new gear, because of matching.
+- The user's existing gear is in Excel, one sheet per trip. Columns are Category (as section header rows), Item, Name, oz, lb, g, Qty and Type (mostly blank). Rearranging one sheet into the fixed CSV columns (section header → the Gear List's Category, Item → Gear Type, Name → Name, g → Weight) seeds the Gear Items and the first Gear List. Later sheets add only new gear, because of matching.
 - Primary device: an Android Samsung phone using Chrome. Design and test the phone layout first.
 - The user is learning Blazor for work. Prefer idiomatic, straightforward Blazor and C# over clever patterns.
 - Before slice 5, a Google Cloud project with an OAuth client for the GitHub Pages origin must exist. Setting it up is a human-only step.

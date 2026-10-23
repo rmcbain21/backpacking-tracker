@@ -23,3 +23,4 @@
 - Gear Items whose Category no longer exists (only possible once sync brings in another device's removal) show under "No Category" at the end of the Gear page instead of disappearing.
 - Category names are unique ignoring case; reordering uses up/down buttons.
 - Verified with a headless Edge test against the Release publish at phone width, including an old-style Gear Item planted in IndexedDB.
+- Rethink (ADR 0003): Categories now belong to each Gear List and a Gear Item has a Gear Type and Name instead of a Category and Brand/Model. Tickets 27, 28 and 29 rework the parts of this ticket that used the Gear Item's Category or Brand/Model.

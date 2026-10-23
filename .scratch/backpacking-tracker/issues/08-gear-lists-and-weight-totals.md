@@ -27,3 +27,4 @@
 - Gear Lists implement `IGearItemReferences` and are registered once in `AppCore`; the stand-in test and `InternalsVisibleTo` are gone.
 - UI: Lists tab (each list with its Starting Pack Weight; + to create), a Gear List page (totals; per entry: -/+ quantity, Carry Mode, remove), and an Add gear picker with search that marks gear already on the list.
 - Found while testing on a phone-sized screen: the + button covered the last row's buttons; pages now leave room to scroll the last row above it.
+- Rethink (ADR 0003): Categories now belong to each Gear List and a Gear Item has a Gear Type and Name instead of a Category and Brand/Model. Tickets 27, 28 and 29 rework the parts of this ticket that used the Gear Item's Category or Brand/Model.

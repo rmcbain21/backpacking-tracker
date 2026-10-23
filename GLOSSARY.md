@@ -5,16 +5,24 @@ A personal app for one backpacker to keep track of their gear, food and trips, w
 ## Gear
 
 **Gear Item**:
-A single physical piece of equipment the backpacker owns, such as a tent or a stove.
+A single physical piece of equipment the backpacker owns, such as a tent or a stove, known by its Name (such as "SWD Long Haul 50 EPLX") and its Gear Type.
 _Avoid_: Item, product, equipment
+
+**Gear Type**:
+What kind of gear a Gear Item is, such as Backpack, Tent or Water Bottle, typed freely by the backpacker. It belongs to the Gear Item, so it is the same on every list.
+_Avoid_: Item type, kind, category
 
 **Retired**:
 The state of a Gear Item, Food Item or Meal that is no longer in use. It is hidden from new lists and plans but stays attached to the past Trips that used it.
 _Avoid_: Deleted, archived
 
 **Category**:
-The one group a Gear Item belongs to, such as Shelter, Sleep or Cook, used to break down pack weight. The backpacker defines their own Categories.
-_Avoid_: Type, group
+A group on one Gear List or Packing List that its List Entries are arranged under, such as "Big Three + Sleeping Pad" or "Food and Water", used to break down pack weight. Each list has its own Categories, so renaming one on a list changes no other list, and the same Gear Item can be in different Categories on different lists.
+_Avoid_: Section, group
+
+**Default Categories**:
+The backpacker's usual set of Categories, copied onto each new Gear List as its starting Categories. Changing them later doesn't change existing lists.
+_Avoid_: Template, master categories
 
 **Tag**:
 A free-form label on a Gear Item, such as "winter" or "bear country", used to find gear. A Gear Item can have many Tags.
@@ -29,7 +37,7 @@ A Trip's own set of List Entries, copied from a Gear List when the Trip is creat
 _Avoid_: Trip gear list, pack
 
 **List Entry**:
-One line on a Gear List or Packing List: a Gear Item, how many of it, and its Carry Mode.
+One line on a Gear List or Packing List: a Gear Item, how many of it, its Carry Mode, and its Category on that list.
 _Avoid_: Line item, row, pack item
 
 **Carry Mode**:
