@@ -11,4 +11,7 @@ public sealed record PackWeight
 
     /// <summary>Base Weight plus Consumable Weight: everything in the pack at the trailhead.</summary>
     public decimal StartingPackGrams => BaseGrams + ConsumableGrams;
+
+    /// <summary>How the Starting Pack Weight splits across Categories, in Category order. Worn entries are left out.</summary>
+    public IReadOnlyList<CategoryWeight> ByCategory { get; init; } = [];
 }

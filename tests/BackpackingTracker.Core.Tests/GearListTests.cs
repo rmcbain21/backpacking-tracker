@@ -254,6 +254,27 @@ public class GearListTests
     }
 
     [Fact]
+    public async Task The_breakdown_follows_each_gear_item_current_category()
+    {
+        var app = CreateApp();
+        var categories = await app.Gear.ListCategoriesAsync();
+        var shelter = categories.Single(category => category.Name == "Shelter");
+        var sleep = categories.Single(category => category.Name == "Sleep");
+        var bigThree = await app.Gear.AddCategoryAsync("Big Three");
+        var tent = await app.Gear.AddGearItemAsync(new GearItemDetails("Tent", "", 900m, shelter.Id));
+        var quilt = await app.Gear.AddGearItemAsync(new GearItemDetails("Quilt", "", 600m, sleep.Id));
+        var list = await app.Lists.CreateGearListAsync("Summer kit");
+        await app.Lists.AddEntryAsync(list.Id, tent.Id);
+        await app.Lists.AddEntryAsync(list.Id, quilt.Id);
+
+        await app.Gear.UpdateGearItemAsync(quilt.Id, new GearItemDetails("Quilt", "", 600m, bigThree.Id));
+
+        var lines = (await ViewAsync(app, list)).Weight.ByCategory;
+        Assert.Equal(["Shelter", "Big Three"], lines.Select(line => line.Category.Name));
+        Assert.Equal([0.6m, 0.4m], lines.Select(line => line.Share));
+    }
+
+    [Fact]
     public async Task An_unknown_gear_list_is_not_found()
     {
         Assert.Null(await CreateApp().Lists.GetGearListAsync("not-a-list"));

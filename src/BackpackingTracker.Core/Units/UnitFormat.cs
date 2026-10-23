@@ -14,6 +14,10 @@ public static class UnitFormat
         return system == UnitSystem.Metric ? MetricWeight(grams) : ImperialWeight(grams);
     }
 
+    /// <summary>A share from 0 to 1 as a whole percentage, such as "82%".</summary>
+    public static string Share(decimal share) =>
+        $"{Math.Round(share * 100, 0, MidpointRounding.AwayFromZero).ToString("0", Culture)}%";
+
     public static string Distance(decimal metres, UnitSystem system)
     {
         return system == UnitSystem.Metric

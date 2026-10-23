@@ -37,6 +37,25 @@ else if (_view is not null)
         </div>
     </MudPaper>
 
+    @if (_view.Weight.ByCategory.Count > 0)
+    {
+        <MudPaper Class="pa-3 mb-4 category-breakdown">
+            <MudText Typo="Typo.subtitle2" HtmlTag="h2" Class="mb-2">Where the pack weight goes</MudText>
+            @foreach (var line in _view.Weight.ByCategory)
+            {
+                <div class="breakdown-line">
+                    <div class="d-flex justify-space-between gap-2">
+                        <MudText Typo="Typo.body2" Class="breakdown-name">@line.Category.Name</MudText>
+                        <MudText Typo="Typo.body2" Class="text-nowrap">
+                            @Weight(line.Grams) <span class="breakdown-share">@UnitFormat.Share(line.Share)</span>
+                        </MudText>
+                    </div>
+                    <MudProgressLinear Value="@((double)(line.Share * 100))" Color="Color.Primary" Size="Size.Small" Rounded="true" />
+                </div>
+            }
+        </MudPaper>
+    }
+
     @if (_view.Entries.Count == 0)
     {
         <MudText Class="mud-text-secondary">Nothing on this list yet. Tap + to add gear.</MudText>

@@ -205,3 +205,15 @@ h1:focus {
     max-height: 70vh;
     overflow-y: auto;
 }
+
+/* Category breakdown on a Gear List */
+.breakdown-line {
+    margin-bottom: 8px;
+}
+
+.breakdown-share {
+    display: inline-block;
+    min-width: 3.2em;
+    text-align: right;
+    color: var(--mud-palette-text-secondary);
+}

@@ -12,3 +12,7 @@
 - [ ] Water carried is included in Consumable Weight and Starting Pack Weight and appears as its own line in the Category breakdown.
 - [ ] The checklist is usable one-handed on a phone and works offline.
 - [ ] Core tests cover packed flags, reset and water in the totals.
+
+## Comments
+
+- From ticket 09: the spec says "Meal Plan food and water appear as their own breakdown lines". `WeightCalculator` builds `PackWeight.ByCategory` from List Entries only; add food or water as its own line (after the Categories), and include it in the Consumable Weight that the shares are taken from.

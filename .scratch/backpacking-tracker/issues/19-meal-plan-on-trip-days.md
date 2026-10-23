@@ -14,3 +14,7 @@
 - [ ] The Food Item and Meal hard-delete guards count slot entries as references.
 - [ ] Removing a Trip Day with meals counts as content in the date-change preview.
 - [ ] Core tests cover slot entries, per-day totals, food in Consumable Weight, delete guards and the date-change interaction.
+
+## Comments
+
+- From ticket 09: the spec says "Meal Plan food and water appear as their own breakdown lines". `WeightCalculator` builds `PackWeight.ByCategory` from List Entries only; add food or water as its own line (after the Categories), and include it in the Consumable Weight that the shares are taken from.

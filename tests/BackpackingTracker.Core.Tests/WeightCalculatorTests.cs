@@ -8,7 +8,7 @@ public class WeightCalculatorTests
     [Fact]
     public void No_entries_weigh_nothing()
     {
-        var weight = WeightCalculator.Calculate([]);
+        var weight = WeightCalculator.Calculate([], []);
 
         Assert.Equal((0m, 0m, 0m), (weight.BaseGrams, weight.WornGrams, weight.ConsumableGrams));
         Assert.Equal(0m, weight.StartingPackGrams);
@@ -23,7 +23,7 @@ public class WeightCalculatorTests
             new WeighedEntry(590m, 1, CarryMode.Base),
             new WeighedEntry(283m, 1, CarryMode.Worn),
             new WeighedEntry(110m, 1, CarryMode.Consumable),
-        ]);
+        ], []);
 
         Assert.Equal(1497m, weight.BaseGrams);
         Assert.Equal(283m, weight.WornGrams);
@@ -37,7 +37,7 @@ public class WeightCalculatorTests
         [
             new WeighedEntry(10.5m, 6, CarryMode.Base),
             new WeighedEntry(76m, 2, CarryMode.Worn),
-        ]);
+        ], []);
 
         Assert.Equal(63m, weight.BaseGrams);
         Assert.Equal(152m, weight.WornGrams);
@@ -57,7 +57,7 @@ public class WeightCalculatorTests
             new WeighedEntry(4000m, 1, CarryMode.Base),
             new WeighedEntry(1500m, 1, CarryMode.Worn),
             new WeighedEntry(220m, 2, CarryMode.Consumable),
-        ]);
+        ], []);
 
         Assert.Equal(4440m, weight.StartingPackGrams);
     }

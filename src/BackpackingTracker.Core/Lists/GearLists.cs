@@ -37,7 +37,8 @@ public sealed class GearLists : IGearItemReferences
     {
         var lists = await LoadGearListsAsync();
         var items = await _gear.GetGearItemsAsync(lists.SelectMany(list => list.Entries).Select(entry => entry.GearItemId));
-        return lists.Select(list => View(list, items)).ToList();
+        var categories = await _gear.ListCategoriesAsync();
+        return lists.Select(list => View(list, items, categories)).ToList();
     }
 
     /// <summary>A Gear List with its entries' current weights and totals, or null if there's no such list.</summary>
@@ -50,7 +51,7 @@ public sealed class GearLists : IGearItemReferences
         }
 
         var items = await _gear.GetGearItemsAsync(list.Entries.Select(entry => entry.GearItemId));
-        return View(list, items);
+        return View(list, items, await _gear.ListCategoriesAsync());
     }
 
     /// <summary>
@@ -105,19 +106,19 @@ public sealed class GearLists : IGearItemReferences
         await SaveAsync(list with { Entries = list.Entries.Where(e => e.Id != entryId).ToList() });
     }
 
-    private static GearListView View(GearList list, IReadOnlyDictionary<string, GearItem> items)
+    private static GearListView View(GearList list, IReadOnlyDictionary<string, GearItem> items, IReadOnlyList<Category> categories)
     {
         var entries = list.Entries
             .Select(entry =>
             {
                 // A Gear Item deleted on another device before a sync is shown as missing and weighs nothing.
                 var item = items.GetValueOrDefault(entry.GearItemId);
-                var weighed = new WeighedEntry(item?.WeightGrams ?? 0m, entry.Quantity, entry.CarryMode);
+                var weighed = new WeighedEntry(item?.WeightGrams ?? 0m, entry.Quantity, entry.CarryMode, item?.CategoryId);
                 return (View: new ListEntryView(entry, item, WeightCalculator.EntryWeight(weighed)), Weighed: weighed);
             })
             .ToList();
 
-        var weight = WeightCalculator.Calculate(entries.Select(e => e.Weighed));
+        var weight = WeightCalculator.Calculate(entries.Select(e => e.Weighed), categories);
         return new GearListView(list, entries.Select(e => e.View).ToList(), weight);
     }
 

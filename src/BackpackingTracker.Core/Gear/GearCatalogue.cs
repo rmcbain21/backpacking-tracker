@@ -303,8 +303,7 @@ public sealed class GearCatalogue
         var withoutCategory = items.Where(item => !liveCategoryIds.Contains(item.CategoryId)).ToList();
         if (filter.OnlyCategoryId is null && withoutCategory.Count > 0)
         {
-            var noCategory = new Category { Id = "", UpdatedAt = DateTimeOffset.UnixEpoch, Name = "No Category", SortOrder = int.MaxValue };
-            sections.Add(new CategorySection(noCategory, withoutCategory));
+            sections.Add(new CategorySection(Category.None, withoutCategory));
         }
 
         return sections;
