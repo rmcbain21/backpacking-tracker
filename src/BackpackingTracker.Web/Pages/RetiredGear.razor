@@ -26,9 +26,9 @@ else
             <div class="d-flex align-center pl-3 pr-1 py-2 gap-2">
                 <div class="flex-grow-1">
                     <MudText>@item.Name</MudText>
-                    @if (!string.IsNullOrEmpty(item.BrandModel))
+                    @if (item.GearType.Length > 0)
                     {
-                        <MudText Typo="Typo.body2" Class="mud-text-secondary">@item.BrandModel</MudText>
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">@item.GearType</MudText>
                     }
                 </div>
                 <MudButton Size="Size.Small" OnClick="() => UnretireAsync(item)">Un-retire</MudButton>

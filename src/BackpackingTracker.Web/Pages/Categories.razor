@@ -84,25 +84,11 @@ else
 
     private async Task RemoveAsync(Category category)
     {
-        var plan = await App.Gear.PlanCategoryRemovalAsync(category.Id);
-        if (!plan.NeedsMoveTarget)
+        var confirmed = await DialogService.ShowMessageBoxAsync(
+            "Remove Category", $"Remove {category.Name}?", yesText: "Remove", cancelText: "Cancel");
+        if (confirmed == true)
         {
-            var confirmed = await DialogService.ShowMessageBoxAsync(
-                "Remove Category", plan.Message, yesText: "Remove", cancelText: "Cancel");
-            if (confirmed == true)
-            {
-                await TryAsync(() => App.Gear.RemoveCategoryAsync(category.Id));
-            }
-
-            return;
-        }
-
-        var parameters = new DialogParameters<RemoveCategoryDialog> { { d => d.Plan, plan } };
-        var dialog = await DialogService.ShowAsync<RemoveCategoryDialog>("Remove Category", parameters);
-        var result = await dialog.Result;
-        if (result is { Canceled: false, Data: string targetId })
-        {
-            await TryAsync(() => App.Gear.RemoveCategoryAsync(category.Id, moveGearItemsToCategoryId: targetId));
+            await TryAsync(() => App.Gear.RemoveCategoryAsync(category.Id));
         }
     }
 

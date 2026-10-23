@@ -58,8 +58,7 @@ public class SettingsTests
     public async Task Changing_units_leaves_stored_gear_weights_alone()
     {
         var app = CreateApp();
-        var shelter = (await app.Gear.ListCategoriesAsync())[0];
-        await app.Gear.AddGearItemAsync(new GearItemDetails("Tent", "Durston X-Mid 1", 765.4m, shelter.Id));
+        await app.Gear.AddGearItemAsync(new GearItemDetails("Durston X-Mid 1", "Tent", 765.4m));
 
         await app.Settings.SetUnitSystemAsync(UnitSystem.Metric);
 

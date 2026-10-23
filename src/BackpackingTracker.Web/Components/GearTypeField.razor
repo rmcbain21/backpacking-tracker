@@ -1,0 +1,31 @@
+@* A Gear Type text field that suggests Gear Types already in use, as tap-to-use chips. *@
+<MudTextField T="string" Value="Value" ValueChanged="ValueChanged" Label="Gear Type (such as Backpack, Tent)"
+              Immediate="true" Class="gear-type-field" />
+@if (Suggestions.Count > 0)
+{
+    <div class="mt-1">
+        @foreach (var gearType in Suggestions)
+        {
+            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" OnClick="() => ValueChanged.InvokeAsync(gearType)">@gearType</MudChip>
+        }
+    </div>
+}
+
+@code {
+    private const int MostSuggestions = 6;
+
+    [Parameter]
+    public string? Value { get; set; }
+
+    [Parameter]
+    public EventCallback<string?> ValueChanged { get; set; }
+
+    /// <summary>Gear Types already in use on other Gear Items.</summary>
+    [Parameter]
+    public IReadOnlyList<string> GearTypesInUse { get; set; } = [];
+
+    // Only while typing, and not once the text already is a Gear Type in use.
+    private IReadOnlyList<string> Suggestions => string.IsNullOrWhiteSpace(Value)
+        ? []
+        : TagRules.Suggest(GearTypesInUse, [Value.Trim()], Value).Take(MostSuggestions).ToList();
+}

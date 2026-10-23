@@ -3,42 +3,56 @@ using BackpackingTracker.Core.Tests.Fakes;
 
 namespace BackpackingTracker.Core.Tests;
 
+/// <summary>Importing the gear layout: one row per Gear Item, with fixed columns.</summary>
 public class CsvImportTests
 {
-    private const string Header = "Category,Name,Brand/Model,Weight (g),Qty,Carry Mode";
+    private const string Header = "Category,Gear Type,Name,Weight (g),Qty,Carry Mode";
 
     private readonly AppCore _app = new(new InMemoryRecordStore(), new FakeClock(new DateTimeOffset(2026, 5, 1, 9, 30, 0, TimeSpan.Zero)));
 
     private static string Csv(params string[] rows) => string.Join("\n", [Header, .. rows]);
 
-    private async Task<string> CategoryNameOfAsync(GearItem item) =>
-        (await _app.Gear.ListCategoriesAsync()).Single(category => category.Id == item.CategoryId).Name;
-
-    private async Task<GearItem> AddExistingTentAsync()
-    {
-        var sleep = (await _app.Gear.ListCategoriesAsync()).Single(category => category.Name == "Sleep");
-        return await _app.Gear.AddGearItemAsync(new GearItemDetails("Tent", "Durston X-Mid 1", 765.4m, sleep.Id, ["solo"]));
-    }
+    private Task<GearItem> AddExistingTentAsync() =>
+        _app.Gear.AddGearItemAsync(new GearItemDetails("Durston X-Mid 1", "Tent", 765.4m, ["solo"]));
 
     [Fact]
-    public async Task Each_row_becomes_a_gear_item_in_its_category()
+    public async Task Each_row_becomes_a_gear_item_with_its_gear_type_and_name()
     {
         var summary = await _app.Import.ImportCsvAsync(Csv(
             "Shelter,Tent,Durston X-Mid 1,765.4,,",
             "Sleep,Quilt,EE Revelation 20,590,,"));
 
         var items = await _app.Gear.ListGearItemsAsync();
-        Assert.Equal(["Quilt", "Tent"], items.Select(item => item.Name));
-        var tent = items.Single(item => item.Name == "Tent");
-        Assert.Equal("Durston X-Mid 1", tent.BrandModel);
-        Assert.Equal(765.4m, tent.WeightGrams);
-        Assert.Equal("Shelter", await CategoryNameOfAsync(tent));
+        Assert.Equal(
+            [("Quilt", "EE Revelation 20", 590m), ("Tent", "Durston X-Mid 1", 765.4m)],
+            items.Select(item => (item.GearType, item.Name, item.WeightGrams)));
         Assert.Equal([2, 3], summary.Created.Select(row => row.RowNumber));
     }
 
+    [Fact]
+    public async Task Each_row_keeps_its_category_for_a_gear_list()
+    {
+        var summary = await _app.Import.ImportCsvAsync(Csv(
+            "Big Three,Tent,Durston X-Mid 1,765,,",
+            ",Bandana,,28,,"));
+
+        Assert.Equal(["Big Three", ""], summary.Rows.Select(row => row.Category));
+    }
+
+    [Fact]
+    public async Task Importing_does_not_change_the_default_categories()
+    {
+        var before = (await _app.Gear.ListCategoriesAsync()).Select(category => category.Name).ToList();
+
+        await _app.Import.ImportCsvAsync(Csv("Big Three,Tent,Durston X-Mid 1,765,,"));
+
+        Assert.Equal(before, (await _app.Gear.ListCategoriesAsync()).Select(category => category.Name));
+    }
+
     [Theory]
-    [InlineData("Name,Category,Brand/Model,Weight (g),Qty,Carry Mode")]
-    [InlineData("Category,Name,Brand/Model,Weight,Qty,Carry Mode")]
+    [InlineData("Category,Name,Brand/Model,Weight (g),Qty,Carry Mode")]
+    [InlineData("Gear Type,Category,Name,Weight (g),Qty,Carry Mode")]
+    [InlineData("Category,Gear Type,Name,Weight,Qty,Carry Mode")]
     [InlineData("")]
     public async Task A_file_without_the_expected_header_is_refused(string header)
     {
@@ -46,7 +60,7 @@ public class CsvImportTests
             () => _app.Import.ImportCsvAsync(header + "\nShelter,Tent,,765,,"));
 
         Assert.Equal(
-            "The first row must be the column names: Category, Name, Brand/Model, Weight (g), Qty, Carry Mode (or, for a trip sheet: Category, Item, Name, g).",
+            "The first row must be the column names: Category, Gear Type, Name, Weight (g), Qty, Carry Mode (or, for a trip sheet: Category, Item, Name, g).",
             refused.Message);
         Assert.Empty(await _app.Gear.ListGearItemsAsync());
     }
@@ -61,11 +75,8 @@ public class CsvImportTests
         var reused = Assert.Single(summary.Reused);
         Assert.Equal(existing.Id, reused.GearItem!.Id);
         var tent = Assert.Single(await _app.Gear.ListGearItemsAsync());
-        Assert.Equal("Tent", tent.Name);
-        Assert.Equal("Durston X-Mid 1", tent.BrandModel);
-        Assert.Equal(765.4m, tent.WeightGrams);
+        Assert.Equal(("Durston X-Mid 1", "Tent", 765.4m), (tent.Name, tent.GearType, tent.WeightGrams));
         Assert.Equal(["solo"], tent.Tags);
-        Assert.Equal("Sleep", await CategoryNameOfAsync(tent));
         Assert.Equal(existing.UpdatedAt, tent.UpdatedAt);
     }
 
@@ -84,12 +95,14 @@ public class CsvImportTests
         Assert.Equal(existing.Id, flagged.GearItem.Id);
     }
 
-    [Fact]
-    public async Task Brand_model_is_part_of_the_match()
+    [Theory]
+    [InlineData("Shelter,Tent,Tarptent Notch,765.4,,")]
+    [InlineData("Shelter,Tarp,Durston X-Mid 1,765.4,,")]
+    public async Task Gear_type_and_name_must_both_match(string row)
     {
         await AddExistingTentAsync();
 
-        var summary = await _app.Import.ImportCsvAsync(Csv("Shelter,Tent,Tarptent Notch,765.4,,"));
+        var summary = await _app.Import.ImportCsvAsync(Csv(row));
 
         Assert.Single(summary.Created);
         Assert.Equal(2, (await _app.Gear.ListGearItemsAsync()).Count);
@@ -121,32 +134,18 @@ public class CsvImportTests
     }
 
     [Fact]
-    public async Task Unknown_categories_are_created_and_known_ones_matched_ignoring_case()
+    public async Task A_row_with_a_gear_type_but_no_name_uses_the_gear_type_as_its_name()
     {
-        var summary = await _app.Import.ImportCsvAsync(Csv(
-            "Big Three,Tent,,765,,",
-            "big three,Quilt,,590,,",
-            "SLEEP,Pad,,400,,"));
+        await _app.Import.ImportCsvAsync(Csv("Misc,Mirror,,16,,"));
 
-        Assert.Equal(["Big Three"], summary.CreatedCategories);
-        var items = await _app.Gear.ListGearItemsAsync();
-        Assert.Equal("Big Three", await CategoryNameOfAsync(items.Single(item => item.Name == "Quilt")));
-        Assert.Equal("Sleep", await CategoryNameOfAsync(items.Single(item => item.Name == "Pad")));
-        Assert.Equal("Big Three", (await _app.Gear.ListCategoriesAsync())[^1].Name);
-    }
-
-    [Fact]
-    public async Task A_row_with_no_category_goes_in_misc()
-    {
-        await _app.Import.ImportCsvAsync(Csv(",Bandana,,28,,"));
-
-        Assert.Equal("Misc", await CategoryNameOfAsync(Assert.Single(await _app.Gear.ListGearItemsAsync())));
+        var mirror = Assert.Single(await _app.Gear.ListGearItemsAsync());
+        Assert.Equal(("Mirror", "Mirror"), (mirror.Name, mirror.GearType));
     }
 
     [Fact]
     public async Task Blank_qty_means_one_and_blank_carry_mode_means_base()
     {
-        var summary = await _app.Import.ImportCsvAsync(Csv("Shelter,Tent,,765,,"));
+        var summary = await _app.Import.ImportCsvAsync(Csv("Shelter,Tent,Durston X-Mid 1,765,,"));
 
         var row = Assert.Single(summary.Created);
         Assert.Equal(1, row.Quantity);
@@ -159,7 +158,7 @@ public class CsvImportTests
     [InlineData("BASE", CarryMode.Base)]
     public async Task Carry_mode_is_read_ignoring_case(string text, CarryMode expected)
     {
-        var summary = await _app.Import.ImportCsvAsync(Csv($"Clothing,Puffy,,283,2,{text}"));
+        var summary = await _app.Import.ImportCsvAsync(Csv($"Clothing,Puffy,OV Vario,283,2,{text}"));
 
         var row = Assert.Single(summary.Created);
         Assert.Equal(2, row.Quantity);
@@ -167,38 +166,29 @@ public class CsvImportTests
     }
 
     [Theory]
-    [InlineData("Shelter,,Durston,765,,", "Name is missing.")]
-    [InlineData("Shelter,Tent,,,,", "Weight (g) is missing.")]
-    [InlineData("Shelter,Tent,,abc,,", "Weight (g) \"abc\" isn't a number.")]
-    [InlineData("Shelter,Tent,,-5,,", "Weight (g) can't be negative.")]
-    [InlineData("Shelter,Tent,,0,,", "Weight (g) is 0.")]
-    [InlineData("Shelter,Tent,,765,0,", "Qty \"0\" isn't a whole number of 1 or more.")]
-    [InlineData("Shelter,Tent,,765,1.5,", "Qty \"1.5\" isn't a whole number of 1 or more.")]
-    [InlineData("Shelter,Tent,,765,,packed", "Carry Mode \"packed\" isn't base, worn or consumable.")]
-    [InlineData("Shelter,Tent,,765,,1", "Carry Mode \"1\" isn't base, worn or consumable.")]
+    [InlineData("Shelter,,,765,,", "Name is missing.")]
+    [InlineData("Shelter,Tent,Durston,,,", "Weight (g) is missing.")]
+    [InlineData("Shelter,Tent,Durston,abc,,", "Weight (g) \"abc\" isn't a number.")]
+    [InlineData("Shelter,Tent,Durston,-5,,", "Weight (g) can't be negative.")]
+    [InlineData("Shelter,Tent,Durston,0,,", "Weight (g) is 0.")]
+    [InlineData("Shelter,Tent,Durston,765,0,", "Qty \"0\" isn't a whole number of 1 or more.")]
+    [InlineData("Shelter,Tent,Durston,765,1.5,", "Qty \"1.5\" isn't a whole number of 1 or more.")]
+    [InlineData("Shelter,Tent,Durston,765,,packed", "Carry Mode \"packed\" isn't base, worn or consumable.")]
+    [InlineData("Shelter,Tent,Durston,765,,1", "Carry Mode \"1\" isn't base, worn or consumable.")]
     public async Task An_invalid_row_is_rejected_with_its_row_number_and_reason(string row, string reason)
     {
-        var summary = await _app.Import.ImportCsvAsync(Csv("Sleep,Quilt,,590,,", row, "Cook,Stove,,25,,"));
+        var summary = await _app.Import.ImportCsvAsync(Csv("Sleep,Quilt,EE Revelation,590,,", row, "Cook,Stove,BRS,25,,"));
 
         var rejected = Assert.Single(summary.Rejected);
         Assert.Equal(3, rejected.RowNumber);
         Assert.Equal(reason, rejected.Reason);
-        Assert.Equal(["Quilt", "Stove"], (await _app.Gear.ListGearItemsAsync()).Select(item => item.Name));
-    }
-
-    [Fact]
-    public async Task A_rejected_row_does_not_create_its_category()
-    {
-        var summary = await _app.Import.ImportCsvAsync(Csv("Kayaking,Paddle,,abc,,"));
-
-        Assert.Empty(summary.CreatedCategories);
-        Assert.DoesNotContain("Kayaking", (await _app.Gear.ListCategoriesAsync()).Select(category => category.Name));
+        Assert.Equal(["EE Revelation", "BRS"], (await _app.Gear.ListGearItemsAsync()).Select(item => item.Name));
     }
 
     [Fact]
     public async Task Blank_rows_are_skipped_but_still_count_for_row_numbers()
     {
-        var summary = await _app.Import.ImportCsvAsync(Csv("Sleep,Quilt,,590,,", ",,,,,", "", "Cook,Stove,,abc,,"));
+        var summary = await _app.Import.ImportCsvAsync(Csv("Sleep,Quilt,EE,590,,", ",,,,,", "", "Cook,Stove,BRS,abc,,"));
 
         Assert.Single(summary.Created);
         Assert.Equal(5, Assert.Single(summary.Rejected).RowNumber);
@@ -211,15 +201,15 @@ public class CsvImportTests
         await _app.Import.ImportCsvAsync(Csv("Shelter,\"Tent, 1-person\",\"Durston \"\"X-Mid\"\" 1\",765,,"));
 
         var tent = Assert.Single(await _app.Gear.ListGearItemsAsync());
-        Assert.Equal("Tent, 1-person", tent.Name);
-        Assert.Equal("Durston \"X-Mid\" 1", tent.BrandModel);
+        Assert.Equal("Tent, 1-person", tent.GearType);
+        Assert.Equal("Durston \"X-Mid\" 1", tent.Name);
     }
 
     [Fact]
     public async Task A_file_saved_by_excel_as_csv_utf8_imports()
     {
         // Excel's "CSV UTF-8" starts with a byte-order mark and ends lines with \r\n.
-        var csv = "﻿" + Header + "\r\nShelter,Tent,,765,,\r\nSleep,Quilt,,590,,\r\n";
+        var csv = (char)0xFEFF + Header + "\r\nShelter,Tent,Durston,765,,\r\nSleep,Quilt,EE,590,,\r\n";
 
         var summary = await _app.Import.ImportCsvAsync(csv);
 
@@ -230,7 +220,7 @@ public class CsvImportTests
     [Fact]
     public async Task Rows_missing_their_last_empty_columns_still_import()
     {
-        var summary = await _app.Import.ImportCsvAsync(Csv("Shelter,Tent,,765"));
+        var summary = await _app.Import.ImportCsvAsync(Csv("Shelter,Tent,Durston,765"));
 
         var row = Assert.Single(summary.Created);
         Assert.Equal(1, row.Quantity);
@@ -243,7 +233,6 @@ public class CsvImportTests
         var summary = await _app.Import.ImportCsvAsync(Header + "\n");
 
         Assert.Empty(summary.Rows);
-        Assert.Empty(summary.CreatedCategories);
     }
 
     [Fact]
@@ -260,7 +249,7 @@ public class CsvImportTests
     {
         // Excel's plain "CSV" isn't UTF-8; read as UTF-8, letters like é become U+FFFD.
         var refused = await Assert.ThrowsAsync<RuleViolationException>(
-            () => _app.Import.ImportCsvAsync(Csv("Cook,Caf� press,,200,,")));
+            () => _app.Import.ImportCsvAsync(Csv($"Cook,Caf{(char)0xFFFD} press,Bodum,200,,")));
 
         Assert.Equal(
             "Some letters in this file can't be read. In Excel, save it with Save As, \"CSV UTF-8\", and import that.",
@@ -269,21 +258,9 @@ public class CsvImportTests
     }
 
     [Fact]
-    public async Task A_row_with_no_category_goes_in_misc_even_after_misc_is_renamed()
-    {
-        var misc = (await _app.Gear.ListCategoriesAsync()).Single(category => category.Name == "Misc");
-        await _app.Gear.RenameCategoryAsync(misc.Id, "Other");
-
-        var summary = await _app.Import.ImportCsvAsync(Csv(",Bandana,,28,,"));
-
-        Assert.Equal("Other", await CategoryNameOfAsync(Assert.Single(await _app.Gear.ListGearItemsAsync())));
-        Assert.Empty(summary.CreatedCategories);
-    }
-
-    [Fact]
     public async Task The_header_may_have_empty_columns_after_the_six()
     {
-        var summary = await _app.Import.ImportCsvAsync(Header + ",,\nShelter,Tent,,765,,,,");
+        var summary = await _app.Import.ImportCsvAsync(Header + ",,\nShelter,Tent,Durston,765,,,,");
 
         Assert.Single(summary.Created);
     }
@@ -292,23 +269,14 @@ public class CsvImportTests
     public async Task A_header_with_extra_named_columns_is_refused()
     {
         await Assert.ThrowsAsync<RuleViolationException>(
-            () => _app.Import.ImportCsvAsync(Header + ",Price\nShelter,Tent,,765,,,299"));
-    }
-
-    [Fact]
-    public async Task The_header_ignores_spaces_inside_column_names()
-    {
-        var summary = await _app.Import.ImportCsvAsync(
-            "Category,Name,Brand / Model,Weight(g),Qty,CarryMode\nShelter,Tent,,765,,");
-
-        Assert.Single(summary.Created);
+            () => _app.Import.ImportCsvAsync(Header + ",Price\nShelter,Tent,Durston,765,,,299"));
     }
 
     [Fact]
     public async Task The_header_is_matched_ignoring_case_and_spaces()
     {
         var summary = await _app.Import.ImportCsvAsync(
-            " category , NAME ,brand/model,weight (G), qty ,CARRY MODE\nShelter,Tent,,765,,");
+            " category , GEARTYPE ,name,weight (G), qty ,Carry  mode\nShelter,Tent,Durston,765,,");
 
         Assert.Single(summary.Created);
     }

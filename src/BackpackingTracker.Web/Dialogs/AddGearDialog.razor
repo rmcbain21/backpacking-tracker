@@ -7,35 +7,31 @@
         <MudTextField T="string" Value="_searchText" ValueChanged="SearchAsync" Label="Search gear" Immediate="true"
                       DebounceInterval="200" Clearable="true" Adornment="Adornment.Start"
                       AdornmentIcon="@Icons.Material.Filled.Search" Class="mb-2" />
-        @if (_sections is { Count: 0 })
+        @if (_items is { Count: 0 })
         {
             <MudText Class="mud-text-secondary">@(string.IsNullOrWhiteSpace(_searchText) ? "No gear yet." : "No Gear Items match.")</MudText>
         }
-        @foreach (var categorySection in _sections ?? [])
+        @foreach (var item in _items ?? [])
         {
-            <MudText Typo="Typo.subtitle2" Class="mt-3 mb-1">@categorySection.Category.Name</MudText>
-            @foreach (var item in categorySection.GearItems)
-            {
-                <div class="d-flex align-center py-2 gap-2 pick-row" role="button" tabindex="0"
-                     aria-label="@($"Add {item.Name}")" @onclick="() => AddAsync(item)">
-                    <div class="flex-grow-1">
-                        <MudText>@item.Name</MudText>
-                        @if (!string.IsNullOrEmpty(item.BrandModel))
-                        {
-                            <MudText Typo="Typo.body2" Class="mud-text-secondary">@item.BrandModel</MudText>
-                        }
-                    </div>
-                    @if (_onList.TryGetValue(item.Id, out var quantity))
+            <div class="d-flex align-center py-2 gap-2 pick-row" role="button" tabindex="0"
+                 aria-label="@($"Add {item.Name}")" @onclick="() => AddAsync(item)">
+                <div class="flex-grow-1">
+                    <MudText>@item.Name</MudText>
+                    @if (item.GearType.Length > 0)
                     {
-                        <MudChip T="string" Size="Size.Small" Color="Color.Success">On list @(quantity > 1 ? $"×{quantity}" : "")</MudChip>
-                    }
-                    else
-                    {
-                        <MudIcon Icon="@Icons.Material.Filled.AddCircleOutline" Color="Color.Primary" />
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">@item.GearType</MudText>
                     }
                 </div>
-                <MudDivider />
-            }
+                @if (_onList.TryGetValue(item.Id, out var quantity))
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Success">On list @(quantity > 1 ? $"×{quantity}" : "")</MudChip>
+                }
+                else
+                {
+                    <MudIcon Icon="@Icons.Material.Filled.AddCircleOutline" Color="Color.Primary" />
+                }
+            </div>
+            <MudDivider />
         }
     </DialogContent>
     <DialogActions>
@@ -51,7 +47,7 @@
     public string GearListId { get; set; } = "";
 
     private string? _searchText;
-    private IReadOnlyList<CategorySection>? _sections;
+    private IReadOnlyList<GearItem>? _items;
 
     // How many of each Gear Item the list holds, so gear already on it is marked.
     private Dictionary<string, int> _onList = [];
@@ -71,7 +67,7 @@
     }
 
     private async Task LoadAsync() =>
-        _sections = await App.Gear.ListGearItemsByCategoryAsync(new GearFilter(_searchText));
+        _items = await App.Gear.ListGearItemsAsync(new GearFilter(_searchText));
 
     private async Task SearchAsync(string? searchText)
     {

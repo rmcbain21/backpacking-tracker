@@ -10,11 +10,8 @@ public class RetireAndDeleteTests
 
     private AppCore CreateApp() => new(_store, _clock);
 
-    private static async Task<GearItem> AddAsync(AppCore app, string name, params string[] tags)
-    {
-        var shelter = (await app.Gear.ListCategoriesAsync()).Single(category => category.Name == "Shelter");
-        return await app.Gear.AddGearItemAsync(new GearItemDetails(name, "", 100m, shelter.Id, tags));
-    }
+    private static Task<GearItem> AddAsync(AppCore app, string name, params string[] tags) =>
+        app.Gear.AddGearItemAsync(new GearItemDetails(name, null, 100m, tags));
 
     private static async Task<string[]> CatalogueNamesAsync(AppCore app) =>
         (await app.Gear.ListGearItemsAsync()).Select(item => item.Name).ToArray();
@@ -29,9 +26,7 @@ public class RetireAndDeleteTests
         await app.Gear.RetireGearItemAsync(tent.Id);
 
         Assert.Equal(["Stakes"], await CatalogueNamesAsync(CreateApp()));
-        Assert.Equal(["Stakes"], (await app.Gear.ListGearItemsByCategoryAsync())
-            .SelectMany(section => section.GearItems).Select(item => item.Name));
-        Assert.Empty((await app.Gear.ListGearItemsByCategoryAsync(new GearFilter("tent"))));
+        Assert.Empty(await app.Gear.ListGearItemsAsync(new GearFilter("tent")));
     }
 
     [Fact]
@@ -244,19 +239,5 @@ public class RetireAndDeleteTests
         var refused = await Assert.ThrowsAsync<RuleViolationException>(() => app.Gear.DeleteGearItemAsync("gone"));
 
         Assert.Equal("That Gear Item no longer exists.", refused.Message);
-    }
-
-    [Fact]
-    public async Task Retired_gear_items_still_need_moving_when_their_category_is_removed()
-    {
-        var app = CreateApp();
-        var tent = await AddAsync(app, "Tent");
-        await app.Gear.RetireGearItemAsync(tent.Id);
-        var shelter = (await app.Gear.ListCategoriesAsync()).Single(category => category.Name == "Shelter");
-
-        var plan = await app.Gear.PlanCategoryRemovalAsync(shelter.Id);
-
-        Assert.True(plan.NeedsMoveTarget);
-        Assert.Equal(1, plan.GearItemCount);
     }
 }

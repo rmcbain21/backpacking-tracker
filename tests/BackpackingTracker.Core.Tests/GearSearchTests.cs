@@ -7,42 +7,39 @@ public class GearSearchTests
 {
     private readonly AppCore _app = new(new InMemoryRecordStore(), new FakeClock(DateTimeOffset.UnixEpoch));
 
-    private async Task<string> CategoryIdAsync(string name) =>
-        (await _app.Gear.ListCategoriesAsync()).Single(category => category.Name == name).Id;
-
-    private async Task AddAsync(string name, string brandModel, string category, params string[] tags) =>
-        await _app.Gear.AddGearItemAsync(new GearItemDetails(name, brandModel, 100m, await CategoryIdAsync(category), tags));
+    private Task AddAsync(string name, string gearType, params string[] tags) =>
+        _app.Gear.AddGearItemAsync(new GearItemDetails(name, gearType, 100m, tags));
 
     private async Task AddSampleGearAsync()
     {
-        await AddAsync("Tent", "Durston X-Mid 1", "Shelter", "winter");
-        await AddAsync("Quilt", "EE Revelation 20", "Sleep", "winter", "summer");
-        await AddAsync("Stove", "BRS-3000T", "Cook");
-        await AddAsync("Canister", "BearVault BV450", "Misc", "bear country");
+        await AddAsync("Durston X-Mid 1", "Tent", "winter");
+        await AddAsync("EE Revelation 20", "Quilt", "winter", "summer");
+        await AddAsync("BRS-3000T", "Stove");
+        await AddAsync("BearVault BV450", "Bear Canister", "bear country");
+        await AddAsync("Igneous 1L", "Water Bottle");
     }
 
     private async Task<string[]> FoundNamesAsync(GearFilter filter) =>
-        (await _app.Gear.ListGearItemsByCategoryAsync(filter))
-            .SelectMany(section => section.GearItems)
-            .Select(item => item.Name)
-            .ToArray();
+        (await _app.Gear.ListGearItemsAsync(filter)).Select(item => item.Name).ToArray();
 
     [Fact]
-    public async Task With_no_filter_every_gear_item_is_listed()
+    public async Task With_no_filter_every_gear_item_is_listed_by_gear_type()
     {
         await AddSampleGearAsync();
 
-        Assert.Equal(["Tent", "Quilt", "Stove", "Canister"], await FoundNamesAsync(new GearFilter()));
+        Assert.Equal(
+            ["BearVault BV450", "EE Revelation 20", "BRS-3000T", "Durston X-Mid 1", "Igneous 1L"],
+            await FoundNamesAsync(new GearFilter()));
     }
 
     [Theory]
-    [InlineData("TENT", "Tent")]
-    [InlineData("qui", "Quilt")]
-    [InlineData("x-mid", "Tent")]
-    [InlineData("revelation", "Quilt")]
-    [InlineData("country", "Canister")]
-    [InlineData("summ", "Quilt")]
-    public async Task Search_matches_part_of_a_name_brand_model_or_tag_ignoring_case(string search, string expected)
+    [InlineData("DURSTON", "Durston X-Mid 1")]
+    [InlineData("revel", "EE Revelation 20")]
+    [InlineData("tent", "Durston X-Mid 1")]
+    [InlineData("bottle", "Igneous 1L")]
+    [InlineData("country", "BearVault BV450")]
+    [InlineData("summ", "EE Revelation 20")]
+    public async Task Search_matches_part_of_a_name_gear_type_or_tag_ignoring_case(string search, string expected)
     {
         await AddSampleGearAsync();
 
@@ -54,7 +51,7 @@ public class GearSearchTests
     {
         await AddSampleGearAsync();
 
-        Assert.Equal(["Tent", "Quilt"], await FoundNamesAsync(new GearFilter(SearchText: "winter")));
+        Assert.Equal(["EE Revelation 20", "Durston X-Mid 1"], await FoundNamesAsync(new GearFilter(SearchText: "winter")));
     }
 
     [Fact]
@@ -62,7 +59,7 @@ public class GearSearchTests
     {
         await AddSampleGearAsync();
 
-        Assert.Equal(["Quilt"], await FoundNamesAsync(new GearFilter(SearchText: "winter  quilt")));
+        Assert.Equal(["EE Revelation 20"], await FoundNamesAsync(new GearFilter(SearchText: "winter  quilt")));
     }
 
     [Theory]
@@ -73,7 +70,7 @@ public class GearSearchTests
     {
         await AddSampleGearAsync();
 
-        Assert.Equal(4, (await FoundNamesAsync(new GearFilter(SearchText: search))).Length);
+        Assert.Equal(5, (await FoundNamesAsync(new GearFilter(SearchText: search))).Length);
     }
 
     [Fact]
@@ -81,37 +78,34 @@ public class GearSearchTests
     {
         await AddSampleGearAsync();
 
-        Assert.Empty(await _app.Gear.ListGearItemsByCategoryAsync(new GearFilter(SearchText: "kayak")));
+        Assert.Empty(await FoundNamesAsync(new GearFilter(SearchText: "kayak")));
+    }
+
+    [Theory]
+    [InlineData("Water Bottle")]
+    [InlineData(" water bottle ")]
+    public async Task The_gear_type_filter_lists_only_that_gear_type(string gearType)
+    {
+        await AddSampleGearAsync();
+        await AddAsync("Mazama M!GO 1L", "Water Bottle");
+
+        Assert.Equal(["Igneous 1L", "Mazama M!GO 1L"], await FoundNamesAsync(new GearFilter(GearType: gearType)));
     }
 
     [Fact]
-    public async Task The_category_filter_lists_only_that_category()
+    public async Task Search_and_the_gear_type_filter_combine()
     {
         await AddSampleGearAsync();
 
-        var sections = await _app.Gear.ListGearItemsByCategoryAsync(new GearFilter(CategoryId: await CategoryIdAsync("Sleep")));
-
-        Assert.Equal(["Sleep"], sections.Select(section => section.Category.Name));
-        Assert.Equal(["Quilt"], sections[0].GearItems.Select(item => item.Name));
-    }
-
-    [Fact]
-    public async Task Search_and_the_category_filter_combine()
-    {
-        await AddSampleGearAsync();
-        var shelter = await CategoryIdAsync("Shelter");
-
-        Assert.Equal(["Tent"], await FoundNamesAsync(new GearFilter("winter", shelter)));
-        Assert.Empty(await FoundNamesAsync(new GearFilter("stove", shelter)));
+        Assert.Equal(["Durston X-Mid 1"], await FoundNamesAsync(new GearFilter("winter", "Tent")));
+        Assert.Empty(await FoundNamesAsync(new GearFilter("stove", "Tent")));
     }
 
     [Fact]
     public async Task Tags_do_not_change_a_gear_item_weight()
     {
-        var misc = await CategoryIdAsync("Misc");
-
         var tagged = await _app.Gear.AddGearItemAsync(
-            new GearItemDetails("Puffy", "", 283.5m, misc, ["winter", "bear country", "camp"]));
+            new GearItemDetails("OV Vario", "Puffy", 283.5m, ["winter", "bear country", "camp"]));
 
         Assert.Equal(283.5m, tagged.WeightGrams);
     }
@@ -120,9 +114,9 @@ public class GearSearchTests
     [InlineData(null, null, true)]
     [InlineData("  ", "", true)]
     [InlineData("tent", null, false)]
-    [InlineData(null, "some-category", false)]
-    public void A_filter_with_no_search_text_or_category_is_empty(string? searchText, string? categoryId, bool expected)
+    [InlineData(null, "Tent", false)]
+    public void A_filter_with_no_search_text_or_gear_type_is_empty(string? searchText, string? gearType, bool expected)
     {
-        Assert.Equal(expected, new GearFilter(searchText, categoryId).IsEmpty);
+        Assert.Equal(expected, new GearFilter(searchText, gearType).IsEmpty);
     }
 }

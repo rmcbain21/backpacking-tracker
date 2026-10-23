@@ -56,31 +56,27 @@ public sealed class GearCatalogue
             throw new RuleViolationException("A price can't be negative.");
         }
 
-        var categories = await ListCategoriesAsync();
-        if (!categories.Any(category => category.Id == details.CategoryId))
-        {
-            throw new RuleViolationException("Choose a Category.");
-        }
-
         return item with
         {
             Name = details.Name.Trim(),
-            BrandModel = details.BrandModel?.Trim() ?? "",
+            GearType = await CleanUpGearTypeAsync(details.GearType),
             WeightGrams = Math.Round(details.WeightGrams, 1, MidpointRounding.AwayFromZero),
-            CategoryId = details.CategoryId,
             Tags = await CleanUpTagsAsync(details.Tags),
             Price = details.Price is { } price ? Math.Round(price, 2, MidpointRounding.AwayFromZero) : null,
             Notes = details.Notes?.Trim() ?? "",
+            LegacyBrandModel = null,
         };
     }
 
-    /// <summary>The catalogue: Gear Items the backpacker owns, by name. Leaves out Retired and deleted ones.</summary>
-    public async Task<IReadOnlyList<GearItem>> ListGearItemsAsync() =>
-        (await LoadGearItemsAsync()).Where(item => !item.Retired).ToList();
+    /// <summary>The catalogue: Gear Items the backpacker owns, by Gear Type then Name. Leaves out Retired ones.</summary>
+    public Task<IReadOnlyList<GearItem>> ListGearItemsAsync() => ListGearItemsAsync(new GearFilter());
+
+    /// <summary>The catalogue narrowed by search text and Gear Type, by Gear Type then Name.</summary>
+    public async Task<IReadOnlyList<GearItem>> ListGearItemsAsync(GearFilter filter) =>
+        (await LoadGearItemsAsync()).Where(item => !item.Retired && filter.Matches(item)).ToList();
 
     public async Task<IReadOnlyList<GearItem>> ListRetiredGearItemsAsync() =>
         (await LoadGearItemsAsync()).Where(item => item.Retired).ToList();
-
     /// <summary>
     /// A Gear Item by id, Retired or not, so anything that refers to it can still show it.
     /// Null if it doesn't exist or was deleted.
@@ -115,17 +111,66 @@ public sealed class GearCatalogue
         await _store.SaveAsync(Table, item with { Retired = retired, UpdatedAt = _clock.UtcNow });
     }
 
-    /// <summary>Every Gear Item that hasn't been deleted, Retired or not, by name.</summary>
+    /// <summary>
+    /// Every Gear Item that hasn't been deleted, Retired or not, sorted by Gear Type (those without one
+    /// last), then Name. Records saved before Gear Types existed are converted as they're read.
+    /// </summary>
     private async Task<IReadOnlyList<GearItem>> LoadGearItemsAsync()
     {
         var items = await _store.ListAsync<GearItem>(Table);
         return items
             .Where(item => !item.Deleted)
-            // Gear Items saved before Categories existed have none; they belong in Misc.
-            .Select(item => string.IsNullOrEmpty(item.CategoryId) ? item with { CategoryId = DefaultCategories.MiscId } : item)
-            .OrderBy(item => item.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(ConvertOldRecord)
+            .OrderBy(item => item.GearType.Length == 0)
+            .ThenBy(item => item.GearType, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(item => item.Name, StringComparer.OrdinalIgnoreCase)
             .ToList();
     }
+
+    /// <summary>
+    /// A record saved before ticket 27 had a name (what the gear is, such as "Tent") and a brand/model
+    /// (such as "Durston X-Mid 1"). Its name becomes the Gear Type and its brand/model the Name; with no
+    /// brand/model, the name serves as both. Records from before Categories had no Category: Misc.
+    /// </summary>
+    private static GearItem ConvertOldRecord(GearItem item)
+    {
+        if (item.LegacyBrandModel is null)
+        {
+            return item;
+        }
+
+        var brandModel = item.LegacyBrandModel.Trim();
+        return item with
+        {
+            GearType = item.Name,
+            Name = brandModel.Length > 0 ? brandModel : item.Name,
+            LegacyBrandModel = null,
+            LegacyCategoryId = string.IsNullOrEmpty(item.LegacyCategoryId) ? DefaultCategories.MiscId : item.LegacyCategoryId,
+        };
+    }
+
+    /// <summary>Every Gear Type in use in the catalogue, once each, in alphabetical order; used for suggestions.</summary>
+    public async Task<IReadOnlyList<string>> ListGearTypesAsync() =>
+        (await ListGearItemsAsync())
+            .Select(item => item.GearType)
+            .Where(gearType => gearType.Length > 0)
+            .Distinct(TagRules.Comparer)
+            .Order(TagRules.Comparer)
+            .ToList();
+
+    /// <summary>Trims a Gear Type and gives it the spelling it already has elsewhere, like a Tag.</summary>
+    private async Task<string> CleanUpGearTypeAsync(string? gearType)
+    {
+        var trimmed = gearType?.Trim() ?? "";
+        if (trimmed.Length == 0)
+        {
+            return "";
+        }
+
+        var gearTypesInUse = await ListGearTypesAsync();
+        return gearTypesInUse.FirstOrDefault(t => TagRules.Comparer.Equals(t, trimmed)) ?? trimmed;
+    }
+
 
     /// <summary>
     /// The Categories in the backpacker's chosen order. On first run this also creates the defaults.
@@ -235,78 +280,17 @@ public sealed class GearCatalogue
         }
     }
 
-    /// <summary>What removing a Category involves: how many Gear Items it has, and where they could move.</summary>
-    public async Task<CategoryRemovalPlan> PlanCategoryRemovalAsync(string categoryId)
+    /// <summary>Removes a Category; at least one must stay. Kept as a tombstone so the removal syncs.</summary>
+    public async Task RemoveCategoryAsync(string categoryId)
     {
         var categories = await ListCategoriesAsync();
         var category = FindCategory(categories, categoryId);
-        var gearItemCount = (await LoadGearItemsAsync()).Count(item => item.CategoryId == categoryId);
-
-        return new CategoryRemovalPlan(category, gearItemCount, categories.Where(c => c.Id != categoryId).ToList());
-    }
-
-    /// <summary>
-    /// Removes a Category. If Gear Items use it, they must be moved to another Category,
-    /// so that no Gear Item is left without one.
-    /// </summary>
-    public async Task RemoveCategoryAsync(string categoryId, string? moveGearItemsToCategoryId = null)
-    {
-        var plan = await PlanCategoryRemovalAsync(categoryId);
-        if (plan.MoveTargets.Count == 0)
+        if (categories.Count == 1)
         {
-            throw new RuleViolationException("Keep at least one Category, so Gear Items have somewhere to go.");
+            throw new RuleViolationException("Keep at least one Category.");
         }
 
-        if (plan.NeedsMoveTarget)
-        {
-            if (moveGearItemsToCategoryId is null)
-            {
-                throw new RuleViolationException(plan.Message);
-            }
-
-            if (moveGearItemsToCategoryId == categoryId)
-            {
-                throw new RuleViolationException("Choose a different Category to move the Gear Items to.");
-            }
-
-            var target = FindCategory(plan.MoveTargets, moveGearItemsToCategoryId);
-            var items = (await LoadGearItemsAsync()).Where(item => item.CategoryId == categoryId);
-            foreach (var item in items)
-            {
-                await _store.SaveAsync(Table, item with { CategoryId = target.Id, UpdatedAt = _clock.UtcNow });
-            }
-        }
-
-        // Kept as a tombstone so that the removal syncs to other devices.
-        await _store.SaveAsync(CategoryTable, plan.Category with { Deleted = true, UpdatedAt = _clock.UtcNow });
-    }
-
-    /// <summary>
-    /// Gear Items under their Category, in Category order, leaving out empty Categories. Gear Items whose
-    /// Category no longer exists (removed on another device before a sync) come last, under "No Category".
-    /// </summary>
-    public async Task<IReadOnlyList<CategorySection>> ListGearItemsByCategoryAsync(GearFilter? filter = null)
-    {
-        filter ??= new GearFilter();
-        var categories = await ListCategoriesAsync();
-        var items = (await ListGearItemsAsync()).Where(filter.Matches).ToList();
-
-        var sections = categories
-            .Where(category => filter.OnlyCategoryId is null || category.Id == filter.OnlyCategoryId)
-            .Select(category => new CategorySection(
-                category,
-                items.Where(item => item.CategoryId == category.Id).ToList()))
-            .Where(section => section.GearItems.Count > 0)
-            .ToList();
-
-        var liveCategoryIds = categories.Select(category => category.Id).ToHashSet();
-        var withoutCategory = items.Where(item => !liveCategoryIds.Contains(item.CategoryId)).ToList();
-        if (filter.OnlyCategoryId is null && withoutCategory.Count > 0)
-        {
-            sections.Add(new CategorySection(Category.None, withoutCategory));
-        }
-
-        return sections;
+        await _store.SaveAsync(CategoryTable, category with { Deleted = true, UpdatedAt = _clock.UtcNow });
     }
 
     /// <summary>Every Tag in use on a Gear Item, once each, in alphabetical order; used for suggestions.</summary>

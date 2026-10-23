@@ -136,7 +136,7 @@ h1:focus {
 }
 
 /* Category filter beside the gear search box */
-.category-filter {
+.gear-type-filter {
     flex: 0 0 132px;
 }
 

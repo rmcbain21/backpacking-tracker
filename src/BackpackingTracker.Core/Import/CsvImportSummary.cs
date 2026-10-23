@@ -1,6 +1,6 @@
 namespace BackpackingTracker.Core.Import;
 
-public sealed record CsvImportSummary(IReadOnlyList<CsvRowResult> Rows, IReadOnlyList<string> CreatedCategories)
+public sealed record CsvImportSummary(IReadOnlyList<CsvRowResult> Rows)
 {
     public IReadOnlyList<CsvRowResult> Created => RowsWith(CsvRowOutcome.Created);
 

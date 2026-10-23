@@ -8,14 +8,14 @@ namespace BackpackingTracker.Core.Import;
 /// <list type="bullet">
 /// <item>The gear layout: one row per Gear Item, with the fixed <see cref="Columns"/>.</item>
 /// <item>A trip sheet, as kept in Excel: Category as section-header rows, then rows with Item (the
-/// Gear Item's name), Name (its brand/model) and a g column, plus subtotal and spacer rows to skip.
-/// Columns are found by name; others, such as lb and oz, are ignored.</item>
+/// Gear Item's Gear Type), Name and a g column, plus subtotal and spacer rows to skip. Columns are
+/// found by name; others, such as lb and oz, are ignored.</item>
 /// </list>
 /// </summary>
 public sealed class GearImport
 {
     /// <summary>The columns the gear layout's first row must name, in this order.</summary>
-    public static readonly IReadOnlyList<string> Columns = ["Category", "Name", "Brand/Model", "Weight (g)", "Qty", "Carry Mode"];
+    public static readonly IReadOnlyList<string> Columns = ["Category", "Gear Type", "Name", "Weight (g)", "Qty", "Carry Mode"];
 
     /// <summary>The columns a trip sheet's first row must include, in any order.</summary>
     public static readonly IReadOnlyList<string> TripSheetColumns = ["Category", "Item", "Name", "g"];
@@ -31,9 +31,9 @@ public sealed class GearImport
     }
 
     /// <summary>
-    /// Imports each row as a Gear Item. A row whose name and brand/model match an existing Gear Item
-    /// (ignoring case and spaces) reuses it unchanged; unknown Categories are created; a row that
-    /// can't be imported is rejected with a reason and the rest still import.
+    /// Imports each row as a Gear Item. A row whose Gear Type and Name match an existing Gear Item
+    /// (ignoring case and spaces) reuses it unchanged; a row that can't be imported is rejected with
+    /// a reason and the rest still import.
     /// </summary>
     public async Task<CsvImportSummary> ImportCsvAsync(string csvText)
     {
@@ -54,8 +54,6 @@ public sealed class GearImport
         }
 
         var results = new List<CsvRowResult>();
-        var createdCategories = new List<string>();
-        var categories = (await _gear.ListCategoriesAsync()).ToList();
 
         // Retired gear matches too, so re-importing an old trip sheet doesn't recreate it.
         var knownItems = (await _gear.ListGearItemsAsync()).Concat(await _gear.ListRetiredGearItemsAsync()).ToList();
@@ -65,7 +63,7 @@ public sealed class GearImport
             var (values, problem) = ReadValues(row);
             if (values is null)
             {
-                results.Add(new CsvRowResult(row.Number, CsvRowOutcome.Rejected, row.Name, Reason: problem));
+                results.Add(new CsvRowResult(row.Number, CsvRowOutcome.Rejected, row.Name, row.Category, Reason: problem));
                 continue;
             }
 
@@ -73,39 +71,16 @@ public sealed class GearImport
             if (match is not null)
             {
                 var outcome = match.WeightGrams == values.WeightGrams ? CsvRowOutcome.Reused : CsvRowOutcome.Flagged;
-                results.Add(new CsvRowResult(row.Number, outcome, match.Name, match, values.Quantity, values.CarryMode, values.WeightGrams));
+                results.Add(new CsvRowResult(row.Number, outcome, match.Name, row.Category, match, values.Quantity, values.CarryMode, values.WeightGrams));
                 continue;
             }
 
-            var category = FindCategory(categories, row.Category);
-            if (category is null)
-            {
-                category = await _gear.AddCategoryAsync(row.Category);
-                categories.Add(category);
-                createdCategories.Add(category.Name);
-            }
-
-            var created = await _gear.AddGearItemAsync(new GearItemDetails(row.Name, row.BrandModel, values.WeightGrams, category.Id));
+            var created = await _gear.AddGearItemAsync(new GearItemDetails(row.Name, row.GearType, values.WeightGrams));
             knownItems.Add(created);
-            results.Add(new CsvRowResult(row.Number, CsvRowOutcome.Created, created.Name, created, values.Quantity, values.CarryMode, values.WeightGrams));
+            results.Add(new CsvRowResult(row.Number, CsvRowOutcome.Created, created.Name, row.Category, created, values.Quantity, values.CarryMode, values.WeightGrams));
         }
 
-        return new CsvImportSummary(results, createdCategories);
-    }
-
-    /// <summary>
-    /// The row's Category by name, ignoring case (with two of the same name, possible after a sync, the
-    /// first in order). A blank Category means Misc, found by its fixed id so a renamed Misc still works.
-    /// </summary>
-    private static Category? FindCategory(IReadOnlyList<Category> categories, string name)
-    {
-        if (name.Length == 0)
-        {
-            return categories.FirstOrDefault(c => c.Id == DefaultCategories.MiscId)
-                ?? categories.FirstOrDefault(c => string.Equals(c.Name, "Misc", StringComparison.OrdinalIgnoreCase));
-        }
-
-        return categories.FirstOrDefault(c => string.Equals(c.Name, name, StringComparison.OrdinalIgnoreCase));
+        return new CsvImportSummary(results);
     }
 
     /// <summary>The weight, Qty and Carry Mode a valid row gives.</summary>
@@ -165,18 +140,18 @@ public sealed class GearImport
         return (new RowValues(Math.Round(weight, 1, MidpointRounding.AwayFromZero), quantity, carryMode), null);
     }
 
-    /// <summary>Same name and brand/model, ignoring case and surrounding spaces.</summary>
+    /// <summary>Same Gear Type and Name, ignoring case and surrounding spaces.</summary>
     private static bool Matches(GearItem item, GearRow row) =>
-        string.Equals(item.Name, row.Name, StringComparison.OrdinalIgnoreCase)
-        && string.Equals(item.BrandModel, row.BrandModel, StringComparison.OrdinalIgnoreCase);
+        string.Equals(item.GearType, row.GearType, StringComparison.OrdinalIgnoreCase)
+        && string.Equals(item.Name, row.Name, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>A row that describes a Gear Item, whichever layout it came from. Every value is trimmed.</summary>
     private sealed record GearRow(
-        int Number, string Category, string Name, string BrandModel, string Weight, string Qty, string CarryMode);
+        int Number, string Category, string GearType, string Name, string Weight, string Qty, string CarryMode);
 
     /// <summary>Where a layout's values are, by column position (-1 for a column it doesn't have).</summary>
     private sealed record SheetLayout(
-        bool IsTripSheet, int Category, int Name, int BrandModel, int Weight, int Qty, int CarryMode)
+        bool IsTripSheet, int Category, int GearType, int Name, int Weight, int Qty, int CarryMode)
     {
         /// <summary>The layout the header row describes, or null if it's neither.</summary>
         public static SheetLayout? FromHeader(IReadOnlyList<string> header)
@@ -188,20 +163,23 @@ public sealed class GearImport
                 && names.Select((name, i) => i < Columns.Count ? Same(name, Columns[i]) : name.Length == 0).All(ok => ok);
             if (isGearLayout)
             {
-                return new SheetLayout(IsTripSheet: false, Category: 0, Name: 1, BrandModel: 2, Weight: 3, Qty: 4, CarryMode: 5);
+                return new SheetLayout(IsTripSheet: false, Category: 0, GearType: 1, Name: 2, Weight: 3, Qty: 4, CarryMode: 5);
             }
 
             int IndexOf(string column) => names.FindIndex(name => Same(name, column));
 
-            // A trip sheet: Item is the Gear Item's name and Name is its brand/model.
+            // A trip sheet: Item is the Gear Item's Gear Type and Name is its Name.
             var tripSheet = new SheetLayout(
-                IsTripSheet: true, Category: IndexOf("Category"), Name: IndexOf("Item"), BrandModel: IndexOf("Name"),
+                IsTripSheet: true, Category: IndexOf("Category"), GearType: IndexOf("Item"), Name: IndexOf("Name"),
                 Weight: IndexOf("g"), Qty: IndexOf("Qty"), CarryMode: IndexOf("Type"));
-            var hasRequiredColumns = tripSheet.Category >= 0 && tripSheet.Name >= 0 && tripSheet.BrandModel >= 0 && tripSheet.Weight >= 0;
+            var hasRequiredColumns = tripSheet.Category >= 0 && tripSheet.GearType >= 0 && tripSheet.Name >= 0 && tripSheet.Weight >= 0;
             return hasRequiredColumns ? tripSheet : null;
         }
 
-        /// <summary>The rows after the header that describe Gear Items, skipping blank and subtotal rows.</summary>
+        /// <summary>
+        /// The rows after the header that describe Gear Items, skipping blank, section-header and subtotal
+        /// rows. A row with a Gear Type but no Name uses the Gear Type as its Name.
+        /// </summary>
         public IEnumerable<GearRow> ReadGearRows(IReadOnlyList<IReadOnlyList<string>> records)
         {
             var section = "";
@@ -211,34 +189,30 @@ public sealed class GearImport
                 string Field(int column) => column >= 0 && column < fields.Count ? fields[column].Trim() : "";
 
                 var row = new GearRow(
-                    Number: index + 1, Field(Category), Field(Name), Field(BrandModel), Field(Weight), Field(Qty), Field(CarryMode));
+                    Number: index + 1, Field(Category), Field(GearType), Field(Name), Field(Weight), Field(Qty), Field(CarryMode));
 
-                if (!IsTripSheet)
+                if (IsTripSheet)
                 {
-                    if (!fields.All(string.IsNullOrWhiteSpace))
+                    // A trip sheet's Category is a section-header row that applies to the rows below it.
+                    if (row.Category.Length > 0)
                     {
-                        yield return row;
+                        section = row.Category;
                     }
 
-                    continue;
-                }
+                    // Rows with neither Item nor Name are section headers or spacers; "Total:" rows are subtotals.
+                    if (row.GearType.Length == 0 && (row.Name.Length == 0 || IsSubtotal(row.Name)))
+                    {
+                        continue;
+                    }
 
-                // A trip sheet's Category is a section-header row that applies to the rows below it.
-                if (row.Category.Length > 0)
-                {
-                    section = row.Category;
+                    row = row with { Category = section };
                 }
-
-                // Item names the Gear Item; a row with only Name (such as "Electronics bag") uses that instead,
-                // unless it's a subtotal ("Total:"). Rows with neither are section headers or spacers.
-                if (row.Name.Length == 0 && (row.BrandModel.Length == 0 || IsSubtotal(row.BrandModel)))
+                else if (fields.All(string.IsNullOrWhiteSpace))
                 {
                     continue;
                 }
 
-                yield return row.Name.Length > 0
-                    ? row with { Category = section }
-                    : row with { Category = section, Name = row.BrandModel, BrandModel = "" };
+                yield return row.Name.Length == 0 ? row with { Name = row.GearType } : row;
             }
         }
 

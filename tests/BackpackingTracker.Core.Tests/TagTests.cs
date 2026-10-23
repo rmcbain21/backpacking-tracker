@@ -10,19 +10,15 @@ public class TagTests
 
     private AppCore CreateApp() => new(_store, _clock);
 
-    private static async Task<GearItem> AddTaggedAsync(AppCore app, string name, params string[] tags)
-    {
-        var misc = (await app.Gear.ListCategoriesAsync()).Single(category => category.Name == "Misc");
-        return await app.Gear.AddGearItemAsync(new GearItemDetails(name, "", 100m, misc.Id, tags));
-    }
+    private static Task<GearItem> AddTaggedAsync(AppCore app, string name, params string[] tags) =>
+        app.Gear.AddGearItemAsync(new GearItemDetails(name, null, 100m, tags));
 
     [Fact]
     public async Task A_gear_item_has_no_tags_unless_given_some()
     {
         var app = CreateApp();
-        var misc = (await app.Gear.ListCategoriesAsync()).Single(category => category.Name == "Misc");
 
-        await app.Gear.AddGearItemAsync(new GearItemDetails("Bandana", "", 28m, misc.Id));
+        await app.Gear.AddGearItemAsync(new GearItemDetails("Bandana", null, 28m));
 
         Assert.Empty(Assert.Single(await app.Gear.ListGearItemsAsync()).Tags);
     }

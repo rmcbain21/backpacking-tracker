@@ -12,11 +12,8 @@ public class GearListTests
 
     private AppCore CreateApp() => new(_store, _clock);
 
-    private static async Task<GearItem> AddGearAsync(AppCore app, string name, decimal grams)
-    {
-        var misc = (await app.Gear.ListCategoriesAsync()).Single(category => category.Name == "Misc");
-        return await app.Gear.AddGearItemAsync(new GearItemDetails(name, "", grams, misc.Id));
-    }
+    private static Task<GearItem> AddGearAsync(AppCore app, string name, decimal grams) =>
+        app.Gear.AddGearItemAsync(new GearItemDetails(name, null, grams));
 
     private static async Task<GearListView> ViewAsync(AppCore app, GearList list) =>
         (await app.Lists.GetGearListAsync(list.Id))!;
@@ -212,7 +209,7 @@ public class GearListTests
         await app.Lists.AddEntryAsync(summer.Id, tent.Id);
         await app.Lists.AddEntryAsync(winter.Id, tent.Id);
 
-        await app.Gear.UpdateGearItemAsync(tent.Id, new GearItemDetails("Tent", "", 880m, tent.CategoryId));
+        await app.Gear.UpdateGearItemAsync(tent.Id, new GearItemDetails("Tent", null, 880m));
 
         Assert.Equal(880m, (await ViewAsync(app, summer)).Weight.BaseGrams);
         Assert.Equal(880m, (await ViewAsync(app, winter)).Weight.BaseGrams);
@@ -251,27 +248,6 @@ public class GearListTests
         Assert.Null(view.Entries[0].GearItem);
         Assert.Equal(0m, view.Entries[0].EntryWeightGrams);
         Assert.Equal(590m, view.Weight.BaseGrams);
-    }
-
-    [Fact]
-    public async Task The_breakdown_follows_each_gear_item_current_category()
-    {
-        var app = CreateApp();
-        var categories = await app.Gear.ListCategoriesAsync();
-        var shelter = categories.Single(category => category.Name == "Shelter");
-        var sleep = categories.Single(category => category.Name == "Sleep");
-        var bigThree = await app.Gear.AddCategoryAsync("Big Three");
-        var tent = await app.Gear.AddGearItemAsync(new GearItemDetails("Tent", "", 900m, shelter.Id));
-        var quilt = await app.Gear.AddGearItemAsync(new GearItemDetails("Quilt", "", 600m, sleep.Id));
-        var list = await app.Lists.CreateGearListAsync("Summer kit");
-        await app.Lists.AddEntryAsync(list.Id, tent.Id);
-        await app.Lists.AddEntryAsync(list.Id, quilt.Id);
-
-        await app.Gear.UpdateGearItemAsync(quilt.Id, new GearItemDetails("Quilt", "", 600m, bigThree.Id));
-
-        var lines = (await ViewAsync(app, list)).Weight.ByCategory;
-        Assert.Equal(["Shelter", "Big Three"], lines.Select(line => line.Category.Name));
-        Assert.Equal([0.6m, 0.4m], lines.Select(line => line.Share));
     }
 
     [Fact]

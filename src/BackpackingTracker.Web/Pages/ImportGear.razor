@@ -46,11 +46,6 @@
         @_summary.Rejected.Count rejected
     </MudText>
 
-    @if (_summary.CreatedCategories.Count > 0)
-    {
-        <MudText Typo="Typo.body2" Class="mb-2">New Categories: @string.Join(", ", _summary.CreatedCategories)</MudText>
-    }
-
     @if (_summary.Rejected.Count > 0)
     {
         <MudText Typo="Typo.subtitle2" HtmlTag="h3" Class="mt-4 mb-1">Rejected</MudText>

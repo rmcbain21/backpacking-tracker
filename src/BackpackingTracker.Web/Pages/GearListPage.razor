@@ -72,9 +72,9 @@ else if (_view is not null)
                             @if (entryView.GearItem is { } item)
                             {
                                 <MudText>@item.Name@(item.Retired ? " (Retired)" : "")</MudText>
-                                @if (!string.IsNullOrEmpty(item.BrandModel))
+                                @if (item.GearType.Length > 0)
                                 {
-                                    <MudText Typo="Typo.body2" Class="mud-text-secondary">@item.BrandModel</MudText>
+                                    <MudText Typo="Typo.body2" Class="mud-text-secondary">@item.GearType</MudText>
                                 }
                             }
                             else

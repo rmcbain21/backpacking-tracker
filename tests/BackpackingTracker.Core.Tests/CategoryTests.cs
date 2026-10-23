@@ -3,6 +3,7 @@ using BackpackingTracker.Core.Tests.Fakes;
 
 namespace BackpackingTracker.Core.Tests;
 
+/// <summary>The Default Categories: the backpacker's usual set, which each new Gear List starts with (ADR 0003).</summary>
 public class CategoryTests
 {
     private static readonly string[] DefaultNames =
@@ -170,9 +171,6 @@ public class CategoryTests
         Assert.Equal(["First Aid", "Misc", "Cook"], (await CategoryNamesAsync(app))[^3..]);
     }
 
-    private static Task AddGearItemAsync(AppCore app, string name, Category category) =>
-        app.Gear.AddGearItemAsync(new GearItemDetails(name, "", 100m, category.Id));
-
     [Fact]
     public async Task An_unused_category_can_be_removed()
     {
@@ -209,7 +207,7 @@ public class CategoryTests
         var refused = await Assert.ThrowsAsync<RuleViolationException>(
             () => app.Gear.RemoveCategoryAsync(categories[0].Id));
 
-        Assert.Equal("Keep at least one Category, so Gear Items have somewhere to go.", refused.Message);
+        Assert.Equal("Keep at least one Category.", refused.Message);
         Assert.Equal(["Shelter"], await CategoryNamesAsync(app));
     }
 
@@ -232,157 +230,6 @@ public class CategoryTests
         await app.Gear.AddCategoryAsync("Pack");
 
         Assert.Equal("Pack", (await CategoryNamesAsync(app))[^1]);
-    }
-
-    [Fact]
-    public async Task Planning_to_remove_a_used_category_says_where_its_gear_items_can_go()
-    {
-        var app = CreateApp();
-        var shelter = await CategoryNamedAsync(app, "Shelter");
-        await AddGearItemAsync(app, "Tent", shelter);
-        await AddGearItemAsync(app, "Stakes", shelter);
-
-        var plan = await app.Gear.PlanCategoryRemovalAsync(shelter.Id);
-
-        Assert.True(plan.NeedsMoveTarget);
-        Assert.Equal("Shelter has 2 Gear Items. Choose a Category to move them to.", plan.Message);
-        Assert.Equal(DefaultNames[1..], plan.MoveTargets.Select(category => category.Name));
-    }
-
-    [Fact]
-    public async Task Planning_to_remove_a_category_with_one_gear_item_says_so()
-    {
-        var app = CreateApp();
-        var cook = await CategoryNamedAsync(app, "Cook");
-        await AddGearItemAsync(app, "Stove", cook);
-
-        var plan = await app.Gear.PlanCategoryRemovalAsync(cook.Id);
-
-        Assert.Equal("Cook has 1 Gear Item. Choose a Category to move it to.", plan.Message);
-    }
-
-    [Fact]
-    public async Task Planning_to_remove_an_unused_category_just_asks_to_confirm()
-    {
-        var app = CreateApp();
-
-        var plan = await app.Gear.PlanCategoryRemovalAsync((await CategoryNamedAsync(app, "Sleep")).Id);
-
-        Assert.False(plan.NeedsMoveTarget);
-        Assert.Equal("Remove Sleep?", plan.Message);
-    }
-
-    [Fact]
-    public async Task Removing_a_category_that_gear_items_use_is_refused()
-    {
-        var app = CreateApp();
-        var shelter = await CategoryNamedAsync(app, "Shelter");
-        await AddGearItemAsync(app, "Tent", shelter);
-        await AddGearItemAsync(app, "Stakes", shelter);
-
-        var refused = await Assert.ThrowsAsync<RuleViolationException>(() => app.Gear.RemoveCategoryAsync(shelter.Id));
-
-        Assert.Equal("Shelter has 2 Gear Items. Choose a Category to move them to.", refused.Message);
-        Assert.Contains("Shelter", await CategoryNamesAsync(app));
-    }
-
-    [Fact]
-    public async Task Removing_a_used_category_can_move_its_gear_items_to_another()
-    {
-        var app = CreateApp();
-        var shelter = await CategoryNamedAsync(app, "Shelter");
-        var misc = await CategoryNamedAsync(app, "Misc");
-        await AddGearItemAsync(app, "Tent", shelter);
-        await AddGearItemAsync(app, "Stakes", shelter);
-        var later = _clock.UtcNow.AddHours(1);
-        _clock.UtcNow = later;
-
-        await app.Gear.RemoveCategoryAsync(shelter.Id, moveGearItemsToCategoryId: misc.Id);
-
-        Assert.DoesNotContain("Shelter", await CategoryNamesAsync(app));
-        var items = await CreateApp().Gear.ListGearItemsAsync();
-        Assert.All(items, item => Assert.Equal(misc.Id, item.CategoryId));
-        Assert.All(items, item => Assert.Equal(later, item.UpdatedAt));
-    }
-
-    [Fact]
-    public async Task Gear_items_cannot_be_moved_into_the_category_being_removed()
-    {
-        var app = CreateApp();
-        var shelter = await CategoryNamedAsync(app, "Shelter");
-        await AddGearItemAsync(app, "Tent", shelter);
-
-        var refused = await Assert.ThrowsAsync<RuleViolationException>(
-            () => app.Gear.RemoveCategoryAsync(shelter.Id, moveGearItemsToCategoryId: shelter.Id));
-
-        Assert.Equal("Choose a different Category to move the Gear Items to.", refused.Message);
-        Assert.Contains("Shelter", await CategoryNamesAsync(app));
-    }
-
-    [Fact]
-    public async Task Gear_items_cannot_be_moved_into_a_category_that_does_not_exist()
-    {
-        var app = CreateApp();
-        var shelter = await CategoryNamedAsync(app, "Shelter");
-        await AddGearItemAsync(app, "Tent", shelter);
-
-        await Assert.ThrowsAsync<RuleViolationException>(
-            () => app.Gear.RemoveCategoryAsync(shelter.Id, moveGearItemsToCategoryId: "not-a-category"));
-
-        Assert.Contains("Shelter", await CategoryNamesAsync(app));
-    }
-
-    [Fact]
-    public async Task A_removed_category_cannot_be_chosen_for_a_new_gear_item()
-    {
-        var app = CreateApp();
-        var water = await CategoryNamedAsync(app, "Water");
-        await app.Gear.RemoveCategoryAsync(water.Id);
-
-        await Assert.ThrowsAsync<RuleViolationException>(() => AddGearItemAsync(app, "Filter", water));
-    }
-
-    [Fact]
-    public async Task Gear_items_whose_category_was_removed_elsewhere_are_listed_under_no_category()
-    {
-        // Sync can bring in a Gear Item whose Category another device removed. The API can't
-        // create one, so this test writes it to the store directly.
-        var app = CreateApp();
-        await AddGearItemAsync(app, "Tent", await CategoryNamedAsync(app, "Shelter"));
-        await _store.SaveAsync("gearItems", new GearItem
-        {
-            Id = Guid.NewGuid().ToString(),
-            UpdatedAt = _clock.UtcNow,
-            Name = "Toothbrush",
-            WeightGrams = 12m,
-            CategoryId = "a-category-removed-on-another-device",
-        });
-
-        var sections = await app.Gear.ListGearItemsByCategoryAsync();
-
-        Assert.Equal(["Shelter", "No Category"], sections.Select(section => section.Category.Name));
-        Assert.Equal(["Toothbrush"], sections[1].GearItems.Select(item => item.Name));
-    }
-
-    [Fact]
-    public async Task Gear_items_are_grouped_by_category_in_category_order()
-    {
-        var app = CreateApp();
-        var shelter = await CategoryNamedAsync(app, "Shelter");
-        var sleep = await CategoryNamedAsync(app, "Sleep");
-        var cook = await CategoryNamedAsync(app, "Cook");
-        await AddGearItemAsync(app, "Tent", shelter);
-        await AddGearItemAsync(app, "Stove", cook);
-        await AddGearItemAsync(app, "Quilt", sleep);
-        await AddGearItemAsync(app, "Pot", cook);
-        await app.Gear.MoveCategoryAsync(cook.Id, 0);
-
-        var sections = await app.Gear.ListGearItemsByCategoryAsync();
-
-        Assert.Equal(["Cook", "Shelter", "Sleep"], sections.Select(section => section.Category.Name));
-        Assert.Equal(["Pot", "Stove"], sections[0].GearItems.Select(item => item.Name));
-        Assert.Equal(["Tent"], sections[1].GearItems.Select(item => item.Name));
-        Assert.Equal(["Quilt"], sections[2].GearItems.Select(item => item.Name));
     }
 
     [Fact]

@@ -10,11 +10,11 @@
     <MudTextField T="string" Value="_searchText" ValueChanged="SearchAsync" Label="Search gear" Immediate="true"
                   DebounceInterval="200" Clearable="true" Adornment="Adornment.Start"
                   AdornmentIcon="@Icons.Material.Filled.Search" Class="flex-grow-1 gear-search" />
-    <MudSelect T="string" Value="_filterCategoryId" ValueChanged="FilterByCategoryAsync" Label="Category"
-               Class="category-filter" Clearable="true" Placeholder="All">
-        @foreach (var category in _categories)
+    <MudSelect T="string" Value="_filterGearType" ValueChanged="FilterByGearTypeAsync" Label="Gear Type"
+               Class="gear-type-filter" Clearable="true" Placeholder="All">
+        @foreach (var gearType in _gearTypes)
         {
-            <MudSelectItem Value="category.Id">@category.Name</MudSelectItem>
+            <MudSelectItem Value="gearType">@gearType</MudSelectItem>
         }
     </MudSelect>
 </div>
@@ -24,15 +24,13 @@
                StartIcon="@Icons.Material.Filled.UploadFile">Import</MudButton>
     <MudButton Href="gear/retired" Variant="Variant.Text" Size="Size.Small"
                StartIcon="@Icons.Material.Filled.Inventory2">Retired</MudButton>
-    <MudButton Href="categories" Variant="Variant.Text" Size="Size.Small"
-               StartIcon="@Icons.Material.Filled.Category">Edit Categories</MudButton>
 </div>
 
-@if (_sections is null)
+@if (_items is null)
 {
     <MudProgressLinear Indeterminate="true" />
 }
-else if (_sections.Count == 0)
+else if (_items.Count == 0)
 {
     <MudText Class="mud-text-secondary mt-4">
         @(Filter.IsEmpty ? "No gear yet. Tap + to add your first Gear Item." : "No Gear Items match.")
@@ -40,42 +38,38 @@ else if (_sections.Count == 0)
 }
 else
 {
-    @foreach (var categorySection in _sections)
-    {
-        <MudText Typo="Typo.subtitle2" HtmlTag="h2" Class="mt-4 mb-1 px-1">@categorySection.Category.Name</MudText>
-        <MudPaper>
-            @foreach (var item in categorySection.GearItems)
-            {
-                <div class="d-flex align-center pa-3 gap-3 gear-row" role="button" tabindex="0"
-                     aria-label="@($"Edit {item.Name}")" @onclick="() => EditAsync(item)">
-                    <div class="flex-grow-1">
-                        <MudText>@item.Name</MudText>
-                        @if (!string.IsNullOrEmpty(item.BrandModel))
-                        {
-                            <MudText Typo="Typo.body2" Class="mud-text-secondary">@item.BrandModel</MudText>
-                        }
-                        @if (item.Tags.Count > 0)
-                        {
-                            <div class="gear-tags">
-                                @foreach (var tag in item.Tags)
-                                {
-                                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@tag</MudChip>
-                                }
-                            </div>
-                        }
-                    </div>
-                    <div class="text-right">
-                        <MudText Class="text-nowrap gear-weight">@UnitFormat.Weight(item.WeightGrams, _unitSystem)</MudText>
-                        @if (item.Price is { } price)
-                        {
-                            <MudText Typo="Typo.body2" Class="mud-text-secondary text-nowrap">@PriceInput.Format(price)</MudText>
-                        }
-                    </div>
+    <MudPaper Class="mt-2">
+        @foreach (var item in _items)
+        {
+            <div class="d-flex align-center pa-3 gap-3 gear-row" role="button" tabindex="0"
+                 aria-label="@($"Edit {item.Name}")" @onclick="() => EditAsync(item)">
+                <div class="flex-grow-1">
+                    <MudText>@item.Name</MudText>
+                    @if (item.GearType.Length > 0)
+                    {
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary gear-type">@item.GearType</MudText>
+                    }
+                    @if (item.Tags.Count > 0)
+                    {
+                        <div class="gear-tags">
+                            @foreach (var tag in item.Tags)
+                            {
+                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@tag</MudChip>
+                            }
+                        </div>
+                    }
                 </div>
-                <MudDivider />
-            }
-        </MudPaper>
-    }
+                <div class="text-right">
+                    <MudText Class="text-nowrap gear-weight">@UnitFormat.Weight(item.WeightGrams, _unitSystem)</MudText>
+                    @if (item.Price is { } price)
+                    {
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary text-nowrap">@PriceInput.Format(price)</MudText>
+                    }
+                </div>
+            </div>
+            <MudDivider />
+        }
+    </MudPaper>
 }
 
 <MudFab Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Class="add-fab" aria-label="Add Gear Item"
@@ -83,22 +77,24 @@ else
 
 @code {
     private UnitSystem _unitSystem;
-    private IReadOnlyList<Category> _categories = [];
-    private IReadOnlyList<CategorySection>? _sections;
+    private IReadOnlyList<string> _gearTypes = [];
+    private IReadOnlyList<GearItem>? _items;
     private string? _searchText;
-    private string? _filterCategoryId;
-    private string? _lastCategoryId;
+    private string? _filterGearType;
 
-    private GearFilter Filter => new(_searchText, _filterCategoryId);
+    private GearFilter Filter => new(_searchText, _filterGearType);
 
     protected override async Task OnInitializedAsync()
     {
         _unitSystem = (await App.Settings.GetAsync()).UnitSystem;
-        _categories = await App.Gear.ListCategoriesAsync();
         await LoadGearAsync();
     }
 
-    private async Task LoadGearAsync() => _sections = await App.Gear.ListGearItemsByCategoryAsync(Filter);
+    private async Task LoadGearAsync()
+    {
+        _gearTypes = await App.Gear.ListGearTypesAsync();
+        _items = await App.Gear.ListGearItemsAsync(Filter);
+    }
 
     private async Task SearchAsync(string? searchText)
     {
@@ -106,36 +102,26 @@ else
         await LoadGearAsync();
     }
 
-    private async Task FilterByCategoryAsync(string? categoryId)
+    private async Task FilterByGearTypeAsync(string? gearType)
     {
-        _filterCategoryId = categoryId;
+        _filterGearType = gearType;
         await LoadGearAsync();
     }
 
-    private async Task AddAsync()
-    {
-        // Start in the Category last used, so adding several items in a row is quick.
-        var saved = await ShowGearItemDialogAsync("Add Gear Item", item: null);
-        if (saved is not null)
-        {
-            _lastCategoryId = saved.CategoryId;
-        }
-    }
+    private Task AddAsync() => ShowGearItemDialogAsync("Add Gear Item", item: null);
 
     private Task EditAsync(GearItem item) => ShowGearItemDialogAsync("Edit Gear Item", item);
 
-    private async Task<GearItem?> ShowGearItemDialogAsync(string title, GearItem? item)
+    private async Task ShowGearItemDialogAsync(string title, GearItem? item)
     {
         var parameters = new DialogParameters<GearItemDialog>
         {
             { d => d.GearItem, item },
             { d => d.UnitSystem, _unitSystem },
-            { d => d.DefaultCategoryId, _lastCategoryId },
         };
         var options = new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Small };
         var dialog = await DialogService.ShowAsync<GearItemDialog>(title, parameters, options);
-        var result = await dialog.Result;
+        await dialog.Result;
         await LoadGearAsync();
-        return result is { Canceled: false, Data: GearItem saved } ? saved : null;
     }
 }

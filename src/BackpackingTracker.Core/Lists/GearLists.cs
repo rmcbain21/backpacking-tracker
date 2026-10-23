@@ -113,7 +113,8 @@ public sealed class GearLists : IGearItemReferences
             {
                 // A Gear Item deleted on another device before a sync is shown as missing and weighs nothing.
                 var item = items.GetValueOrDefault(entry.GearItemId);
-                var weighed = new WeighedEntry(item?.WeightGrams ?? 0m, entry.Quantity, entry.CarryMode, item?.CategoryId);
+                // Until Gear Lists have their own Categories (ticket 28), the breakdown uses the Category the Gear Item had.
+                var weighed = new WeighedEntry(item?.WeightGrams ?? 0m, entry.Quantity, entry.CarryMode, item?.LegacyCategoryId);
                 return (View: new ListEntryView(entry, item, WeightCalculator.EntryWeight(weighed)), Weighed: weighed);
             })
             .ToList();

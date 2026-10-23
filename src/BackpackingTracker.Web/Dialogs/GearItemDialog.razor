@@ -5,8 +5,9 @@
 <MudDialog>
     <DialogContent>
         <MudForm @ref="_form">
-            <MudTextField @bind-Value="_name" Label="Name" Required="true" RequiredError="Give the Gear Item a name" />
-            <MudTextField @bind-Value="_brandModel" Label="Brand / model" />
+            <MudTextField @bind-Value="_name" Label="Name (such as SWD Long Haul 50)" Required="true"
+                          RequiredError="Give the Gear Item a name" />
+            <GearTypeField @bind-Value="_gearType" GearTypesInUse="_gearTypesInUse" />
             <div class="d-flex gap-3">
                 <MudTextField @bind-Value="_weightText" Label="Weight" InputMode="@(InputMode.@decimal)"
                               Validation="@(new Func<string?, string?>(ValidateWeight))" Class="flex-grow-1" />
@@ -17,13 +18,6 @@
                     }
                 </MudSelect>
             </div>
-            <MudSelect T="string" @bind-Value="_categoryId" Label="Category" Required="true" Class="category-select"
-                       RequiredError="Choose a Category">
-                @foreach (var category in _categories)
-                {
-                    <MudSelectItem Value="category.Id">@category.Name</MudSelectItem>
-                }
-            </MudSelect>
             <TagEditor @ref="_tagEditor" @bind-Tags="_tags" TagsInUse="_tagsInUse" />
             <MudTextField @bind-Value="_priceText" Label="Price (optional)" InputMode="@(InputMode.@decimal)"
                           Adornment="Adornment.Start" AdornmentText="$"
@@ -57,42 +51,34 @@
 
     [Parameter]
     public UnitSystem UnitSystem { get; set; }
-
-    /// <summary>The Category a new Gear Item starts in.</summary>
-    [Parameter]
-    public string? DefaultCategoryId { get; set; }
-
     private MudForm _form = default!;
     private TagEditor _tagEditor = default!;
     private string? _name;
-    private string? _brandModel;
+    private string? _gearType;
     private string? _weightText;
     private WeightUnit _weightUnit;
-    private string? _categoryId;
     private IReadOnlyList<string> _tags = [];
     private string? _priceText;
     private string? _notes;
-    private IReadOnlyList<Category> _categories = [];
+    private IReadOnlyList<string> _gearTypesInUse = [];
     private IReadOnlyList<string> _tagsInUse = [];
     private string? _problem;
     private bool _busy;
 
     protected override async Task OnInitializedAsync()
     {
-        _categories = await App.Gear.ListCategoriesAsync();
+        _gearTypesInUse = await App.Gear.ListGearTypesAsync();
         _tagsInUse = await App.Gear.ListTagsAsync();
         _weightUnit = WeightInput.DefaultUnit(UnitSystem);
 
         if (GearItem is null)
         {
-            _categoryId = DefaultCategoryId;
             return;
         }
 
         _name = GearItem.Name;
-        _brandModel = GearItem.BrandModel;
+        _gearType = GearItem.GearType;
         _weightText = WeightInput.TextForEditing(GearItem.WeightGrams, _weightUnit);
-        _categoryId = GearItem.CategoryId;
         _tags = GearItem.Tags;
         _priceText = PriceInput.TextForEditing(GearItem.Price);
         _notes = GearItem.Notes;
@@ -126,7 +112,7 @@
         }
 
         var details = new GearItemDetails(
-            _name ?? "", _brandModel, weight.Grams.Value, _categoryId ?? "",
+            _name ?? "", _gearType, weight.Grams.Value,
             _tagEditor.TagsIncludingTyped(), price.Price, _notes);
 
         await RunAsync(async () =>
