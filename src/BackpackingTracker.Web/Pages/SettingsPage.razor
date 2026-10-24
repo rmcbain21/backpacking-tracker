@@ -1,5 +1,6 @@
 @page "/settings"
 @inject AppCore App
+@inject ThemeState Theme
 
 <PageTitle>Settings</PageTitle>
 
@@ -17,6 +18,35 @@
 </MudPaper>
 
 <MudPaper Class="pa-4 mt-4">
+    <MudText Typo="Typo.subtitle1">Colours</MudText>
+    <div class="palette-choices mt-2" role="radiogroup" aria-label="Colour palette">
+        @foreach (var option in AppThemes.All)
+        {
+            // Each swatch shows the palette's own colours, in light or dark as the app is now.
+            var colours = IsDark ? Swatch(option.Theme.PaletteDark) : Swatch(option.Theme.PaletteLight);
+            var chosen = option.Palette == Theme.Palette;
+            <button type="button" role="radio" aria-checked="@(chosen ? "true" : "false")"
+                    class="@($"palette-choice{(chosen ? " chosen" : "")}")" @onclick="() => SetPaletteAsync(option.Palette)">
+                <span class="palette-swatch" style="@($"background:{colours.Background}")">
+                    <span style="@($"background:{colours.Main}")"></span>
+                    <span style="@($"background:{colours.Accent}")"></span>
+                </span>
+                <span class="palette-name">@option.Name</span>
+            </button>
+        }
+    </div>
+
+    <MudText Typo="Typo.subtitle2" Class="mt-4">Appearance</MudText>
+    <div class="stacked-radios">
+        <MudRadioGroup T="Appearance" Value="Theme.Appearance" ValueChanged="SetAppearanceAsync">
+            <MudRadio Value="Appearance.MatchDevice" Color="Color.Primary">Match my device</MudRadio>
+            <MudRadio Value="Appearance.Light" Color="Color.Primary">Light</MudRadio>
+            <MudRadio Value="Appearance.Dark" Color="Color.Primary">Dark</MudRadio>
+        </MudRadioGroup>
+    </div>
+</MudPaper>
+
+<MudPaper Class="pa-4 mt-4">
     <MudText Typo="Typo.subtitle1">Gear</MudText>
     <MudButton Href="categories" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Category" Class="mt-1">
         Edit Default Categories
@@ -29,6 +59,10 @@
 @code {
     private UnitSystem _unitSystem;
 
+    // Whether the app is showing dark colours now, from MainLayout's MudThemeProvider.
+    [CascadingParameter(Name = "IsDarkMode")]
+    private bool IsDark { get; set; }
+
     protected override async Task OnInitializedAsync()
     {
         _unitSystem = (await App.Settings.GetAsync()).UnitSystem;
@@ -39,4 +73,19 @@
         _unitSystem = unitSystem;
         await App.Settings.SetUnitSystemAsync(unitSystem);
     }
+
+    private async Task SetPaletteAsync(ColourPalette palette)
+    {
+        await App.Settings.SetPaletteAsync(palette);
+        Theme.Set(palette, Theme.Appearance);
+    }
+
+    private async Task SetAppearanceAsync(Appearance appearance)
+    {
+        await App.Settings.SetAppearanceAsync(appearance);
+        Theme.Set(Theme.Palette, appearance);
+    }
+
+    private static (string Background, string Main, string Accent) Swatch(Palette palette) =>
+        (palette.Background.Value, palette.Primary.Value, palette.Secondary.Value);
 }

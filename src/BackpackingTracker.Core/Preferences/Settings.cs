@@ -6,4 +6,8 @@ namespace BackpackingTracker.Core.Preferences;
 public sealed record Settings : StoredRecord
 {
     public UnitSystem UnitSystem { get; init; } = UnitSystem.Imperial;
+
+    public ColourPalette Palette { get; init; } = ColourPalette.Camping;
+
+    public Appearance Appearance { get; init; } = Appearance.MatchDevice;
 }

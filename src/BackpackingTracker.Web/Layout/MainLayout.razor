@@ -1,38 +1,92 @@
 ﻿@inherits LayoutComponentBase
+@implements IDisposable
+@inject AppCore App
+@inject ThemeState Theme
+@inject IJSRuntime JS
 
-<MudThemeProvider />
+<MudThemeProvider @ref="_themeProvider" Theme="AppThemes.For(Theme.Palette).Theme" IsDarkMode="IsDarkMode" />
 <MudPopoverProvider />
 <MudDialogProvider />
 <MudSnackbarProvider />
 
-<MudLayout>
-    <MudAppBar Elevation="1" Dense="true">
-        <MudText Typo="Typo.h6">Backpacking Tracker</MudText>
-        <MudSpacer />
-        <MudIconButton Href="settings" Icon="@Icons.Material.Filled.Settings" Color="Color.Inherit"
-                       aria-label="Settings" />
-    </MudAppBar>
+<CascadingValue Value="IsDarkMode" Name="IsDarkMode">
+    <MudLayout>
+        <MudAppBar Elevation="1" Dense="true">
+            <MudText Typo="Typo.h6">Backpacking Tracker</MudText>
+            <MudSpacer />
+            <MudIconButton Href="settings" Icon="@Icons.Material.Filled.Settings" Color="Color.Inherit"
+                           aria-label="Settings" />
+        </MudAppBar>
 
-    @* Tablet and desktop: navigation drawer *@
-    <MudHidden Breakpoint="Breakpoint.Xs">
-        <MudDrawer Open="true" Variant="DrawerVariant.Persistent" ClipMode="DrawerClipMode.Always" Elevation="1">
-            <MudNavMenu Class="pt-2">
-                @foreach (var item in NavItem.All)
-                {
-                    <MudNavLink Href="@item.Href" Match="@item.Match" Icon="@item.Icon">@item.Title</MudNavLink>
-                }
-            </MudNavMenu>
-        </MudDrawer>
-    </MudHidden>
+        @* Tablet and desktop: navigation drawer *@
+        <MudHidden Breakpoint="Breakpoint.Xs">
+            <MudDrawer Open="true" Variant="DrawerVariant.Persistent" ClipMode="DrawerClipMode.Always" Elevation="1">
+                <MudNavMenu Class="pt-2">
+                    @foreach (var item in NavItem.All)
+                    {
+                        <MudNavLink Href="@item.Href" Match="@item.Match" Icon="@item.Icon">@item.Title</MudNavLink>
+                    }
+                </MudNavMenu>
+            </MudDrawer>
+        </MudHidden>
 
-    <MudMainContent>
-        <MudContainer MaxWidth="MaxWidth.Large" Class="pt-4 main-content">
-            @Body
-        </MudContainer>
-    </MudMainContent>
+        <MudMainContent>
+            <MudContainer MaxWidth="MaxWidth.Large" Class="pt-4 main-content">
+                @Body
+            </MudContainer>
+        </MudMainContent>
 
-    @* Phone: bottom navigation *@
-    <MudHidden Breakpoint="Breakpoint.SmAndUp">
-        <BottomNav />
-    </MudHidden>
-</MudLayout>
+        @* Phone: bottom navigation *@
+        <MudHidden Breakpoint="Breakpoint.SmAndUp">
+            <BottomNav />
+        </MudHidden>
+    </MudLayout>
+</CascadingValue>
+
+@code {
+    private MudThemeProvider _themeProvider = default!;
+    private bool _deviceIsDark;
+    private string? _statusBarColour;
+
+    private bool IsDarkMode => Theme.Appearance switch
+    {
+        Appearance.Dark => true,
+        Appearance.Light => false,
+        _ => _deviceIsDark,
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        Theme.Changed += OnThemeChanged;
+        var settings = await App.Settings.GetAsync();
+        Theme.Set(settings.Palette, settings.Appearance);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            // Match my device: read the device's dark mode, and follow it if it changes while the app is open.
+            _deviceIsDark = await _themeProvider.GetSystemDarkModeAsync();
+            await _themeProvider.WatchSystemDarkModeAsync(isDark =>
+            {
+                _deviceIsDark = isDark;
+                return InvokeAsync(StateHasChanged);
+            });
+            StateHasChanged();
+        }
+
+        // The phone's status bar takes the top bar's colour.
+        var theme = AppThemes.For(Theme.Palette).Theme;
+        var barColour = (IsDarkMode ? theme.PaletteDark.AppbarBackground : theme.PaletteLight.AppbarBackground).ToString(MudBlazor.Utilities.MudColorOutputFormats.Hex);
+        if (barColour != _statusBarColour)
+        {
+            _statusBarColour = barColour;
+            await JS.InvokeVoidAsync("setThemeColor", barColour);
+        }
+    }
+
+    private void OnThemeChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Theme.Changed -= OnThemeChanged;
+}

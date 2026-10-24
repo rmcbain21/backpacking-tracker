@@ -52,14 +52,14 @@
 
     .loading-progress circle {
         fill: none;
-        stroke: #e0e0e0;
+        stroke: #d7ccc8;
         stroke-width: 0.6rem;
         transform-origin: 50% 50%;
         transform: rotate(-90deg);
     }
 
         .loading-progress circle:last-child {
-            stroke: #1b6ec2;
+            stroke: #2e7d32;
             stroke-dasharray: calc(3.141 * var(--blazor-load-percentage, 0%) * 0.8), 500%;
             transition: stroke-dasharray 0.05s ease-in-out;
         }
@@ -76,7 +76,7 @@
     }
 
 code {
-    color: #c02d76;
+    color: var(--mud-palette-secondary);
 }
 
 .form-floating > .form-control-plaintext::placeholder, .form-floating > .form-control::placeholder {
@@ -216,4 +216,54 @@ h1:focus {
     min-width: 3.2em;
     text-align: right;
     color: var(--mud-palette-text-secondary);
+}
+
+/* Settings: colour palette choices, each a swatch of its main and accent colours on its background */
+.palette-choices {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+    gap: 8px;
+}
+
+.palette-choice {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 8px;
+    border: 2px solid var(--mud-palette-divider);
+    border-radius: 8px;
+    background: none;
+    color: var(--mud-palette-text-primary);
+    font: inherit;
+    cursor: pointer;
+}
+
+    .palette-choice.chosen {
+        border-color: var(--mud-palette-primary);
+    }
+
+.palette-swatch {
+    display: flex;
+    gap: 4px;
+    padding: 8px;
+    border-radius: 6px;
+    border: 1px solid var(--mud-palette-divider);
+}
+
+    .palette-swatch span {
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+    }
+
+.palette-name {
+    font-size: 0.8rem;
+    text-align: center;
+}
+
+/* A radio group with one choice per line, however short the labels (outranks MudBlazor's row layout) */
+.stacked-radios .mud-input-control.mud-input-control-boolean-input .mud-radio-group {
+    flex-direction: column;
+    align-items: flex-start;
 }

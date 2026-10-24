@@ -27,9 +27,21 @@ public sealed class UserSettings
             ?? new Settings { Id = SettingsId, UpdatedAt = DateTimeOffset.MinValue };
     }
 
-    public async Task SetUnitSystemAsync(UnitSystem unitSystem)
+    public Task SetUnitSystemAsync(UnitSystem unitSystem) => ChangeAsync(settings => settings with { UnitSystem = unitSystem });
+
+    public Task SetPaletteAsync(ColourPalette palette) =>
+        Enum.IsDefined(palette)
+            ? ChangeAsync(settings => settings with { Palette = palette })
+            : throw new RuleViolationException("Choose one of the palettes.");
+
+    public Task SetAppearanceAsync(Appearance appearance) =>
+        Enum.IsDefined(appearance)
+            ? ChangeAsync(settings => settings with { Appearance = appearance })
+            : throw new RuleViolationException("Choose Match my device, Light or Dark.");
+
+    private async Task ChangeAsync(Func<Settings, Settings> change)
     {
         var settings = await GetAsync();
-        await _store.SaveAsync(Table, settings with { UnitSystem = unitSystem, UpdatedAt = _clock.UtcNow });
+        await _store.SaveAsync(Table, change(settings) with { UpdatedAt = _clock.UtcNow });
     }
 }

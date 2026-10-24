@@ -1,4 +1,5 @@
 using BackpackingTracker.Core.Gear;
+using BackpackingTracker.Core.Preferences;
 using BackpackingTracker.Core.Tests.Fakes;
 using BackpackingTracker.Core.Units;
 
@@ -63,5 +64,56 @@ public class SettingsTests
         await app.Settings.SetUnitSystemAsync(UnitSystem.Metric);
 
         Assert.Equal(765.4m, Assert.Single(await app.Gear.ListGearItemsAsync()).WeightGrams);
+    }
+
+    [Fact]
+    public async Task The_palette_is_camping_and_appearance_matches_the_device_by_default()
+    {
+        var settings = await CreateApp().Settings.GetAsync();
+
+        Assert.Equal(ColourPalette.Camping, settings.Palette);
+        Assert.Equal(Appearance.MatchDevice, settings.Appearance);
+    }
+
+    [Fact]
+    public async Task A_chosen_palette_is_remembered_after_the_app_is_reopened()
+    {
+        await CreateApp().Settings.SetPaletteAsync(ColourPalette.CanyonSandstone);
+
+        Assert.Equal(ColourPalette.CanyonSandstone, (await CreateApp().Settings.GetAsync()).Palette);
+    }
+
+    [Fact]
+    public async Task A_chosen_appearance_is_remembered_after_the_app_is_reopened()
+    {
+        await CreateApp().Settings.SetAppearanceAsync(Appearance.Dark);
+
+        Assert.Equal(Appearance.Dark, (await CreateApp().Settings.GetAsync()).Appearance);
+    }
+
+    [Fact]
+    public async Task Each_setting_changes_without_resetting_the_others()
+    {
+        var app = CreateApp();
+        await app.Settings.SetUnitSystemAsync(UnitSystem.Metric);
+        await app.Settings.SetPaletteAsync(ColourPalette.AlpineLake);
+
+        await app.Settings.SetAppearanceAsync(Appearance.Light);
+
+        var settings = await CreateApp().Settings.GetAsync();
+        Assert.Equal((UnitSystem.Metric, ColourPalette.AlpineLake, Appearance.Light), (settings.UnitSystem, settings.Palette, settings.Appearance));
+    }
+
+    [Fact]
+    public async Task An_unknown_palette_or_appearance_is_refused()
+    {
+        var app = CreateApp();
+
+        var palette = await Assert.ThrowsAsync<RuleViolationException>(() => app.Settings.SetPaletteAsync((ColourPalette)99));
+        var appearance = await Assert.ThrowsAsync<RuleViolationException>(() => app.Settings.SetAppearanceAsync((Appearance)99));
+
+        Assert.Equal("Choose one of the palettes.", palette.Message);
+        Assert.Equal("Choose Match my device, Light or Dark.", appearance.Message);
+        Assert.Equal(ColourPalette.Camping, (await app.Settings.GetAsync()).Palette);
     }
 }
