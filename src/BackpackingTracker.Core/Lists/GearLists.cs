@@ -10,7 +10,7 @@ namespace BackpackingTracker.Core.Lists;
 /// </summary>
 public sealed class GearLists : IGearItemReferences
 {
-    private const string Table = "gearLists";
+    internal const string Table = "gearLists";
 
     private readonly IRecordStore _store;
     private readonly IClock _clock;
@@ -40,6 +40,38 @@ public sealed class GearLists : IGearItemReferences
         };
         await _store.SaveAsync(Table, list);
         return list;
+    }
+
+    /// <summary>
+    /// A new Gear List with these Categories and entries, not saved (for the import, which saves it along
+    /// with its Gear Items). Each entry must be in one of the Categories.
+    /// </summary>
+    internal GearList NewGearList(string name, IReadOnlyList<Category> categories, IReadOnlyList<ListEntry> entries)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            throw new RuleViolationException("Give the Gear List a name.");
+        }
+
+        if (categories.Count == 0)
+        {
+            throw new RuleViolationException("A Gear List needs at least one Category.");
+        }
+
+        var categoryIds = categories.Select(category => category.Id).ToHashSet();
+        if (entries.Any(entry => !categoryIds.Contains(entry.CategoryId)))
+        {
+            throw new ArgumentException("Every entry must be in one of the list's Categories.", nameof(entries));
+        }
+
+        return new GearList
+        {
+            Id = Guid.NewGuid().ToString(),
+            UpdatedAt = _clock.UtcNow,
+            Name = name.Trim(),
+            Categories = categories,
+            Entries = entries,
+        };
     }
 
     /// <summary>Every Gear List by name, each with its entries' current weights and totals.</summary>

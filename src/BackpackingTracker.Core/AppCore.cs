@@ -15,8 +15,8 @@ public sealed class AppCore
     {
         Gear = new GearCatalogue(store, clock);
         Settings = new UserSettings(store, clock);
-        Import = new GearImport(Gear);
         Lists = new GearLists(store, clock, Gear);
+        Import = new GearImport(store, Gear, Lists);
 
         // Every area that refers to Gear Items takes part in the Gear Item delete check.
         Gear.AddReferences(Lists);

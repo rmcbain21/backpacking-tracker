@@ -23,6 +23,15 @@ public sealed class DexieRecordStore : IRecordStore, IAsyncDisposable
         await module.InvokeVoidAsync("save", table, record);
     }
 
+    public async Task SaveAllAsync(IReadOnlyList<RecordToSave> records)
+    {
+        var module = await _module.Value;
+
+        // Typed as object so each record is sent with all its fields, not only StoredRecord's.
+        var rows = records.Select(r => new { table = r.Table, record = (object)r.Record }).ToList();
+        await module.InvokeVoidAsync("saveAll", rows);
+    }
+
     public async Task<T?> LoadAsync<T>(string table, string id) where T : StoredRecord
     {
         var module = await _module.Value;

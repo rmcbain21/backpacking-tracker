@@ -14,6 +14,12 @@ export async function save(table, record) {
     await db.records.put({ table, id: record.id, record });
 }
 
+// One transaction, so if any record fails to save, none are saved.
+export async function saveAll(rows) {
+    await db.transaction('rw', db.records, () =>
+        db.records.bulkPut(rows.map(({ table, record }) => ({ table, id: record.id, record }))));
+}
+
 export async function load(table, id) {
     const row = await db.records.get([table, id]);
     return row ? row.record : null;

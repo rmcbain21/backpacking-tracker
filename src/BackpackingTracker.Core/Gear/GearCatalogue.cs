@@ -4,8 +4,8 @@ namespace BackpackingTracker.Core.Gear;
 
 public sealed class GearCatalogue
 {
-    private const string Table = "gearItems";
-    private const string CategoryTable = "categories";
+    internal const string Table = "gearItems";
+    internal const string CategoryTable = "categories";
 
     private readonly IRecordStore _store;
     private readonly IClock _clock;
@@ -19,13 +19,17 @@ public sealed class GearCatalogue
 
     public async Task<GearItem> AddGearItemAsync(GearItemDetails details)
     {
-        var item = await ApplyDetailsAsync(
-            new GearItem { Id = Guid.NewGuid().ToString(), UpdatedAt = _clock.UtcNow, Name = "", WeightGrams = 0 },
-            details);
+        var item = await NewGearItemAsync(details);
 
         await _store.SaveAsync(Table, item);
         return item;
     }
+
+    /// <summary>A new Gear Item, checked and cleaned up as when adding, but not saved (for the import).</summary>
+    internal Task<GearItem> NewGearItemAsync(GearItemDetails details) =>
+        ApplyDetailsAsync(
+            new GearItem { Id = Guid.NewGuid().ToString(), UpdatedAt = _clock.UtcNow, Name = "", WeightGrams = 0 },
+            details);
 
     /// <summary>Replaces every field the backpacker can edit, applying the same rules as adding.</summary>
     public async Task<GearItem> UpdateGearItemAsync(string gearItemId, GearItemDetails details)
@@ -228,6 +232,35 @@ public sealed class GearCatalogue
 
         await _store.SaveAsync(CategoryTable, category);
         return category;
+    }
+
+    /// <summary>
+    /// New Default Categories, not saved, for each name the Default Categories don't already have (ignoring
+    /// case), in the order given, after the existing ones (for the import).
+    /// </summary>
+    internal async Task<IReadOnlyList<DefaultCategory>> NewDefaultCategoriesAsync(IEnumerable<string> names)
+    {
+        var categories = (await ListDefaultCategoriesAsync()).ToList();
+        var added = new List<DefaultCategory>();
+        foreach (var name in names.Select(name => name.Trim()).Where(name => name.Length > 0))
+        {
+            if (categories.Any(c => string.Equals(c.Name, name, StringComparison.OrdinalIgnoreCase)))
+            {
+                continue;
+            }
+
+            var category = new DefaultCategory
+            {
+                Id = Guid.NewGuid().ToString(),
+                UpdatedAt = _clock.UtcNow,
+                Name = name,
+                SortOrder = categories.Max(c => c.SortOrder) + 1,
+            };
+            categories.Add(category);
+            added.Add(category);
+        }
+
+        return added;
     }
 
     /// <summary>Returns the trimmed name, or refuses a blank name or one another Category already has.</summary>

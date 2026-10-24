@@ -2,6 +2,7 @@
 @using System.Text
 @using BackpackingTracker.Core.Import
 @inject AppCore App
+@inject NavigationManager Navigation
 
 <PageTitle>Import gear</PageTitle>
 
@@ -14,21 +15,21 @@
     </MudText>
     <code class="import-columns">@string.Join(", ", GearImport.TripSheetColumns)</code>
     <MudText Typo="Typo.body2" Class="mt-2 mb-2">
-        with each Category as a section-header row, Item as the gear's name, Name as its brand/model, and the
+        with each Category as a section-header row, Item as the gear's Gear Type, Name as its Name, and the
         weight in g. Or one row per Gear Item, with exactly these columns in order:
     </MudText>
     <code class="import-columns">@string.Join(", ", GearImport.Columns)</code>
     <MudText Typo="Typo.body2" Class="mud-text-secondary mt-2">
-        Gear you already have (same name and brand/model) is reused and never changed. Rows with no weight,
-        or 0 g, are listed so you can weigh them and add them by hand.
+        You'll see what will happen before anything is saved. Gear you already have (same Gear Type and Name) is
+        reused and never changed. Rows with no weight, or 0 g, are listed so you can weigh them and add them by hand.
     </MudText>
 
     <MudButton HtmlTag="label" for="csv-file" Variant="Variant.Filled" Color="Color.Primary" Class="mt-4"
-               StartIcon="@Icons.Material.Filled.UploadFile" Disabled="_importing">Choose CSV file</MudButton>
-    <InputFile id="csv-file" OnChange="ImportAsync" accept=".csv,text/csv" hidden />
+               StartIcon="@Icons.Material.Filled.UploadFile" Disabled="_busy">Choose CSV file</MudButton>
+    <InputFile id="csv-file" OnChange="PreviewAsync" accept=".csv,text/csv" hidden />
 </MudPaper>
 
-@if (_importing)
+@if (_busy)
 {
     <MudProgressLinear Indeterminate="true" />
 }
@@ -38,19 +39,50 @@
     <MudAlert Severity="Severity.Error" Class="mb-4">@_problem</MudAlert>
 }
 
-@if (_summary is not null)
+@if (_imported is not null)
 {
-    <MudText Typo="Typo.h6" HtmlTag="h2">@_fileName</MudText>
+    <MudAlert Severity="Severity.Success" Class="mb-4">@_imported</MudAlert>
+}
+
+@if (_preview is not null)
+{
+    <MudText Typo="Typo.h6" HtmlTag="h2">Preview: @_fileName</MudText>
     <MudText Class="mb-2 import-counts">
-        @_summary.Created.Count created · @_summary.Reused.Count reused · @_summary.Flagged.Count flagged ·
-        @_summary.Rejected.Count rejected
+        @_preview.Created.Count to create · @_preview.Reused.Count reused · @_preview.Flagged.Count flagged ·
+        @_preview.Rejected.Count rejected
     </MudText>
 
-    @if (_summary.Rejected.Count > 0)
+    <MudPaper Class="pa-4 mb-4">
+        <MudCheckBox @bind-Value="_createGearList" Label="Create a Gear List" Color="Color.Primary"
+                     Disabled="!_preview.CanCreateGearList" />
+        @if (_createGearList)
+        {
+            <MudTextField @bind-Value="_gearListName" Label="Gear List name" Immediate="true" Class="mb-2" />
+        }
+
+        @if (_preview.NewDefaultCategoryNames.Count > 0)
+        {
+            <MudCheckBox @bind-Value="_addToDefaultCategories" Label="Add this sheet's sections to my Default Categories"
+                         Color="Color.Primary" />
+            @if (_addToDefaultCategories)
+            {
+                <MudText Typo="Typo.body2" Class="mud-text-secondary ml-4">
+                    Adds @string.Join(", ", _preview.NewDefaultCategoryNames)
+                </MudText>
+            }
+        }
+
+        <div class="d-flex gap-2 mt-4">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="ImportAsync" Disabled="_busy">Import</MudButton>
+            <MudButton Variant="Variant.Text" OnClick="Cancel" Disabled="_busy">Cancel</MudButton>
+        </div>
+    </MudPaper>
+
+    @if (_preview.Rejected.Count > 0)
     {
         <MudText Typo="Typo.subtitle2" HtmlTag="h3" Class="mt-4 mb-1">Rejected</MudText>
         <MudPaper Class="import-rejected">
-            @foreach (var row in _summary.Rejected)
+            @foreach (var row in _preview.Rejected)
             {
                 <div class="pa-3"><b>Row @row.RowNumber</b>@(row.Name.Length > 0 ? $" ({row.Name})" : ""): @row.Reason</div>
                 <MudDivider />
@@ -58,11 +90,11 @@
         </MudPaper>
     }
 
-    @if (_summary.Flagged.Count > 0)
+    @if (_preview.Flagged.Count > 0)
     {
-        <MudText Typo="Typo.subtitle2" HtmlTag="h3" Class="mt-4 mb-1">Flagged: weight differs (kept as it was)</MudText>
+        <MudText Typo="Typo.subtitle2" HtmlTag="h3" Class="mt-4 mb-1">Flagged: weight differs (will be kept as it is)</MudText>
         <MudPaper Class="import-flagged">
-            @foreach (var row in _summary.Flagged)
+            @foreach (var row in _preview.Flagged)
             {
                 <div class="pa-3">
                     <b>Row @row.RowNumber</b> @row.Name: CSV says @UnitFormat.Weight(row.CsvWeightGrams!.Value, _unitSystem),
@@ -73,8 +105,32 @@
         </MudPaper>
     }
 
-    <ImportRowList Title="Created" Rows="_summary.Created" />
-    <ImportRowList Title="Reused" Rows="_summary.Reused" />
+    @if (_createGearList && _preview.CanCreateGearList)
+    {
+        <MudText Typo="Typo.subtitle2" HtmlTag="h3" Class="mt-4 mb-1">Gear List: its Categories and entries</MudText>
+        <MudPaper>
+            @foreach (var sheetSection in _preview.Sections)
+            {
+                <div class="pa-3">
+                    <b>@sheetSection.Name</b>
+                    @if (sheetSection.Entries.Count == 0)
+                    {
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">No entries</MudText>
+                    }
+                    @foreach (var entry in sheetSection.Entries)
+                    {
+                        <MudText Typo="Typo.body2">
+                            @entry.GearItem.Name@(entry.Quantity > 1 ? $" × {entry.Quantity}" : "")@(entry.CarryMode == CarryMode.Base ? "" : $" ({entry.CarryMode.ToString().ToLowerInvariant()})")
+                        </MudText>
+                    }
+                </div>
+                <MudDivider />
+            }
+        </MudPaper>
+    }
+
+    <ImportRowList Title="To create" Rows="_preview.Created" />
+    <ImportRowList Title="Reused" Rows="_preview.Reused" />
 }
 
 @code {
@@ -82,21 +138,26 @@
     private const long MaxFileBytes = 1_000_000;
 
     private UnitSystem _unitSystem;
-    private bool _importing;
+    private bool _busy;
     private string? _problem;
+    private string? _imported;
     private string? _fileName;
-    private CsvImportSummary? _summary;
+    private ImportPreview? _preview;
+    private bool _createGearList;
+    private string _gearListName = "";
+    private bool _addToDefaultCategories;
 
     protected override async Task OnInitializedAsync()
     {
         _unitSystem = (await App.Settings.GetAsync()).UnitSystem;
     }
 
-    private async Task ImportAsync(InputFileChangeEventArgs e)
+    private async Task PreviewAsync(InputFileChangeEventArgs e)
     {
-        _importing = true;
+        _busy = true;
         _problem = null;
-        _summary = null;
+        _imported = null;
+        _preview = null;
         _fileName = e.File.Name;
         try
         {
@@ -108,7 +169,10 @@
 
             using var reader = new StreamReader(e.File.OpenReadStream(MaxFileBytes), Encoding.UTF8);
             var csv = await reader.ReadToEndAsync();
-            _summary = await App.Import.ImportCsvAsync(csv);
+            _preview = await App.Import.PreviewCsvAsync(csv);
+            _createGearList = _preview.CanCreateGearList;
+            _gearListName = Path.GetFileNameWithoutExtension(e.File.Name);
+            _addToDefaultCategories = true;
         }
         catch (RuleViolationException ex)
         {
@@ -116,7 +180,51 @@
         }
         finally
         {
-            _importing = false;
+            _busy = false;
         }
+    }
+
+    private async Task ImportAsync()
+    {
+        if (_preview is null)
+        {
+            return;
+        }
+
+        _busy = true;
+        _problem = null;
+        try
+        {
+            var options = new ImportOptions(
+                GearListName: _createGearList && _preview.CanCreateGearList ? _gearListName : null,
+                AddSectionsToDefaultCategories: _addToDefaultCategories && _preview.NewDefaultCategoryNames.Count > 0);
+            var list = await App.Import.ImportAsync(_preview, options);
+            if (list is not null)
+            {
+                Navigation.NavigateTo($"lists/{list.Id}");
+                return;
+            }
+
+            _imported = $"Imported {_fileName}: {_preview.Created.Count} Gear Items created.";
+            _preview = null;
+        }
+        catch (RuleViolationException ex)
+        {
+            _problem = ex.Message;
+        }
+        catch (Exception)
+        {
+            _problem = "The import couldn't be saved, so nothing was changed. Try again.";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void Cancel()
+    {
+        _preview = null;
+        _problem = null;
     }
 }

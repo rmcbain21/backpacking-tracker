@@ -14,7 +14,36 @@ public sealed class InMemoryRecordStore : IRecordStore
 
     private readonly Dictionary<string, Dictionary<string, string>> _tables = new();
 
+    /// <summary>When set, a save that includes a record this matches fails, as a full device might, and saves nothing.</summary>
+    public Func<StoredRecord, bool>? FailSavingWhen { get; set; }
+
     public Task SaveAsync<T>(string table, T record) where T : StoredRecord
+    {
+        if (FailSavingWhen?.Invoke(record) == true)
+        {
+            throw new IOException("The record couldn't be saved.");
+        }
+
+        Put(table, record, JsonSerializer.Serialize(record, JsonOptions));
+        return Task.CompletedTask;
+    }
+
+    public Task SaveAllAsync(IReadOnlyList<RecordToSave> records)
+    {
+        if (records.Any(r => FailSavingWhen?.Invoke(r.Record) == true))
+        {
+            throw new IOException("The records couldn't be saved.");
+        }
+
+        foreach (var (table, record) in records)
+        {
+            Put(table, record, JsonSerializer.Serialize(record, record.GetType(), JsonOptions));
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private void Put(string table, StoredRecord record, string json)
     {
         if (!_tables.TryGetValue(table, out var rows))
         {
@@ -22,8 +51,7 @@ public sealed class InMemoryRecordStore : IRecordStore
             _tables[table] = rows;
         }
 
-        rows[record.Id] = JsonSerializer.Serialize(record, JsonOptions);
-        return Task.CompletedTask;
+        rows[record.Id] = json;
     }
 
     public Task<T?> LoadAsync<T>(string table, string id) where T : StoredRecord

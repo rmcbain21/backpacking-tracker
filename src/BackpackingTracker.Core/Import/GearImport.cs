@@ -1,5 +1,7 @@
 using System.Globalization;
 using BackpackingTracker.Core.Gear;
+using BackpackingTracker.Core.Lists;
+using BackpackingTracker.Core.Ports;
 
 namespace BackpackingTracker.Core.Import;
 
@@ -23,19 +25,26 @@ public sealed class GearImport
     // Text that wasn't UTF-8 (Excel's plain "CSV") arrives with this in place of letters like é.
     private const char UnreadableCharacter = (char)0xFFFD;
 
-    private readonly GearCatalogue _gear;
+    /// <summary>The Gear List Category for rows that come before any section (or have a blank Category).</summary>
+    public const string NoSectionName = "Other";
 
-    public GearImport(GearCatalogue gear)
+    private readonly IRecordStore _store;
+    private readonly GearCatalogue _gear;
+    private readonly GearLists _lists;
+
+    public GearImport(IRecordStore store, GearCatalogue gear, GearLists lists)
     {
+        _store = store;
         _gear = gear;
+        _lists = lists;
     }
 
     /// <summary>
-    /// Imports each row as a Gear Item. A row whose Gear Type and Name match an existing Gear Item
-    /// (ignoring case and spaces) reuses it unchanged; a row that can't be imported is rejected with
-    /// a reason and the rest still import.
+    /// Works out what importing the file will do, saving nothing. Each row becomes a Gear Item: a row whose
+    /// Gear Type and Name match an existing Gear Item (ignoring case and spaces) reuses it unchanged; a row
+    /// that can't be imported is rejected with a reason and the rest still import.
     /// </summary>
-    public async Task<CsvImportSummary> ImportCsvAsync(string csvText)
+    public async Task<ImportPreview> PreviewCsvAsync(string csvText)
     {
         // Importing garbled letters would create Gear Items that never match a correctly saved sheet.
         if (csvText.Contains(UnreadableCharacter))
@@ -75,13 +84,91 @@ public sealed class GearImport
                 continue;
             }
 
-            var created = await _gear.AddGearItemAsync(new GearItemDetails(row.Name, row.GearType, values.WeightGrams));
+            var created = await _gear.NewGearItemAsync(new GearItemDetails(row.Name, row.GearType, values.WeightGrams));
+
+            // Not saved yet, so give it the Gear Type spelling of an earlier new Gear Item in this file.
+            var spelling = knownItems.Select(item => item.GearType).FirstOrDefault(t => TagRules.Comparer.Equals(t, created.GearType));
+            created = created with { GearType = spelling ?? created.GearType };
             knownItems.Add(created);
             results.Add(new CsvRowResult(row.Number, CsvRowOutcome.Created, created.Name, row.Category, created, values.Quantity, values.CarryMode, values.WeightGrams));
         }
 
-        return new CsvImportSummary(results);
+        var sections = Sections(results);
+        var newDefaults = await _gear.NewDefaultCategoriesAsync(SectionNames(results));
+        return new ImportPreview(results, sections, newDefaults.Select(category => category.Name).ToList());
     }
+
+    /// <summary>
+    /// Saves what the preview showed, all at once (if anything fails, nothing is saved): the new Gear Items,
+    /// and as the options say, a Gear List with the sheet's sections as its Categories and the sections
+    /// added to the Default Categories. Returns the created Gear List, or null if none was asked for.
+    /// </summary>
+    public async Task<GearList?> ImportAsync(ImportPreview preview, ImportOptions options)
+    {
+        // A preview imported twice, or gear added since, would otherwise create the same Gear Item twice.
+        var knownItems = (await _gear.ListGearItemsAsync()).Concat(await _gear.ListRetiredGearItemsAsync()).ToList();
+        if (preview.Created.Any(row => knownItems.Any(item => Matches(item, row.GearItem!.GearType, row.GearItem.Name))))
+        {
+            throw new RuleViolationException("Your gear has changed since this preview. Choose the file again.");
+        }
+
+        var records = preview.Created
+            .Select(row => new RecordToSave(GearCatalogue.Table, row.GearItem!))
+            .ToList();
+
+        GearList? list = null;
+        if (options.GearListName is { } name)
+        {
+            if (!preview.CanCreateGearList)
+            {
+                throw new RuleViolationException("There's no gear in this file to make a Gear List from.");
+            }
+
+            var categories = preview.Sections.Select(section => new Category { Id = Guid.NewGuid().ToString(), Name = section.Name }).ToList();
+            var entries = preview.Sections
+                .Zip(categories, (section, category) => section.Entries.Select(entry => new ListEntry
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    GearItemId = entry.GearItem.Id,
+                    CategoryId = category.Id,
+                    Quantity = entry.Quantity,
+                    CarryMode = entry.CarryMode,
+                }))
+                .SelectMany(sectionEntries => sectionEntries)
+                .ToList();
+            list = _lists.NewGearList(name, categories, entries);
+            records.Add(new RecordToSave(GearLists.Table, list));
+        }
+
+        if (options.AddSectionsToDefaultCategories)
+        {
+            var newDefaults = await _gear.NewDefaultCategoriesAsync(SectionNames(preview.Rows));
+            records.AddRange(newDefaults.Select(category => new RecordToSave(GearCatalogue.CategoryTable, category)));
+        }
+
+        await _store.SaveAllAsync(records);
+        return list;
+    }
+
+    /// <summary>The sheet's section names in sheet order, each once; rows with no section aren't one.</summary>
+    private static IEnumerable<string> SectionNames(IEnumerable<CsvRowResult> rows) =>
+        rows.Select(row => row.Category).Where(name => name.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Each section in sheet order (rows with no section under <see cref="NoSectionName"/>), with one entry per
+    /// Gear Item: its rows' quantities added up, and the first row's Carry Mode.
+    /// </summary>
+    private static IReadOnlyList<ImportSection> Sections(IReadOnlyList<CsvRowResult> rows) =>
+        rows
+            .GroupBy(row => row.Category.Length > 0 ? row.Category : NoSectionName, StringComparer.OrdinalIgnoreCase)
+            .Select(section => new ImportSection(
+                section.First().Category.Length > 0 ? section.First().Category : NoSectionName,
+                section
+                    .Where(row => row.GearItem is not null)
+                    .GroupBy(row => row.GearItem!.Id)
+                    .Select(item => new ImportEntry(item.First().GearItem!, item.Sum(row => row.Quantity), item.First().CarryMode))
+                    .ToList()))
+            .ToList();
 
     /// <summary>The weight, Qty and Carry Mode a valid row gives.</summary>
     private sealed record RowValues(decimal WeightGrams, int Quantity, CarryMode CarryMode);
@@ -141,9 +228,11 @@ public sealed class GearImport
     }
 
     /// <summary>Same Gear Type and Name, ignoring case and surrounding spaces.</summary>
-    private static bool Matches(GearItem item, GearRow row) =>
-        string.Equals(item.GearType, row.GearType, StringComparison.OrdinalIgnoreCase)
-        && string.Equals(item.Name, row.Name, StringComparison.OrdinalIgnoreCase);
+    private static bool Matches(GearItem item, GearRow row) => Matches(item, row.GearType, row.Name);
+
+    private static bool Matches(GearItem item, string gearType, string name) =>
+        string.Equals(item.GearType, gearType.Trim(), StringComparison.OrdinalIgnoreCase)
+        && string.Equals(item.Name, name.Trim(), StringComparison.OrdinalIgnoreCase);
 
     /// <summary>A row that describes a Gear Item, whichever layout it came from. Every value is trimmed.</summary>
     private sealed record GearRow(

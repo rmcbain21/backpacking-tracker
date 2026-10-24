@@ -17,7 +17,7 @@ public class TripSheetImportTests
     private static string Sheet(params string[] rows) => string.Join("\r\n", [Header, .. rows]);
 
     /// <summary>Each imported row as (Gear Type, Name, grams, Category).</summary>
-    private static (string GearType, string Name, decimal Grams, string Category)[] Imported(CsvImportSummary summary) =>
+    private static (string GearType, string Name, decimal Grams, string Category)[] Imported(ImportPreview summary) =>
         summary.Rows
             .Where(row => row.GearItem is not null)
             .Select(row => (row.GearItem!.GearType, row.GearItem.Name, row.GearItem.WeightGrams, row.Category))
