@@ -1,0 +1,163 @@
+@using BackpackingTracker.Core.Trips
+@* Changes a Trip's dates, one of two ways. Moving the Trip picks a new start and every day moves with its
+   plan. Changing the start or end keeps each day on its date: it previews the days added, and the days
+   removed and which of them have something filled in, which must be confirmed. *@
+@inject AppCore App
+
+<MudDialog>
+    <DialogContent>
+        <MudRadioGroup T="bool" Value="_moving" ValueChanged="ModeChanged" Class="d-flex flex-column date-change-mode">
+            <MudRadio T="bool" Value="true" Color="Color.Primary" Class="move-trip">Move the trip (every day moves with it)</MudRadio>
+            <MudRadio T="bool" Value="false" Color="Color.Primary" Class="change-start-end">Change the start or end</MudRadio>
+        </MudRadioGroup>
+        <div class="d-flex gap-3 mt-2">
+            <MudDatePicker Date="_start" DateChanged="StartChanged" Label="Start" Class="trip-start" />
+            <MudDatePicker Date="_end" DateChanged="EndChanged" Label="End" Class="trip-end" ReadOnly="_moving" />
+        </div>
+        <div class="mt-3 date-change-preview">
+            @if (_moving)
+            {
+                @if (IsChanged)
+                {
+                    <MudText Typo="Typo.body2">Every day moves with its plan: Day 1 is now @TripDates.Day(StartDate).</MudText>
+                }
+            }
+            else if (_plan is not null)
+            {
+                @if (_plan.AddedDates.Count > 0)
+                {
+                    <MudText Typo="Typo.body2">Adds empty days: @string.Join(", ", _plan.AddedDates.Select(TripDates.Day)).</MudText>
+                }
+                @if (_plan.RemovedDays.Count > 0)
+                {
+                    <MudText Typo="Typo.body2">Removes:</MudText>
+                    <ul class="removed-days">
+                        @foreach (var removed in _plan.RemovedDays)
+                        {
+                            <li class="@(removed.HasContent ? "has-content" : "")">
+                                <MudText Typo="Typo.body2" Color="@(removed.HasContent ? Color.Error : Color.Default)">
+                                    Day @removed.DayNumber (@TripDates.Day(removed.Day.Date)) ·
+                                    @(removed.HasContent ? "has things filled in, which will be lost" : "empty")
+                                </MudText>
+                            </li>
+                        }
+                    </ul>
+                }
+            }
+        </div>
+        @if (_refusal is not null)
+        {
+            <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-3">@_refusal</MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        @if (_moving)
+        {
+            <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="!IsChanged" OnClick="MoveAsync">Move trip</MudButton>
+        }
+        else if (_plan?.NeedsConfirmation == true)
+        {
+            <MudButton Color="Color.Error" Variant="Variant.Filled" OnClick="ChangeAsync">Remove days and change</MudButton>
+        }
+        else
+        {
+            <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="!IsChanged || _plan is null" OnClick="ChangeAsync">Change dates</MudButton>
+        }
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter, EditorRequired]
+    public Trip Trip { get; set; } = default!;
+
+    private bool _moving = true;
+    private DateTime? _start;
+    private DateTime? _end;
+    private DateChangePlan? _plan;
+    private string? _refusal;
+
+    private DateOnly StartDate => DateOnly.FromDateTime(_start!.Value);
+
+    private DateOnly EndDate => DateOnly.FromDateTime(_end!.Value);
+
+    private bool IsChanged => _start is not null && _end is not null && (StartDate, EndDate) != (Trip.StartDate, Trip.EndDate);
+
+    protected override void OnInitialized() => ResetDates();
+
+    private void ResetDates()
+    {
+        _start = Trip.StartDate.ToDateTime(TimeOnly.MinValue);
+        _end = Trip.EndDate.ToDateTime(TimeOnly.MinValue);
+        _plan = null;
+        _refusal = null;
+    }
+
+    /// <summary>Switching between moving and changing starts again from the Trip's own dates.</summary>
+    private void ModeChanged(bool moving)
+    {
+        _moving = moving;
+        ResetDates();
+    }
+
+    /// <summary>When moving, the end follows the start so the Trip keeps its length.</summary>
+    private Task StartChanged(DateTime? start)
+    {
+        _start = start;
+        if (_moving && start is not null)
+        {
+            _end = start.Value.AddDays(Trip.EndDate.DayNumber - Trip.StartDate.DayNumber);
+            return Task.CompletedTask;
+        }
+
+        return PreviewAsync();
+    }
+
+    private Task EndChanged(DateTime? end)
+    {
+        _end = end;
+        return PreviewAsync();
+    }
+
+    private async Task PreviewAsync()
+    {
+        _plan = null;
+        _refusal = null;
+        if (_start is null || _end is null)
+        {
+            return;
+        }
+
+        try
+        {
+            _plan = await App.Trips.PlanDateChangeAsync(Trip.Id, StartDate, EndDate);
+        }
+        catch (RuleViolationException ex)
+        {
+            _refusal = ex.Message;
+        }
+    }
+
+    private Task MoveAsync() => RunAsync(() => App.Trips.MoveTripAsync(Trip.Id, StartDate));
+
+    /// <summary>Applies the change previewed; pressing "Remove days and change" is the confirmation.</summary>
+    private Task ChangeAsync() => _plan is null
+        ? Task.CompletedTask
+        : RunAsync(() => App.Trips.ChangeDatesAsync(Trip.Id, _plan.StartDate, _plan.EndDate, removeDaysWithContent: _plan.NeedsConfirmation));
+
+    private async Task RunAsync(Func<Task> change)
+    {
+        try
+        {
+            await change();
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (RuleViolationException ex)
+        {
+            _refusal = ex.Message;
+        }
+    }
+}

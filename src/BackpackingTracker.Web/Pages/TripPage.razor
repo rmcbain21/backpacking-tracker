@@ -19,57 +19,142 @@ else if (_view is not null)
 {
     var trip = _view.Trip;
     <MudText Typo="Typo.h5" HtmlTag="h1">@trip.Name</MudText>
-    <MudText Typo="Typo.body2" Class="mud-text-secondary trip-dates">@TripDates.Format(trip)</MudText>
-    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3 trip-created-from">
+    <div class="d-flex align-center">
+        <MudText Typo="Typo.body2" Class="mud-text-secondary trip-dates">@TripDates.Format(trip)</MudText>
+        <MudIconButton Icon="@Icons.Material.Filled.EditCalendar" Size="Size.Small" aria-label="Change dates"
+                       Class="change-dates" OnClick="ChangeDatesAsync" />
+    </div>
+    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2 trip-created-from">
         @trip.Status@(trip.CreatedFrom is null ? "" : $" · from Gear List \"{trip.CreatedFrom}\"")
     </MudText>
 
-    <PackTotals Weight="_view.Weight" UnitSystem="_unitSystem" />
+    <MudTabs @bind-ActivePanelIndex="_tab" Elevation="0" TabPanelsClass="pt-3" Class="trip-tabs">
+        <MudTabPanel Text="Packing List">@PackingList(trip)</MudTabPanel>
+        <MudTabPanel Text="Itinerary">@Itinerary(trip)</MudTabPanel>
+    </MudTabs>
 
-    <MudText Typo="Typo.h6" HtmlTag="h2" Class="mt-2">Packing List</MudText>
-    <MudText Typo="Typo.body2" Class="mud-text-secondary">Changes here are for this Trip only.</MudText>
-
-    @foreach (var categorySection in _view.Sections)
+    @if (_tab == PackingListTab)
     {
-        var category = categorySection.Category;
-        <div class="d-flex align-center mt-4 mb-1 pl-1 category-heading" data-category="@category.Name">
-            <MudText Typo="Typo.subtitle2" HtmlTag="h3" Class="flex-grow-1">@category.Name</MudText>
-            <MudText Typo="Typo.body2" Class="mud-text-secondary text-nowrap category-subtotal">
-                @(categorySection.Entries.Count == 0 ? "Empty" : UnitFormat.Weight(categorySection.SubtotalGrams, _unitSystem))
-            </MudText>
-            @if (categorySection.IsOnList)
-            {
-                <MudIconButton Icon="@Icons.Material.Filled.Add" Size="Size.Small" aria-label="@($"Add gear to {category.Name}")"
-                               OnClick="() => AddGearAsync(category.Id)" />
-            }
-        </div>
-        @if (categorySection.Entries.Count > 0)
-        {
-            <MudPaper>
-                @foreach (var entryView in categorySection.Entries)
-                {
-                    var entry = entryView.Entry;
-                    <ListEntryRow EntryView="entryView" Categories="trip.PackingList.Categories" UnitSystem="_unitSystem"
-                                  OnChange="change => TryAsync(() => App.Trips.UpdateEntryAsync(TripId, entry.Id, change.Quantity, change.CarryMode))"
-                                  OnMove="target => TryAsync(() => App.Trips.MoveEntryAsync(TripId, entry.Id, target.Id))"
-                                  OnRemove="() => TryAsync(() => App.Trips.RemoveEntryAsync(TripId, entry.Id))" />
-                    <MudDivider />
-                }
-            </MudPaper>
-        }
+        <MudFab Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Class="add-fab" aria-label="Add gear to Packing List"
+                OnClick="() => AddGearAsync(null)" />
     }
-
-    <MudFab Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Class="add-fab" aria-label="Add gear to Packing List"
-            OnClick="() => AddGearAsync(null)" />
 }
 
 @code {
+    private const int PackingListTab = 0;
+
     [Parameter]
     public string TripId { get; set; } = "";
 
     private UnitSystem _unitSystem;
     private TripView? _view;
     private bool _loaded;
+    private int _tab = PackingListTab;
+
+    private RenderFragment PackingList(Trip trip) => __builder =>
+    {
+        <PackTotals Weight="_view!.Weight" UnitSystem="_unitSystem" />
+
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mt-2">Changes here are for this Trip only.</MudText>
+
+        @foreach (var categorySection in _view.Sections)
+        {
+            var category = categorySection.Category;
+            <div class="d-flex align-center mt-4 mb-1 pl-1 category-heading" data-category="@category.Name">
+                <MudText Typo="Typo.subtitle2" HtmlTag="h3" Class="flex-grow-1">@category.Name</MudText>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary text-nowrap category-subtotal">
+                    @(categorySection.Entries.Count == 0 ? "Empty" : UnitFormat.Weight(categorySection.SubtotalGrams, _unitSystem))
+                </MudText>
+                @if (categorySection.IsOnList)
+                {
+                    <MudIconButton Icon="@Icons.Material.Filled.Add" Size="Size.Small" aria-label="@($"Add gear to {category.Name}")"
+                                   OnClick="() => AddGearAsync(category.Id)" />
+                }
+            </div>
+            @if (categorySection.Entries.Count > 0)
+            {
+                <MudPaper>
+                    @foreach (var entryView in categorySection.Entries)
+                    {
+                        var entry = entryView.Entry;
+                        <ListEntryRow EntryView="entryView" Categories="trip.PackingList.Categories" UnitSystem="_unitSystem"
+                                      OnChange="change => TryAsync(() => App.Trips.UpdateEntryAsync(TripId, entry.Id, change.Quantity, change.CarryMode))"
+                                      OnMove="target => TryAsync(() => App.Trips.MoveEntryAsync(TripId, entry.Id, target.Id))"
+                                      OnRemove="() => TryAsync(() => App.Trips.RemoveEntryAsync(TripId, entry.Id))" />
+                        <MudDivider />
+                    }
+                </MudPaper>
+            }
+        }
+    };
+
+    /// <summary>The Trip Days' route details in order, each opening that day for editing.</summary>
+    private RenderFragment Itinerary(Trip trip) => __builder =>
+    {
+        <MudPaper Class="itinerary">
+            @for (var i = 0; i < trip.Days.Count; i++)
+            {
+                var day = trip.Days[i];
+                var dayNumber = i + 1;
+                <div class="pa-3 pick-row trip-day" role="button" tabindex="0" data-date="@day.Date.ToString("yyyy-MM-dd")"
+                     aria-label="@($"Edit Day {dayNumber}")" @onclick="() => EditDayAsync(day, dayNumber)">
+                    <MudText Typo="Typo.subtitle2">Day @dayNumber · @TripDates.Day(day.Date)</MudText>
+                    @if (!day.HasContent())
+                    {
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">Nothing yet. Tap to add the route and notes.</MudText>
+                    }
+                    @if (RouteLine(day) is { } route)
+                    {
+                        <MudText Typo="Typo.body2" Class="day-route">@route</MudText>
+                    }
+                    @if (day.Campsite is not null)
+                    {
+                        <MudText Typo="Typo.body2" Class="day-campsite">Camp: @day.Campsite</MudText>
+                    }
+                    @if (FiguresLine(day) is { } figures)
+                    {
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary day-figures">@figures</MudText>
+                    }
+                    @if (day.JournalNotes is not null)
+                    {
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary day-notes">@day.JournalNotes</MudText>
+                    }
+                </div>
+                <MudDivider />
+            }
+        </MudPaper>
+    };
+
+    /// <summary>"Start → End", or whichever of the two is filled in; null when neither is.</summary>
+    private static string? RouteLine(TripDay day) => (day.Start, day.End) switch
+    {
+        (null, null) => null,
+        ({ } start, null) => $"From {start}",
+        (null, { } end) => $"To {end}",
+        var (start, end) => $"{start} → {end}",
+    };
+
+    /// <summary>Such as "Planned 8.5 mi · Actual 9.0 mi · Gain 2,349 ft", leaving out what's empty.</summary>
+    private string? FiguresLine(TripDay day)
+    {
+        var figures = new List<string>();
+        if (day.PlannedDistanceMetres is { } planned)
+        {
+            figures.Add($"Planned {UnitFormat.Distance(planned, _unitSystem)}");
+        }
+
+        if (day.ActualDistanceMetres is { } actual)
+        {
+            figures.Add($"Actual {UnitFormat.Distance(actual, _unitSystem)}");
+        }
+
+        if (day.ElevationGainMetres is { } gain)
+        {
+            figures.Add($"Gain {UnitFormat.Elevation(gain, _unitSystem)}");
+        }
+
+        return figures.Count == 0 ? null : string.Join(" · ", figures);
+    }
 
     protected override async Task OnParametersSetAsync()
     {
@@ -79,6 +164,29 @@ else if (_view is not null)
     }
 
     private async Task LoadAsync() => _view = await App.Trips.GetTripAsync(TripId);
+
+    private async Task EditDayAsync(TripDay day, int dayNumber)
+    {
+        var parameters = new DialogParameters<TripDayDialog>
+        {
+            { d => d.TripId, TripId },
+            { d => d.Day, day },
+            { d => d.UnitSystem, _unitSystem },
+        };
+        var options = new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Small };
+        var dialog = await DialogService.ShowAsync<TripDayDialog>($"Day {dayNumber} · {TripDates.Day(day.Date)}", parameters, options);
+        await dialog.Result;
+        await LoadAsync();
+    }
+
+    private async Task ChangeDatesAsync()
+    {
+        var parameters = new DialogParameters<ChangeDatesDialog> { { d => d.Trip, _view!.Trip } };
+        var options = new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Small };
+        var dialog = await DialogService.ShowAsync<ChangeDatesDialog>("Change dates", parameters, options);
+        await dialog.Result;
+        await LoadAsync();
+    }
 
     /// <summary>Opens the picker; from a Category's + it starts on that Category, otherwise on the first.</summary>
     private async Task AddGearAsync(string? categoryId)

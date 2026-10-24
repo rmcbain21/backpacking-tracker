@@ -177,3 +177,71 @@ public class UnitsTests
         Assert.Equal(expected, UnitFormat.Weight(grams, system));
     }
 }
+
+public class RouteInputTests
+{
+    [Theory]
+    [InlineData("8.5", UnitSystem.Imperial, 13679.4)]
+    [InlineData("8.5", UnitSystem.Metric, 8500)]
+    [InlineData("1,000", UnitSystem.Imperial, 1609344)]
+    [InlineData(" 0 ", UnitSystem.Metric, 0)]
+    public void Typed_distances_become_metres(string typed, UnitSystem system, decimal expected)
+    {
+        Assert.Equal(new LengthParseResult(expected, null), RouteInput.ParseDistance(typed, system));
+    }
+
+    [Theory]
+    [InlineData("2349", UnitSystem.Imperial, 716)]
+    [InlineData("1000", UnitSystem.Imperial, 304.8)]
+    [InlineData("716", UnitSystem.Metric, 716)]
+    public void Typed_elevations_become_metres(string typed, UnitSystem system, decimal expected)
+    {
+        Assert.Equal(new LengthParseResult(expected, null), RouteInput.ParseElevation(typed, system));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("  ")]
+    public void A_blank_distance_or_elevation_is_no_value_not_an_error(string? typed)
+    {
+        Assert.Equal(new LengthParseResult(null, null), RouteInput.ParseDistance(typed, UnitSystem.Imperial));
+        Assert.Equal(new LengthParseResult(null, null), RouteInput.ParseElevation(typed, UnitSystem.Imperial));
+    }
+
+    [Fact]
+    public void Text_and_negative_numbers_are_refused()
+    {
+        Assert.Equal("Enter a number, like 8.5.", RouteInput.ParseDistance("far", UnitSystem.Imperial).Error);
+        Assert.Equal("A distance can't be negative.", RouteInput.ParseDistance("-1", UnitSystem.Imperial).Error);
+        Assert.Equal("An elevation can't be negative.", RouteInput.ParseElevation("-1", UnitSystem.Metric).Error);
+    }
+
+    [Theory]
+    [InlineData(13679.4, UnitSystem.Imperial, "8.5")]
+    [InlineData(8450, UnitSystem.Metric, "8.5")]
+    public void Stored_distances_show_to_a_tenth_for_editing(decimal metres, UnitSystem system, string expected)
+    {
+        Assert.Equal(expected, RouteInput.DistanceText(metres, system));
+        Assert.Equal("", RouteInput.DistanceText(null, system));
+    }
+
+    [Theory]
+    [InlineData(716, UnitSystem.Imperial, "2349")]
+    [InlineData(716.4, UnitSystem.Metric, "716")]
+    public void Stored_elevations_show_in_whole_units_for_editing(decimal metres, UnitSystem system, string expected)
+    {
+        Assert.Equal(expected, RouteInput.ElevationText(metres, system));
+        Assert.Equal("", RouteInput.ElevationText(null, system));
+    }
+
+    [Fact]
+    public void An_untouched_distance_or_elevation_keeps_its_stored_metres()
+    {
+        // 14,000 m shows as "8.7" mi, which on its own would parse back to 14001.3 m.
+        Assert.Equal(14000m, RouteInput.ParseDistance("8.7", UnitSystem.Imperial, 14000m).Metres);
+        Assert.Equal(14001.3m, RouteInput.ParseDistance("8.7", UnitSystem.Imperial).Metres);
+        Assert.Equal(716m, RouteInput.ParseElevation("2349", UnitSystem.Imperial, 716m).Metres);
+        Assert.Equal(16093.4m, RouteInput.ParseDistance("10", UnitSystem.Imperial, 14000m).Metres);
+    }
+}

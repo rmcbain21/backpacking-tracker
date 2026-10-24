@@ -1,0 +1,98 @@
+@using BackpackingTracker.Core.Trips
+@* Edits one Trip Day: its route (start, end, campsite, distances, elevation gain) and journal notes.
+   Distances and elevation are typed in the chosen units. A refusal is shown here so nothing typed is lost. *@
+@inject AppCore App
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="_form">
+            <MudTextField @bind-Value="_start" Label="Start (optional)" Class="day-start" />
+            <MudTextField @bind-Value="_end" Label="End (optional)" Class="day-end" />
+            <MudTextField @bind-Value="_campsite" Label="Campsite (optional)" Class="day-campsite" />
+            <div class="d-flex gap-3">
+                <MudTextField @bind-Value="_plannedText" Label="Planned distance" InputMode="@(InputMode.@decimal)" Immediate="true"
+                              Adornment="Adornment.End" AdornmentText="@RouteInput.DistanceLabel(UnitSystem)" Class="day-planned"
+                              Validation="@(new Func<string?, string?>(text => ParsePlanned(text).Error))" />
+                <MudTextField @bind-Value="_actualText" Label="Actual distance" InputMode="@(InputMode.@decimal)" Immediate="true"
+                              Adornment="Adornment.End" AdornmentText="@RouteInput.DistanceLabel(UnitSystem)" Class="day-actual"
+                              Validation="@(new Func<string?, string?>(text => ParseActual(text).Error))" />
+            </div>
+            <MudTextField @bind-Value="_elevationText" Label="Elevation gain" InputMode="@(InputMode.numeric)" Immediate="true"
+                          Adornment="Adornment.End" AdornmentText="@RouteInput.ElevationLabel(UnitSystem)" Class="day-elevation"
+                          Validation="@(new Func<string?, string?>(text => ParseElevation(text).Error))" />
+            <MudTextField @bind-Value="_notes" Label="Journal notes (optional)" Lines="4" Sizing="InputSizing.Auto" Class="day-notes" />
+        </MudForm>
+        @if (_refusal is not null)
+        {
+            <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-3">@_refusal</MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SaveAsync">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter, EditorRequired]
+    public string TripId { get; set; } = "";
+
+    [Parameter, EditorRequired]
+    public TripDay Day { get; set; } = default!;
+
+    [Parameter]
+    public UnitSystem UnitSystem { get; set; }
+
+    private MudForm _form = default!;
+    private string? _start;
+    private string? _end;
+    private string? _campsite;
+    private string? _plannedText;
+    private string? _actualText;
+    private string? _elevationText;
+    private string? _notes;
+    private string? _refusal;
+
+    protected override void OnInitialized()
+    {
+        _start = Day.Start;
+        _end = Day.End;
+        _campsite = Day.Campsite;
+        _plannedText = RouteInput.DistanceText(Day.PlannedDistanceMetres, UnitSystem);
+        _actualText = RouteInput.DistanceText(Day.ActualDistanceMetres, UnitSystem);
+        _elevationText = RouteInput.ElevationText(Day.ElevationGainMetres, UnitSystem);
+        _notes = Day.JournalNotes;
+    }
+
+    private LengthParseResult ParsePlanned(string? text) => RouteInput.ParseDistance(text, UnitSystem, Day.PlannedDistanceMetres);
+
+    private LengthParseResult ParseActual(string? text) => RouteInput.ParseDistance(text, UnitSystem, Day.ActualDistanceMetres);
+
+    private LengthParseResult ParseElevation(string? text) => RouteInput.ParseElevation(text, UnitSystem, Day.ElevationGainMetres);
+
+    private async Task SaveAsync()
+    {
+        await _form.ValidateAsync();
+        var planned = ParsePlanned(_plannedText);
+        var actual = ParseActual(_actualText);
+        var elevation = ParseElevation(_elevationText);
+        if (!_form.IsValid || planned.Error is not null || actual.Error is not null || elevation.Error is not null)
+        {
+            return;
+        }
+
+        try
+        {
+            await App.Trips.UpdateDayAsync(TripId, Day.Date, new TripDayDetails(
+                _start, _end, _campsite, planned.Metres, actual.Metres, elevation.Metres, _notes));
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (RuleViolationException ex)
+        {
+            _refusal = ex.Message;
+        }
+    }
+}

@@ -14,6 +14,9 @@ public static class TripDates
         return $"{Range(trip.StartDate, trip.EndDate)} · {(days == 1 ? "1 day" : $"{days} days")}";
     }
 
+    /// <summary>One day, such as "Wed, Jul 1".</summary>
+    public static string Day(DateOnly date) => date.ToString("ddd, MMM d", English);
+
     private static string Range(DateOnly start, DateOnly end)
     {
         if (start == end)

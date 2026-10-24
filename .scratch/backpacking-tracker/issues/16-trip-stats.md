@@ -11,3 +11,7 @@
 - [ ] Starting Pack Weight and Base Weight come from the weight calculator, using frozen values on Completed Trips.
 - [ ] The stats are shown on the Trip in the chosen units, grouped into calculated weight stats and typed-in route stats.
 - [ ] Core tests cover each stat for Planned and Completed Trips.
+
+## Comments
+- From ticket 13: sum `Trip.Days` (`PlannedDistanceMetres`, `ActualDistanceMetres`, `ElevationGainMetres`, each nullable) and format with `UnitFormat.Distance` / `Elevation`.
+- From ticket 13: a Skipped status on Trip Days is planned in ticket 31; days and distances here may later leave out Skipped days.
