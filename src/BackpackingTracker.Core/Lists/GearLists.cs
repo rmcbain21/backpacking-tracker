@@ -26,21 +26,50 @@ public sealed class GearLists : IGearItemReferences
     /// <summary>Makes a Gear List that starts with a copy of the Default Categories.</summary>
     public async Task<GearList> CreateGearListAsync(string name)
     {
-        if (string.IsNullOrWhiteSpace(name))
-        {
-            throw new RuleViolationException("Give the Gear List a name.");
-        }
-
         var list = new GearList
         {
             Id = Guid.NewGuid().ToString(),
             UpdatedAt = _clock.UtcNow,
-            Name = name.Trim(),
+            Name = TrimAndCheckListName(name),
             Categories = await CopyDefaultCategoriesAsync(),
         };
         await _store.SaveAsync(Table, list);
         return list;
     }
+
+    public async Task RenameGearListAsync(string gearListId, string newName)
+    {
+        var list = await GetExistingGearListAsync(gearListId);
+        await SaveAsync(list with { Name = TrimAndCheckListName(newName) });
+    }
+
+    /// <summary>
+    /// A new Gear List with copies of the list's Categories and List Entries (each entry with a new id),
+    /// to make a variation such as a winter kit. Later changes to either list don't change the other.
+    /// </summary>
+    public async Task<GearList> DuplicateGearListAsync(string gearListId, string name)
+    {
+        var original = await GetExistingGearListAsync(gearListId);
+        var copy = original with
+        {
+            Id = Guid.NewGuid().ToString(),
+            UpdatedAt = _clock.UtcNow,
+            Name = TrimAndCheckListName(name),
+            Entries = original.Entries.Select(entry => entry with { Id = Guid.NewGuid().ToString() }).ToList(),
+        };
+        await _store.SaveAsync(Table, copy);
+        return copy;
+    }
+
+    /// <summary>Deletes the Gear List. Kept as a tombstone so the deletion syncs; its Gear Items are untouched.</summary>
+    public async Task DeleteGearListAsync(string gearListId)
+    {
+        var list = await GetExistingGearListAsync(gearListId);
+        await SaveAsync(list with { Deleted = true });
+    }
+
+    private static string TrimAndCheckListName(string name) =>
+        string.IsNullOrWhiteSpace(name) ? throw new RuleViolationException("Give the Gear List a name.") : name.Trim();
 
     /// <summary>
     /// A new Gear List with these Categories and entries, not saved (for the import, which saves it along
@@ -48,11 +77,7 @@ public sealed class GearLists : IGearItemReferences
     /// </summary>
     internal GearList NewGearList(string name, IReadOnlyList<Category> categories, IReadOnlyList<ListEntry> entries)
     {
-        if (string.IsNullOrWhiteSpace(name))
-        {
-            throw new RuleViolationException("Give the Gear List a name.");
-        }
-
+        var trimmed = TrimAndCheckListName(name);
         if (categories.Count == 0)
         {
             throw new RuleViolationException("A Gear List needs at least one Category.");
@@ -68,7 +93,7 @@ public sealed class GearLists : IGearItemReferences
         {
             Id = Guid.NewGuid().ToString(),
             UpdatedAt = _clock.UtcNow,
-            Name = name.Trim(),
+            Name = trimmed,
             Categories = categories,
             Entries = entries,
         };

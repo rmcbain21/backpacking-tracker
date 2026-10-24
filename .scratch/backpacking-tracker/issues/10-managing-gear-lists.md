@@ -6,12 +6,13 @@
 
 **Status:** ready-for-agent
 
-- [ ] I can rename a Gear List.
-- [ ] Duplicating a Gear List creates a new Gear List with copies of all its List Entries.
-- [ ] Deleting a Gear List tombstones it after confirmation.
-- [ ] The Gear Item hard-delete guard counts List Entries on Gear Lists as references.
-- [ ] Core tests cover rename, duplicate, delete, and the extended delete guard.
+- [x] I can rename a Gear List.
+- [x] Duplicating a Gear List creates a new Gear List with copies of all its List Entries.
+- [x] Deleting a Gear List tombstones it after confirmation.
+- [x] The Gear Item hard-delete guard counts List Entries on Gear Lists as references.
+- [x] Core tests cover rename, duplicate, delete, and the extended delete guard.
 
 ## Comments
 
 - From ticket 08: "The Gear Item hard-delete guard counts List Entries on Gear Lists as references" is already done (Gear Lists implement `IGearItemReferences`, registered in `AppCore`, with tests in `RetireAndDeleteTests`). Duplicating a Gear List should give the copied List Entries new ids.
+- Implemented: `GearLists.RenameGearListAsync`, `DuplicateGearListAsync(id, name)` (copies Categories with their ids, which are per list, and entries with new ids) and `DeleteGearListAsync` (tombstone; its Gear Items are untouched and become deletable if no other list uses them). The Gear List page has a menu by the title: Rename, Duplicate (name pre-filled "<name> copy", opens the copy), Delete (confirm, back to Gear Lists). Verified with a headless Edge test at phone width.

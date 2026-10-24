@@ -3,6 +3,7 @@
 @inject AppCore App
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
+@inject NavigationManager Navigation
 
 <PageTitle>@(_view?.GearList.Name ?? "Gear List")</PageTitle>
 
@@ -16,7 +17,14 @@
 }
 else if (_view is not null)
 {
-    <MudText Typo="Typo.h5" HtmlTag="h1" GutterBottom="true">@_view.GearList.Name</MudText>
+    <div class="d-flex align-center mb-2">
+        <MudText Typo="Typo.h5" HtmlTag="h1" Class="flex-grow-1">@_view.GearList.Name</MudText>
+        <MudMenu Icon="@Icons.Material.Filled.MoreVert" Dense="true" AriaLabel="Gear List options">
+            <MudMenuItem OnClick="RenameListAsync">Rename</MudMenuItem>
+            <MudMenuItem OnClick="DuplicateListAsync">Duplicate</MudMenuItem>
+            <MudMenuItem OnClick="DeleteListAsync">Delete</MudMenuItem>
+        </MudMenu>
+    </div>
 
     <MudPaper Class="pa-3 mb-4 pack-totals">
         <div class="d-flex justify-space-between">
@@ -185,6 +193,56 @@ else if (_view is not null)
         var dialog = await DialogService.ShowAsync<AddGearDialog>("Add gear", parameters, options);
         await dialog.Result;
         await LoadAsync();
+    }
+
+    private async Task RenameListAsync()
+    {
+        var name = await AskForNameAsync("Rename Gear List", _view!.GearList.Name, "Save");
+        if (name is not null)
+        {
+            await TryAsync(() => App.Lists.RenameGearListAsync(GearListId, name));
+        }
+    }
+
+    /// <summary>Asks for the copy's name and opens the copy.</summary>
+    private async Task DuplicateListAsync()
+    {
+        var name = await AskForNameAsync("Duplicate Gear List", $"{_view!.GearList.Name} copy", "Duplicate");
+        if (name is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var copy = await App.Lists.DuplicateGearListAsync(GearListId, name);
+            Navigation.NavigateTo($"lists/{copy.Id}");
+        }
+        catch (RuleViolationException ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Warning);
+        }
+    }
+
+    private async Task DeleteListAsync()
+    {
+        var confirmed = await DialogService.ShowMessageBoxAsync(
+            "Delete Gear List", $"Delete {_view!.GearList.Name}? Its gear stays in your catalogue.",
+            yesText: "Delete", cancelText: "Cancel");
+        if (confirmed != true)
+        {
+            return;
+        }
+
+        try
+        {
+            await App.Lists.DeleteGearListAsync(GearListId);
+            Navigation.NavigateTo("lists");
+        }
+        catch (RuleViolationException ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Warning);
+        }
     }
 
     private async Task AddCategoryAsync()
