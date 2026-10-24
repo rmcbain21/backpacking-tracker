@@ -1,6 +1,72 @@
 @page "/trips"
+@using BackpackingTracker.Core.Trips
+@inject AppCore App
+@inject IDialogService DialogService
+@inject NavigationManager Navigation
 
 <PageTitle>Trips</PageTitle>
 
 <MudText Typo="Typo.h5" HtmlTag="h1" GutterBottom="true">Trips</MudText>
-<MudText Class="mud-text-secondary">Coming soon.</MudText>
+
+@if (_trips is null)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else if (_trips.Upcoming.Count == 0 && _trips.Past.Count == 0)
+{
+    <MudText Class="mud-text-secondary">No Trips yet. Tap + to plan one, from a Gear List or from nothing.</MudText>
+}
+else
+{
+    @TripGroup(("Upcoming", "upcoming-trips", _trips.Upcoming))
+    @TripGroup(("Past", "past-trips", _trips.Past))
+}
+
+<MudFab Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Class="add-fab" aria-label="New Trip"
+        OnClick="CreateAsync" />
+
+@code {
+    private UnitSystem _unitSystem;
+    private TripListing? _trips;
+
+    /// <summary>A heading and its Trips; left out when it has none.</summary>
+    private RenderFragment TripGroup((string Heading, string Class, IReadOnlyList<TripView> Trips) group) => __builder =>
+    {
+        if (group.Trips.Count == 0)
+        {
+            return;
+        }
+
+        <MudText Typo="Typo.subtitle2" HtmlTag="h2" Class="mt-4 mb-1 pl-1">@group.Heading</MudText>
+        <MudPaper Class="@group.Class">
+            @foreach (var view in group.Trips)
+            {
+                <a class="d-flex align-center pa-3 gap-3 list-row" href="@($"trips/{view.Trip.Id}")">
+                    <div class="flex-grow-1">
+                        <MudText>@view.Trip.Name</MudText>
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">@TripDates.Format(view.Trip)</MudText>
+                    </div>
+                    <MudText Class="text-nowrap">@UnitFormat.Weight(view.Weight.StartingPackGrams, _unitSystem)</MudText>
+                </a>
+                <MudDivider />
+            }
+        </MudPaper>
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        _unitSystem = (await App.Settings.GetAsync()).UnitSystem;
+        _trips = await App.Trips.ListTripsAsync();
+    }
+
+    private async Task CreateAsync()
+    {
+        var options = new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Small };
+        var dialog = await DialogService.ShowAsync<NewTripDialog>("New Trip", options);
+        var result = await dialog.Result;
+        if (result is { Canceled: false, Data: string tripId })
+        {
+            Navigation.NavigateTo($"trips/{tripId}");
+        }
+    }
+}

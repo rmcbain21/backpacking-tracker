@@ -13,3 +13,4 @@
 - [ ] "Save as Gear List" creates a new Gear List from the Packing List's entries (Gear Item, quantity, Carry Mode).
 - [ ] I can delete a Trip after confirmation.
 - [ ] Core tests cover freezing, the edit locks, Reopen, Save as Gear List and delete.
+- From ticket 12: `TripListing.Past` (Completed Trips, most recent start date first) has no test yet, since no Trip could be Completed; add one here. "Save as Gear List" can use `ListContents.Copy()` (as Duplicate does) and `GearLists.NewGearList`. Packing List edits all go through `TripPlanner`'s Add/Update/Move/RemoveEntryAsync, so that's where to refuse them on a Completed Trip.

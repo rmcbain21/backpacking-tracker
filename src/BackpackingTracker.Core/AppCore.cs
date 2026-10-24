@@ -3,6 +3,7 @@ using BackpackingTracker.Core.Import;
 using BackpackingTracker.Core.Lists;
 using BackpackingTracker.Core.Ports;
 using BackpackingTracker.Core.Preferences;
+using BackpackingTracker.Core.Trips;
 
 namespace BackpackingTracker.Core;
 
@@ -17,9 +18,11 @@ public sealed class AppCore
         Settings = new UserSettings(store, clock);
         Lists = new GearLists(store, clock, Gear);
         Import = new GearImport(store, Gear, Lists);
+        Trips = new TripPlanner(store, clock, Gear, Lists);
 
         // Every area that refers to Gear Items takes part in the Gear Item delete check.
         Gear.AddReferences(Lists);
+        Gear.AddReferences(Trips);
     }
 
     public GearCatalogue Gear { get; }
@@ -29,4 +32,6 @@ public sealed class AppCore
     public GearImport Import { get; }
 
     public GearLists Lists { get; }
+
+    public TripPlanner Trips { get; }
 }

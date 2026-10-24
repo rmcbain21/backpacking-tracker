@@ -1,0 +1,84 @@
+@using BackpackingTracker.Core.Lists
+@* Creates a Trip: a name, start and end dates, and optionally a Gear List to copy as its Packing List.
+   Returns the new Trip's id. A refusal (no name, end before start) is shown here so nothing typed is lost. *@
+@inject AppCore App
+
+<MudDialog>
+    <DialogContent>
+        <MudTextField @bind-Value="_name" Label="Name" AutoFocus="true" Immediate="true" Class="trip-name" />
+        <div class="d-flex gap-3">
+            <MudDatePicker Date="_start" DateChanged="StartChanged" Label="Start" Class="trip-start" />
+            <MudDatePicker @bind-Date="_end" Label="End" Class="trip-end" />
+        </div>
+        <MudSelect T="string" @bind-Value="_gearListId" Label="Packing List from" Class="trip-gear-list"
+                   ToStringFunc="@(id => id is null ? NoGearList : _gearLists.FirstOrDefault(l => l.GearList.Id == id)?.GearList.Name)">
+            <MudSelectItem T="string" Value="null">@NoGearList</MudSelectItem>
+            @foreach (var view in _gearLists)
+            {
+                <MudSelectItem T="string" Value="view.GearList.Id">@view.GearList.Name</MudSelectItem>
+            }
+        </MudSelect>
+        @if (_refusal is not null)
+        {
+            <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-3">@_refusal</MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="CreateAsync">Create</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private const string NoGearList = "Nothing (start empty)";
+
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    /// <summary>The Gear List chosen to start with, if any.</summary>
+    [Parameter]
+    public string? GearListId { get; set; }
+
+    private string? _name;
+    private DateTime? _start;
+    private DateTime? _end;
+    private string? _gearListId;
+    private string? _refusal;
+    private IReadOnlyList<GearListView> _gearLists = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _gearListId = GearListId;
+        _gearLists = await App.Lists.ListGearListsAsync();
+    }
+
+    /// <summary>Picking a start moves the end along with it when the end is unset or would come first.</summary>
+    private void StartChanged(DateTime? start)
+    {
+        _start = start;
+        if (start is not null && (_end is null || _end < start))
+        {
+            _end = start;
+        }
+    }
+
+    private async Task CreateAsync()
+    {
+        if (_start is null || _end is null)
+        {
+            _refusal = "Choose the start and end dates.";
+            return;
+        }
+
+        try
+        {
+            var trip = await App.Trips.CreateTripAsync(
+                _name ?? "", DateOnly.FromDateTime(_start.Value), DateOnly.FromDateTime(_end.Value), _gearListId);
+            MudDialog.Close(DialogResult.Ok(trip.Id));
+        }
+        catch (RuleViolationException ex)
+        {
+            _refusal = ex.Message;
+        }
+    }
+}

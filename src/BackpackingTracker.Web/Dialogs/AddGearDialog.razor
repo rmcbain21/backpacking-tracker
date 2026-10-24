@@ -1,5 +1,5 @@
 @using BackpackingTracker.Core.Lists
-@* Picks Gear Items to add to a Gear List, into the chosen Category: search, then tap to add (tapping again
+@* Picks Gear Items to add to a Gear List or Packing List, into the chosen Category: search, then tap to add (tapping again
    adds one more). Retired gear isn't offered. *@
 @inject AppCore App
 @inject ISnackbar Snackbar
@@ -51,8 +51,13 @@
     [CascadingParameter]
     private IMudDialogInstance MudDialog { get; set; } = default!;
 
+    /// <summary>Adds the Gear Item (by id) into the Category (by id) on the list.</summary>
     [Parameter, EditorRequired]
-    public string GearListId { get; set; } = "";
+    public Func<string, string, Task> Add { get; set; } = default!;
+
+    /// <summary>The list's entries as they are now, so gear already on it is marked.</summary>
+    [Parameter, EditorRequired]
+    public Func<Task<IReadOnlyList<ListEntry>>> LoadEntries { get; set; } = default!;
 
     /// <summary>The list's Categories, for the dropdown.</summary>
     [Parameter, EditorRequired]
@@ -78,10 +83,9 @@
 
     private async Task LoadListAsync()
     {
-        var list = await App.Lists.GetGearListAsync(GearListId);
-        _onList = (list?.Entries ?? [])
-            .GroupBy(entry => entry.Entry.GearItemId)
-            .ToDictionary(group => group.Key, group => group.Sum(entry => entry.Entry.Quantity));
+        _onList = (await LoadEntries())
+            .GroupBy(entry => entry.GearItemId)
+            .ToDictionary(group => group.Key, group => group.Sum(entry => entry.Quantity));
     }
 
     private async Task LoadAsync() =>
@@ -97,7 +101,7 @@
     {
         try
         {
-            await App.Lists.AddEntryAsync(GearListId, item.Id, _categoryId);
+            await Add(item.Id, _categoryId);
             await LoadListAsync();
         }
         catch (RuleViolationException ex)

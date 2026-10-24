@@ -13,4 +13,9 @@ public sealed record GearList : StoredRecord
 
     /// <summary>Kept inside the Gear List record, so they sync as part of it.</summary>
     public IReadOnlyList<ListEntry> Entries { get; init; } = [];
+
+    /// <summary>The Categories and entries together, for the rules Gear Lists share with Packing Lists.</summary>
+    internal ListContents Contents => new() { Categories = Categories, Entries = Entries };
+
+    internal GearList With(ListContents contents) => this with { Categories = contents.Categories, Entries = contents.Entries };
 }

@@ -1,0 +1,49 @@
+@using BackpackingTracker.Core.Weight
+@* A Gear List's or Trip's weight figures: Starting Pack Weight first, then what it's made of. *@
+<MudPaper Class="pa-3 mb-4 pack-totals">
+    <div class="d-flex justify-space-between">
+        <MudText Typo="Typo.subtitle1"><b>Starting Pack Weight</b></MudText>
+        <MudText Typo="Typo.subtitle1" Class="total-starting"><b>@Format(Weight.StartingPackGrams)</b></MudText>
+    </div>
+    <div class="d-flex justify-space-between">
+        <MudText Typo="Typo.body2">Base Weight</MudText>
+        <MudText Typo="Typo.body2" Class="total-base">@Format(Weight.BaseGrams)</MudText>
+    </div>
+    <div class="d-flex justify-space-between">
+        <MudText Typo="Typo.body2">Consumable Weight</MudText>
+        <MudText Typo="Typo.body2" Class="total-consumable">@Format(Weight.ConsumableGrams)</MudText>
+    </div>
+    <div class="d-flex justify-space-between">
+        <MudText Typo="Typo.body2" Class="mud-text-secondary">Worn Weight (not in the pack)</MudText>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary total-worn">@Format(Weight.WornGrams)</MudText>
+    </div>
+</MudPaper>
+
+@if (Weight.ByCategory.Count > 0)
+{
+    <MudPaper Class="pa-3 mb-4 category-breakdown">
+        <MudText Typo="Typo.subtitle2" HtmlTag="h2" Class="mb-2">Where the pack weight goes</MudText>
+        @foreach (var line in Weight.ByCategory)
+        {
+            <div class="breakdown-line">
+                <div class="d-flex justify-space-between gap-2">
+                    <MudText Typo="Typo.body2" Class="breakdown-name">@line.Category.Name</MudText>
+                    <MudText Typo="Typo.body2" Class="text-nowrap">
+                        @Format(line.Grams) <span class="breakdown-share">@UnitFormat.Share(line.Share)</span>
+                    </MudText>
+                </div>
+                <MudProgressLinear Value="@((double)(line.Share * 100))" Color="Color.Primary" Size="Size.Small" Rounded="true" />
+            </div>
+        }
+    </MudPaper>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public PackWeight Weight { get; set; } = default!;
+
+    [Parameter]
+    public UnitSystem UnitSystem { get; set; }
+
+    private string Format(decimal grams) => UnitFormat.Weight(grams, UnitSystem);
+}

@@ -1,0 +1,71 @@
+@using BackpackingTracker.Core.Lists
+@* One List Entry on a Gear List or Packing List: its gear and weight, with quantity, Carry Mode, move and remove. *@
+<div class="pa-3 list-entry">
+    <div class="d-flex align-center gap-2">
+        <div class="flex-grow-1">
+            @if (EntryView.GearItem is { } item)
+            {
+                <MudText>@item.Name@(item.Retired ? " (Retired)" : "")</MudText>
+                @if (item.GearType.Length > 0)
+                {
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">@item.GearType</MudText>
+                }
+            }
+            else
+            {
+                <MudText Class="mud-text-secondary">Deleted Gear Item</MudText>
+            }
+        </div>
+        <MudText Class="text-nowrap entry-weight">@UnitFormat.Weight(EntryView.EntryWeightGrams, UnitSystem)</MudText>
+    </div>
+    <div class="d-flex align-center gap-1 mt-1">
+        <MudIconButton Icon="@Icons.Material.Filled.Remove" Size="Size.Small" Disabled="Entry.Quantity <= 1"
+                       aria-label="Fewer" OnClick="() => OnChange.InvokeAsync((Entry.Quantity - 1, Entry.CarryMode))" />
+        <MudText Class="entry-quantity">@Entry.Quantity</MudText>
+        <MudIconButton Icon="@Icons.Material.Filled.Add" Size="Size.Small"
+                       aria-label="More" OnClick="() => OnChange.InvokeAsync((Entry.Quantity + 1, Entry.CarryMode))" />
+        <MudSelect T="CarryMode" Value="Entry.CarryMode" Dense="true" Class="carry-mode ml-2"
+                   ValueChanged="mode => OnChange.InvokeAsync((Entry.Quantity, mode))">
+            @foreach (var mode in Enum.GetValues<CarryMode>())
+            {
+                <MudSelectItem Value="mode">@mode</MudSelectItem>
+            }
+        </MudSelect>
+        <MudSpacer />
+        <MudMenu Icon="@Icons.Material.Filled.DriveFileMove" Size="Size.Small" Dense="true"
+                 AriaLabel="@($"Move {EntryName} to another Category")">
+            @foreach (var target in Categories.Where(c => c.Id != Entry.CategoryId))
+            {
+                <MudMenuItem OnClick="() => OnMove.InvokeAsync(target)">@target.Name</MudMenuItem>
+            }
+        </MudMenu>
+        <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small"
+                       aria-label="Remove from list" OnClick="OnRemove" />
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public ListEntryView EntryView { get; set; } = default!;
+
+    /// <summary>The list's Categories, to move the entry to.</summary>
+    [Parameter, EditorRequired]
+    public IReadOnlyList<Category> Categories { get; set; } = [];
+
+    [Parameter]
+    public UnitSystem UnitSystem { get; set; }
+
+    /// <summary>A new quantity or Carry Mode.</summary>
+    [Parameter]
+    public EventCallback<(int Quantity, CarryMode CarryMode)> OnChange { get; set; }
+
+    [Parameter]
+    public EventCallback<Category> OnMove { get; set; }
+
+    [Parameter]
+    public EventCallback OnRemove { get; set; }
+
+    private ListEntry Entry => EntryView.Entry;
+
+    private string EntryName => EntryView.GearItem?.Name ?? "Deleted Gear Item";
+}

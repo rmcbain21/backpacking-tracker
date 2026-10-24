@@ -1,0 +1,114 @@
+@page "/trips/{TripId}"
+@using BackpackingTracker.Core.Lists
+@using BackpackingTracker.Core.Trips
+@inject AppCore App
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>@(_view?.Trip.Name ?? "Trip")</PageTitle>
+
+<MudButton Href="trips" Variant="Variant.Text" Size="Size.Small" StartIcon="@Icons.Material.Filled.ArrowBack"
+           Class="mb-1 ml-n2">Trips</MudButton>
+
+@if (_loaded && _view is null)
+{
+    <MudText Typo="Typo.h5" HtmlTag="h1">Trip not found</MudText>
+    <MudText Class="mud-text-secondary">It may have been deleted.</MudText>
+}
+else if (_view is not null)
+{
+    var trip = _view.Trip;
+    <MudText Typo="Typo.h5" HtmlTag="h1">@trip.Name</MudText>
+    <MudText Typo="Typo.body2" Class="mud-text-secondary trip-dates">@TripDates.Format(trip)</MudText>
+    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3 trip-created-from">
+        @trip.Status@(trip.CreatedFrom is null ? "" : $" · from Gear List \"{trip.CreatedFrom}\"")
+    </MudText>
+
+    <PackTotals Weight="_view.Weight" UnitSystem="_unitSystem" />
+
+    <MudText Typo="Typo.h6" HtmlTag="h2" Class="mt-2">Packing List</MudText>
+    <MudText Typo="Typo.body2" Class="mud-text-secondary">Changes here are for this Trip only.</MudText>
+
+    @foreach (var categorySection in _view.Sections)
+    {
+        var category = categorySection.Category;
+        <div class="d-flex align-center mt-4 mb-1 pl-1 category-heading" data-category="@category.Name">
+            <MudText Typo="Typo.subtitle2" HtmlTag="h3" Class="flex-grow-1">@category.Name</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary text-nowrap category-subtotal">
+                @(categorySection.Entries.Count == 0 ? "Empty" : UnitFormat.Weight(categorySection.SubtotalGrams, _unitSystem))
+            </MudText>
+            @if (categorySection.IsOnList)
+            {
+                <MudIconButton Icon="@Icons.Material.Filled.Add" Size="Size.Small" aria-label="@($"Add gear to {category.Name}")"
+                               OnClick="() => AddGearAsync(category.Id)" />
+            }
+        </div>
+        @if (categorySection.Entries.Count > 0)
+        {
+            <MudPaper>
+                @foreach (var entryView in categorySection.Entries)
+                {
+                    var entry = entryView.Entry;
+                    <ListEntryRow EntryView="entryView" Categories="trip.PackingList.Categories" UnitSystem="_unitSystem"
+                                  OnChange="change => TryAsync(() => App.Trips.UpdateEntryAsync(TripId, entry.Id, change.Quantity, change.CarryMode))"
+                                  OnMove="target => TryAsync(() => App.Trips.MoveEntryAsync(TripId, entry.Id, target.Id))"
+                                  OnRemove="() => TryAsync(() => App.Trips.RemoveEntryAsync(TripId, entry.Id))" />
+                    <MudDivider />
+                }
+            </MudPaper>
+        }
+    }
+
+    <MudFab Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Class="add-fab" aria-label="Add gear to Packing List"
+            OnClick="() => AddGearAsync(null)" />
+}
+
+@code {
+    [Parameter]
+    public string TripId { get; set; } = "";
+
+    private UnitSystem _unitSystem;
+    private TripView? _view;
+    private bool _loaded;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _unitSystem = (await App.Settings.GetAsync()).UnitSystem;
+        await LoadAsync();
+        _loaded = true;
+    }
+
+    private async Task LoadAsync() => _view = await App.Trips.GetTripAsync(TripId);
+
+    /// <summary>Opens the picker; from a Category's + it starts on that Category, otherwise on the first.</summary>
+    private async Task AddGearAsync(string? categoryId)
+    {
+        var categories = _view!.Trip.PackingList.Categories;
+        var parameters = new DialogParameters<AddGearDialog>
+        {
+            { d => d.Add, (gearItemId, intoCategoryId) => App.Trips.AddEntryAsync(TripId, gearItemId, intoCategoryId) },
+            { d => d.LoadEntries, async () => (await App.Trips.GetTripAsync(TripId))?.Trip.PackingList.Entries ?? [] },
+            { d => d.Categories, categories },
+            { d => d.CategoryId, categoryId ?? categories[0].Id },
+        };
+        var options = new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Small };
+        var dialog = await DialogService.ShowAsync<AddGearDialog>("Add gear", parameters, options);
+        await dialog.Result;
+        await LoadAsync();
+    }
+
+    /// <summary>Runs a change, shows the reason if the core refuses it, and reloads the Trip.</summary>
+    private async Task TryAsync(Func<Task> change)
+    {
+        try
+        {
+            await change();
+        }
+        catch (RuleViolationException ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Warning);
+        }
+
+        await LoadAsync();
+    }
+}
