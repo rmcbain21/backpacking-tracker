@@ -19,3 +19,4 @@
 
 - From ticket 09: the spec says "Meal Plan food and water appear as their own breakdown lines". `WeightCalculator` builds `PackWeight.ByCategory` from List Entries only; add food or water as its own line (after the Categories), and include it in the Consumable Weight that the shares are taken from.
 - From ticket 13: add the slots to `TripDay` and include them in `TripDay.HasContent()`, which the date-change preview already uses. `TripDayDetails` / `UpdateDayAsync` replace only route and notes, so slots need their own methods.
+- From ticket 14: water goes in through `WeightCalculator.Calculate(..., waterGrams)` as a "Water" line (`Category.Water`); add food the same way, its line before Water.

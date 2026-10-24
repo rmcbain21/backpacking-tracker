@@ -17,3 +17,4 @@
 
 ## Comments
 - From ticket 13: route fields and journal notes are edited through `TripPlanner.UpdateDayAsync`; leave it open on Completed Trips. Decide whether `ChangeDatesAsync` should be allowed on a Completed Trip.
+- From ticket 14: on a Completed Trip, keep `SetWaterCarriedAsync` allowed (water stays editable per the spec). Decide whether ticking the checklist is locked too; `SetPackedAsync` / `ResetPackedAsync` are separate from the Add/Update/Move/Remove entry methods. "Save as Gear List" via `ListContents.Copy()` already clears Packed.

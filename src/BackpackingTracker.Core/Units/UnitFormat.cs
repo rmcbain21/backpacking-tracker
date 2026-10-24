@@ -14,6 +14,10 @@ public static class UnitFormat
         return system == UnitSystem.Metric ? MetricWeight(grams) : ImperialWeight(grams);
     }
 
+    /// <summary>Water by volume, such as "2.5 L", whatever the unit system: water is measured in litres.</summary>
+    public static string WaterVolume(decimal grams) =>
+        $"{Math.Round(grams / UnitConversion.GramsPerLitreOfWater, 2, MidpointRounding.AwayFromZero).ToString("0.0#", Culture)} L";
+
     /// <summary>A share from 0 to 1 as a whole percentage, such as "82%".</summary>
     public static string Share(decimal share) =>
         $"{Math.Round(share * 100, 0, MidpointRounding.AwayFromZero).ToString("0", Culture)}%";

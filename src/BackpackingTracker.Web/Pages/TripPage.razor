@@ -28,8 +28,9 @@ else if (_view is not null)
         @trip.Status@(trip.CreatedFrom is null ? "" : $" · from Gear List \"{trip.CreatedFrom}\"")
     </MudText>
 
-    <MudTabs @bind-ActivePanelIndex="_tab" Elevation="0" TabPanelsClass="pt-3" Class="trip-tabs">
+    <MudTabs @bind-ActivePanelIndex="_tab" Elevation="0" TabPanelsClass="pt-3" MinimumTabWidth="80px" Class="trip-tabs">
         <MudTabPanel Text="Packing List">@PackingList(trip)</MudTabPanel>
+        <MudTabPanel Text="Checklist">@Checklist()</MudTabPanel>
         <MudTabPanel Text="Itinerary">@Itinerary(trip)</MudTabPanel>
     </MudTabs>
 
@@ -53,7 +54,17 @@ else if (_view is not null)
 
     private RenderFragment PackingList(Trip trip) => __builder =>
     {
-        <PackTotals Weight="_view!.Weight" UnitSystem="_unitSystem" />
+        <PackTotals Weight="_view!.Weight" UnitSystem="_unitSystem">
+            <MudDivider Class="my-2" />
+            <div class="d-flex align-center pick-row water-carried" role="button" tabindex="0" aria-label="Set water carried"
+                 @onclick="SetWaterAsync">
+                <MudIcon Icon="@Icons.Material.Filled.WaterDrop" Size="Size.Small" Color="Color.Primary" Class="mr-2" />
+                <MudText Typo="Typo.body2" Class="flex-grow-1">Water carried</MudText>
+                <MudText Typo="Typo.body2" Class="water-amount">
+                    @(trip.WaterCarriedGrams is { } water ? $"{UnitFormat.WaterVolume(water)} · {UnitFormat.Weight(water, _unitSystem)}" : "None · tap to add")
+                </MudText>
+            </div>
+        </PackTotals>
 
         <MudText Typo="Typo.body2" Class="mud-text-secondary mt-2">Changes here are for this Trip only.</MudText>
 
@@ -85,6 +96,54 @@ else if (_view is not null)
                     }
                 </MudPaper>
             }
+        }
+    };
+
+    /// <summary>
+    /// The packing checklist: progress and Reset, then each Packing List entry by Category as a full-width
+    /// row that ticks or unticks with one tap anywhere on it.
+    /// </summary>
+    private RenderFragment Checklist() => __builder =>
+    {
+        var view = _view!;
+        <MudPaper Class="pa-3 mb-3 checklist-progress">
+            <div class="d-flex align-center gap-2">
+                <MudText Class="flex-grow-1 packed-count">
+                    @(view.ChecklistCount == 0 ? "Nothing on the Packing List yet" : $"{view.PackedCount} of {view.ChecklistCount} packed")
+                </MudText>
+                <MudButton Variant="Variant.Text" Size="Size.Small" StartIcon="@Icons.Material.Filled.RestartAlt"
+                           Disabled="view.PackedCount == 0" OnClick="ResetPackedAsync" Class="reset-packed">Reset</MudButton>
+            </div>
+            <MudProgressLinear Value="@(view.ChecklistCount == 0 ? 0 : 100.0 * view.PackedCount / view.ChecklistCount)"
+                               Color="Color.Primary" Rounded="true" Class="mt-1" />
+        </MudPaper>
+
+        @foreach (var checklistSection in view.Sections.Where(s => s.Entries.Count > 0))
+        {
+            <MudText Typo="Typo.subtitle2" HtmlTag="h3" Class="mt-3 mb-1 pl-1">@checklistSection.Category.Name</MudText>
+            <MudPaper>
+                @foreach (var entryView in checklistSection.Entries)
+                {
+                    var entry = entryView.Entry;
+                    var name = entryView.GearItem?.Name ?? "Deleted Gear Item";
+                    <div class="d-flex align-center px-2 pick-row checklist-row @(entry.Packed ? "packed" : "")"
+                         role="checkbox" aria-checked="@(entry.Packed ? "true" : "false")" tabindex="0" aria-label="@name"
+                         @onclick="() => TryAsync(() => App.Trips.SetPackedAsync(TripId, entry.Id, !entry.Packed))">
+                        <MudIcon Icon="@(entry.Packed ? Icons.Material.Filled.CheckBox : Icons.Material.Filled.CheckBoxOutlineBlank)"
+                                 Color="@(entry.Packed ? Color.Primary : Color.Default)" Class="mr-3" />
+                        <MudText Class="flex-grow-1 checklist-name">@name</MudText>
+                        @if (entry.Quantity > 1)
+                        {
+                            <MudText Class="ml-2 text-nowrap checklist-quantity">× @entry.Quantity</MudText>
+                        }
+                        @if (entry.CarryMode == CarryMode.Worn)
+                        {
+                            <MudChip T="string" Size="Size.Small" Class="ml-2">Worn</MudChip>
+                        }
+                    </div>
+                    <MudDivider />
+                }
+            </MudPaper>
         }
     };
 
@@ -177,6 +236,29 @@ else if (_view is not null)
         var dialog = await DialogService.ShowAsync<TripDayDialog>($"Day {dayNumber} · {TripDates.Day(day.Date)}", parameters, options);
         await dialog.Result;
         await LoadAsync();
+    }
+
+    private async Task SetWaterAsync()
+    {
+        var parameters = new DialogParameters<WaterDialog>
+        {
+            { d => d.TripId, TripId },
+            { d => d.Grams, _view!.Trip.WaterCarriedGrams },
+        };
+        var options = new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.ExtraSmall };
+        var dialog = await DialogService.ShowAsync<WaterDialog>("Water carried", parameters, options);
+        await dialog.Result;
+        await LoadAsync();
+    }
+
+    private async Task ResetPackedAsync()
+    {
+        var confirmed = await DialogService.ShowMessageBoxAsync(
+            "Reset checklist", $"Untick all {_view!.PackedCount} packed entries?", yesText: "Reset", cancelText: "Cancel");
+        if (confirmed == true)
+        {
+            await TryAsync(() => App.Trips.ResetPackedAsync(TripId));
+        }
     }
 
     private async Task ChangeDatesAsync()

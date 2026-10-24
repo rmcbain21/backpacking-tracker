@@ -17,6 +17,7 @@
         <MudText Typo="Typo.body2" Class="mud-text-secondary">Worn Weight (not in the pack)</MudText>
         <MudText Typo="Typo.body2" Class="mud-text-secondary total-worn">@Format(Weight.WornGrams)</MudText>
     </div>
+    @ChildContent
 </MudPaper>
 
 @if (Weight.ByCategory.Count > 0)
@@ -44,6 +45,10 @@
 
     [Parameter]
     public UnitSystem UnitSystem { get; set; }
+
+    /// <summary>More rows at the foot of the totals, such as a Trip's water carried.</summary>
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
 
     private string Format(decimal grams) => UnitFormat.Weight(grams, UnitSystem);
 }

@@ -7,4 +7,7 @@ public static class UnitConversion
     public const decimal OuncesPerPound = 16m;
     public const decimal MetresPerMile = 1609.344m;
     public const decimal MetresPerFoot = 0.3048m;
+
+    /// <summary>A litre of water weighs a kilogram, near enough for a pack.</summary>
+    public const decimal GramsPerLitreOfWater = 1000m;
 }

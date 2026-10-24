@@ -14,14 +14,15 @@ public sealed record ListContents
 
     public IReadOnlyList<ListEntry> Entries { get; init; } = [];
 
-    /// <summary>A copy for another list: the same Categories, and the same entries each with a new id.</summary>
+    /// <summary>A copy for another list: the same Categories, and the same entries each with a new id, none ticked as packed.</summary>
     internal ListContents Copy() =>
-        this with { Entries = Entries.Select(entry => entry with { Id = Guid.NewGuid().ToString() }).ToList() };
+        this with { Entries = Entries.Select(entry => entry with { Id = Guid.NewGuid().ToString(), Packed = false }).ToList() };
 
     /// <summary>
     /// Adds the Gear Item into one of the list's Categories, with quantity 1 and Carry Mode base. If it's
-    /// already on the list, adds one to that entry's quantity instead (leaving it in its Category), so a
-    /// list has one entry per Gear Item. Retired gear can't be added.
+    /// already on the list, adds one to that entry's quantity instead (leaving it in its Category, and
+    /// unticking it, since the extra one isn't packed yet), so a list has one entry per Gear Item. Retired
+    /// gear can't be added.
     /// </summary>
     /// <param name="item">The Gear Item, or null if it no longer exists.</param>
     /// <param name="listKind">"Gear List" or "Packing List", for the messages.</param>
@@ -45,7 +46,7 @@ public sealed record ListContents
         var existing = Entries.FirstOrDefault(entry => entry.GearItemId == item.Id);
         if (existing is not null)
         {
-            var more = existing with { Quantity = existing.Quantity + 1 };
+            var more = existing with { Quantity = existing.Quantity + 1, Packed = false };
             return (Replace(more), more);
         }
 
@@ -53,6 +54,7 @@ public sealed record ListContents
         return (this with { Entries = [.. Entries, entry] }, entry);
     }
 
+    /// <summary>Changes an entry's quantity and Carry Mode. Raising the quantity unticks it, since the extra ones aren't packed yet.</summary>
     internal ListContents UpdateEntry(string entryId, int quantity, CarryMode carryMode, string listKind)
     {
         if (quantity < 1)
@@ -65,8 +67,17 @@ public sealed record ListContents
             throw new RuleViolationException("Choose base, worn or consumable.");
         }
 
-        return Replace(FindEntry(entryId, listKind) with { Quantity = quantity, CarryMode = carryMode });
+        var entry = FindEntry(entryId, listKind);
+        return Replace(entry with { Quantity = quantity, CarryMode = carryMode, Packed = entry.Packed && quantity <= entry.Quantity });
     }
+
+    /// <summary>Ticks or unticks an entry on the packing checklist.</summary>
+    internal ListContents SetPacked(string entryId, bool packed, string listKind) =>
+        Replace(FindEntry(entryId, listKind) with { Packed = packed });
+
+    /// <summary>Unticks every entry, to check the packing again.</summary>
+    internal ListContents ResetPacked() =>
+        this with { Entries = Entries.Select(entry => entry with { Packed = false }).ToList() };
 
     /// <summary>Moves an entry to another of the list's Categories.</summary>
     internal ListContents MoveEntry(string entryId, string categoryId, string listKind) =>
@@ -93,7 +104,8 @@ public sealed record ListContents
 
     /// <summary>The entries with their Gear Items' current weights, arranged by Category, and the list's totals.</summary>
     /// <param name="items">The Gear Items the entries use, by id; a missing one was deleted on another device.</param>
-    internal ListContentsView View(IReadOnlyDictionary<string, GearItem> items)
+    /// <param name="waterGrams">Water carried, on a Trip; counted as Consumable Weight.</param>
+    internal ListContentsView View(IReadOnlyDictionary<string, GearItem> items, decimal waterGrams = 0m)
     {
         var entries = Entries
             .Select(entry =>
@@ -106,7 +118,7 @@ public sealed record ListContents
             .ToList();
 
         var views = entries.Select(e => e.View).ToList();
-        var weight = WeightCalculator.Calculate(entries.Select(e => e.Weighed), Categories);
+        var weight = WeightCalculator.Calculate(entries.Select(e => e.Weighed), Categories, waterGrams);
         return new ListContentsView(views, Sections(views), weight);
     }
 

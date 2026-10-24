@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using BackpackingTracker.Core.Gear;
 
 namespace BackpackingTracker.Core.Lists;
@@ -19,4 +20,8 @@ public sealed record ListEntry
     public int Quantity { get; init; } = 1;
 
     public CarryMode CarryMode { get; init; } = CarryMode.Base;
+
+    /// <summary>Ticked on a Trip's packing checklist. Only used on Packing Lists; a copied entry starts unpacked.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool Packed { get; init; }
 }

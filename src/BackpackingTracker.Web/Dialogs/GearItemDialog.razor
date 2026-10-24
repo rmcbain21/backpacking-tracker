@@ -12,7 +12,7 @@
                 <MudTextField @bind-Value="_weightText" Label="Weight" InputMode="@(InputMode.@decimal)"
                               Validation="@(new Func<string?, string?>(ValidateWeight))" Class="flex-grow-1" />
                 <MudSelect T="WeightUnit" Value="_weightUnit" ValueChanged="ChangeWeightUnit" Label="Unit" Class="weight-unit">
-                    @foreach (var unit in Enum.GetValues<WeightUnit>())
+                    @foreach (var unit in WeightInput.GearUnits)
                     {
                         <MudSelectItem Value="unit">@WeightInput.Label(unit)</MudSelectItem>
                     }

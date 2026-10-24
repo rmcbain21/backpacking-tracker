@@ -1,0 +1,89 @@
+@* Sets the water carried on a Trip, typed in litres (the default), oz, lb or g and stored in grams, or clears it. *@
+@inject AppCore App
+
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">
+            Water in the pack at the trailhead. It counts as Consumable Weight.
+        </MudText>
+        <div class="d-flex gap-3">
+            <MudTextField @bind-Value="_text" Label="Water carried" InputMode="@(InputMode.@decimal)" Immediate="true"
+                          AutoFocus="true" Class="flex-grow-1 water-amount"
+                          Validation="@(new Func<string?, string?>(text => Parse(text).Error))" />
+            <MudSelect T="WeightUnit" Value="_unit" ValueChanged="ChangeUnit" Label="Unit" Class="weight-unit">
+                @foreach (var unit in WeightInput.WaterUnits)
+                {
+                    <MudSelectItem Value="unit">@WeightInput.Label(unit)</MudSelectItem>
+                }
+            </MudSelect>
+        </div>
+        @if (_refusal is not null)
+        {
+            <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-3">@_refusal</MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        @if (Grams is not null)
+        {
+            <MudButton OnClick="() => SaveAsync(null)">No water</MudButton>
+            <MudSpacer />
+        }
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SaveTypedAsync">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter, EditorRequired]
+    public string TripId { get; set; } = "";
+
+    /// <summary>The water carried now, in grams, if any.</summary>
+    [Parameter]
+    public decimal? Grams { get; set; }
+
+    private string? _text;
+    private WeightUnit _unit = WeightUnit.Litres;
+    private string? _refusal;
+
+    protected override void OnInitialized() =>
+        _text = Grams is { } grams ? WeightInput.TextForEditing(grams, _unit) : null;
+
+    /// <summary>Blank is no water; otherwise the typed weight, keeping the stored grams while the text is untouched.</summary>
+    private WeightParseResult Parse(string? text) =>
+        string.IsNullOrWhiteSpace(text) ? new WeightParseResult(null, null)
+        : Grams is { } grams ? WeightInput.ParseEdited(text, _unit, grams)
+        : WeightInput.Parse(text, _unit);
+
+    /// <summary>Switching unit on an untouched amount shows the same amount in the new unit.</summary>
+    private void ChangeUnit(WeightUnit unit)
+    {
+        if (Grams is { } grams && WeightInput.IsUnchanged(_text, _unit, grams))
+        {
+            _text = WeightInput.TextForEditing(grams, unit);
+        }
+
+        _unit = unit;
+    }
+
+    private Task SaveTypedAsync()
+    {
+        var parsed = Parse(_text);
+        return parsed.Error is null ? SaveAsync(parsed.Grams) : Task.CompletedTask;
+    }
+
+    private async Task SaveAsync(decimal? grams)
+    {
+        try
+        {
+            await App.Trips.SetWaterCarriedAsync(TripId, grams);
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (RuleViolationException ex)
+        {
+            _refusal = ex.Message;
+        }
+    }
+}

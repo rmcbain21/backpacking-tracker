@@ -170,11 +170,43 @@ public class UnitsTests
     [InlineData("2.5", WeightUnit.Pounds, UnitSystem.Imperial, "2 lb 8.0 oz")]
     [InlineData("765.4", WeightUnit.Grams, UnitSystem.Metric, "765.4 g")]
     [InlineData("1.2", WeightUnit.Pounds, UnitSystem.Metric, "544.3 g")]
-    public void Typed_pounds_and_grams_round_trip(string typed, WeightUnit unit, UnitSystem system, string expected)
+    [InlineData("2", WeightUnit.Litres, UnitSystem.Metric, "2.00 kg")]
+    [InlineData("1.5", WeightUnit.Litres, UnitSystem.Imperial, "3 lb 4.9 oz")]
+    public void Typed_pounds_grams_and_litres_round_trip(string typed, WeightUnit unit, UnitSystem system, string expected)
     {
         var grams = WeightInput.Parse(typed, unit).Grams!.Value;
 
         Assert.Equal(expected, UnitFormat.Weight(grams, system));
+    }
+}
+
+public class WaterUnitsTests
+{
+    [Theory]
+    [InlineData("2", 2000)]
+    [InlineData("1.75", 1750)]
+    [InlineData("0.5", 500)]
+    public void Litres_of_water_become_grams(string typed, decimal expected)
+    {
+        Assert.Equal(new WeightParseResult(expected, null), WeightInput.Parse(typed, WeightUnit.Litres));
+    }
+
+    [Theory]
+    [InlineData(2000, "2.0", "2.0 L")]
+    [InlineData(1750, "1.75", "1.75 L")]
+    [InlineData(1999.4, "2.0", "2.0 L")]
+    public void Water_shows_in_litres(decimal grams, string forEditing, string shown)
+    {
+        Assert.Equal(forEditing, WeightInput.TextForEditing(grams, WeightUnit.Litres));
+        Assert.Equal(shown, UnitFormat.WaterVolume(grams));
+    }
+
+    [Fact]
+    public void Litres_are_offered_for_water_first_but_not_for_gear()
+    {
+        Assert.Equal(WeightUnit.Litres, WeightInput.WaterUnits[0]);
+        Assert.DoesNotContain(WeightUnit.Litres, WeightInput.GearUnits);
+        Assert.Equal("L", WeightInput.Label(WeightUnit.Litres));
     }
 }
 

@@ -117,6 +117,34 @@ public sealed class TripPlanner : IGearItemReferences
         await SaveAsync(trip with { PackingList = trip.PackingList.RemoveEntry(entryId, ListKind) });
     }
 
+    // ----- The packing checklist and water carried -----
+
+    /// <summary>Ticks or unticks a Packing List entry on the packing checklist.</summary>
+    public async Task SetPackedAsync(string tripId, string entryId, bool packed)
+    {
+        var trip = await GetExistingTripAsync(tripId);
+        await SaveAsync(trip with { PackingList = trip.PackingList.SetPacked(entryId, packed, ListKind) });
+    }
+
+    /// <summary>Unticks every entry on the packing checklist, to check the packing again.</summary>
+    public async Task ResetPackedAsync(string tripId)
+    {
+        var trip = await GetExistingTripAsync(tripId);
+        await SaveAsync(trip with { PackingList = trip.PackingList.ResetPacked() });
+    }
+
+    /// <summary>Records the water carried from the trailhead, in grams, or clears it with null.</summary>
+    public async Task SetWaterCarriedAsync(string tripId, decimal? grams)
+    {
+        if (grams < 0)
+        {
+            throw new RuleViolationException("Water carried can't be negative.");
+        }
+
+        var trip = await GetExistingTripAsync(tripId);
+        await SaveAsync(trip with { WaterCarriedGrams = grams == 0 ? null : grams });
+    }
+
     // ----- Trip Days and dates -----
 
     /// <summary>Replaces what's typed in on the Trip Day for that date: its route and journal notes.</summary>
@@ -211,7 +239,7 @@ public sealed class TripPlanner : IGearItemReferences
 
     private static TripView View(Trip trip, IReadOnlyDictionary<string, GearItem> items)
     {
-        var view = trip.PackingList.View(items);
+        var view = trip.PackingList.View(items, trip.WaterCarriedGrams ?? 0m);
         return new TripView(trip, view.Entries, view.Sections, view.Weight);
     }
 

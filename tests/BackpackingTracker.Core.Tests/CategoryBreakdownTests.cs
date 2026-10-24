@@ -102,6 +102,21 @@ public class CategoryBreakdownTests
         Assert.Empty(WeightCalculator.Calculate([], Categories).ByCategory);
     }
 
+    [Fact]
+    public void Water_is_consumable_and_comes_last_after_no_category()
+    {
+        var weight = WeightCalculator.Calculate(
+        [
+            new WeighedEntry(900m, 1, CarryMode.Base, Shelter.Id),
+            new WeighedEntry(100m, 1, CarryMode.Base, "gone"),
+        ], Categories, waterGrams: 1000m);
+
+        Assert.Equal(1000m, weight.ConsumableGrams);
+        Assert.Equal(2000m, weight.StartingPackGrams);
+        Assert.Equal([("Shelter", 900m), ("No Category", 100m), ("Water", 1000m)], Lines(weight));
+        Assert.Equal(0.5m, weight.ByCategory[^1].Share);
+    }
+
     [Theory]
     [InlineData(0.818181, "82%")]
     [InlineData(0.181818, "18%")]

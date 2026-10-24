@@ -26,6 +26,9 @@ public sealed record Trip : StoredRecord
     /// </summary>
     public ListContents PackingList { get; init; } = new();
 
+    /// <summary>The water carried from the trailhead, in grams; null when none is recorded. Counted as Consumable Weight.</summary>
+    public decimal? WaterCarriedGrams { get; init; }
+
     /// <summary>One Trip Day per calendar day from the start date to the end date, in order.</summary>
     public IReadOnlyList<TripDay> Days { get; init; } = [];
 

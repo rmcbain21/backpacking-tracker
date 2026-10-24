@@ -12,6 +12,12 @@ public static class WeightInput
         NumberStyles.AllowLeadingWhite | NumberStyles.AllowTrailingWhite |
         NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint;
 
+    /// <summary>The units a Gear Item's weight can be typed in.</summary>
+    public static IReadOnlyList<WeightUnit> GearUnits { get; } = [WeightUnit.Ounces, WeightUnit.Pounds, WeightUnit.Grams];
+
+    /// <summary>The units water carried can be typed in: litres first, as water is usually measured.</summary>
+    public static IReadOnlyList<WeightUnit> WaterUnits { get; } = [WeightUnit.Litres, WeightUnit.Ounces, WeightUnit.Pounds, WeightUnit.Grams];
+
     /// <summary>The unit a weight is typed in unless the backpacker picks another.</summary>
     public static WeightUnit DefaultUnit(UnitSystem system) =>
         system == UnitSystem.Metric ? WeightUnit.Grams : WeightUnit.Ounces;
@@ -20,16 +26,19 @@ public static class WeightInput
     {
         WeightUnit.Ounces => "oz",
         WeightUnit.Pounds => "lb",
+        WeightUnit.Litres => "L",
         _ => "g",
     };
 
-    /// <summary>A stored weight as a number to edit in the given unit: oz to 0.1, lb to 0.01, g to 0.1.</summary>
+    /// <summary>A stored weight as a number to edit in the given unit: oz to 0.1, lb to 0.01, g to 0.1, L to 0.01.</summary>
     public static string TextForEditing(decimal grams, WeightUnit unit) => unit switch
     {
         WeightUnit.Ounces => Math.Round(grams / UnitConversion.GramsPerOunce, 1, MidpointRounding.AwayFromZero)
             .ToString("0.0", CultureInfo.InvariantCulture),
         WeightUnit.Pounds => Math.Round(grams / (UnitConversion.GramsPerOunce * UnitConversion.OuncesPerPound), 2, MidpointRounding.AwayFromZero)
             .ToString("0.00", CultureInfo.InvariantCulture),
+        WeightUnit.Litres => Math.Round(grams / UnitConversion.GramsPerLitreOfWater, 2, MidpointRounding.AwayFromZero)
+            .ToString("0.0#", CultureInfo.InvariantCulture),
         _ => grams.ToString("0.#", CultureInfo.InvariantCulture),
     };
 
@@ -67,6 +76,7 @@ public static class WeightInput
         {
             WeightUnit.Ounces => amount * UnitConversion.GramsPerOunce,
             WeightUnit.Pounds => amount * UnitConversion.OuncesPerPound * UnitConversion.GramsPerOunce,
+            WeightUnit.Litres => amount * UnitConversion.GramsPerLitreOfWater,
             _ => amount,
         };
 
