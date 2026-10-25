@@ -21,10 +21,14 @@ public sealed class AppCore
         Import = new GearImport(store, Gear, Lists);
         Trips = new TripPlanner(store, clock, Gear, Lists);
         Food = new FoodCatalogue(store, clock);
+        Meals = new MealCatalogue(store, clock, Food);
 
         // Every area that refers to Gear Items takes part in the Gear Item delete check.
         Gear.AddReferences(Lists);
         Gear.AddReferences(Trips);
+
+        // Likewise for Food Items.
+        Food.AddReferences(Meals);
     }
 
     public GearCatalogue Gear { get; }
@@ -38,4 +42,6 @@ public sealed class AppCore
     public TripPlanner Trips { get; }
 
     public FoodCatalogue Food { get; }
+
+    public MealCatalogue Meals { get; }
 }

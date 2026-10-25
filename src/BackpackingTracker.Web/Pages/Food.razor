@@ -6,8 +6,13 @@
 
 <MudText Typo="Typo.h5" HtmlTag="h1" GutterBottom="true">Food</MudText>
 
-<MudTextField T="string" Value="_searchText" ValueChanged="SearchAsync" Label="Search food" Immediate="true"
-              DebounceInterval="200" Clearable="true" Adornment="Adornment.Start"
+<MudTabs ActivePanelIndex="_tab" ActivePanelIndexChanged="ChangeTabAsync" Elevation="0" TabPanelsClass="pt-2" Class="food-tabs">
+    <MudTabPanel Text="Food Items" />
+    <MudTabPanel Text="Meals" />
+</MudTabs>
+
+<MudTextField T="string" Value="_searchText" ValueChanged="SearchAsync" Label="@(OnMeals ? "Search meals" : "Search food")"
+              Immediate="true" DebounceInterval="200" Clearable="true" Adornment="Adornment.Start"
               AdornmentIcon="@Icons.Material.Filled.Search" />
 
 <div class="d-flex justify-end mt-1">
@@ -15,103 +20,177 @@
                StartIcon="@Icons.Material.Filled.Inventory2">Retired</MudButton>
 </div>
 
-@if (_items is null)
+@if (OnMeals)
 {
-    <MudProgressLinear Indeterminate="true" />
-}
-else if (_items.Count == 0)
-{
-    <MudText Class="mud-text-secondary mt-4">
-        @(Filter.IsEmpty ? "No food yet. Tap + to add your first Food Item." : "No Food Items match.")
-    </MudText>
+    @if (_meals is null)
+    {
+        <MudProgressLinear Indeterminate="true" />
+    }
+    else if (_meals.Count == 0)
+    {
+        <MudText Class="mud-text-secondary mt-4">
+            @(new MealFilter(_searchText).IsEmpty ? "No Meals yet. Tap + to make one from your Food Items." : "No Meals match.")
+        </MudText>
+    }
+    else
+    {
+        <MudPaper Class="mt-2">
+            @foreach (var view in _meals)
+            {
+                <div class="d-flex align-center pa-3 gap-3 gear-row" role="button" tabindex="0"
+                     aria-label="@($"Edit {view.Meal.Name}")" @onclick="() => EditMealAsync(view)">
+                    <div class="flex-grow-1">
+                        <MudText>@view.Meal.Name</MudText>
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">@Contents(view)</MudText>
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                            @Nutrition(view.Totals.Calories, view.Totals.ProteinGrams, view.Totals.Cost)
+                        </MudText>
+                        @Tags(view.Meal.Tags)
+                    </div>
+                    <div class="text-right">
+                        <MudText Class="text-nowrap">@UnitFormat.Weight(view.Totals.WeightGrams, _unitSystem)</MudText>
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary text-nowrap">
+                            @CalorieDensity.Format(view.Totals.CaloriesPerGram, _unitSystem)
+                        </MudText>
+                    </div>
+                </div>
+                <MudDivider />
+            }
+        </MudPaper>
+    }
 }
 else
 {
-    <MudPaper Class="mt-2">
-        @foreach (var item in _items)
-        {
-            <div class="d-flex align-center pa-3 gap-3 gear-row" role="button" tabindex="0"
-                 aria-label="@($"Edit {item.Name}")" @onclick="() => EditAsync(item)">
-                <div class="flex-grow-1">
-                    <MudText>@item.Name</MudText>
-                    <MudText Typo="Typo.body2" Class="mud-text-secondary">@Nutrition(item)</MudText>
-                    @if (item.Tags.Count > 0)
-                    {
-                        <div class="gear-tags">
-                            @foreach (var tag in item.Tags)
-                            {
-                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@tag</MudChip>
-                            }
-                        </div>
-                    }
+    @if (_items is null)
+    {
+        <MudProgressLinear Indeterminate="true" />
+    }
+    else if (_items.Count == 0)
+    {
+        <MudText Class="mud-text-secondary mt-4">
+            @(new FoodFilter(_searchText).IsEmpty ? "No food yet. Tap + to add your first Food Item." : "No Food Items match.")
+        </MudText>
+    }
+    else
+    {
+        <MudPaper Class="mt-2">
+            @foreach (var item in _items)
+            {
+                <div class="d-flex align-center pa-3 gap-3 gear-row" role="button" tabindex="0"
+                     aria-label="@($"Edit {item.Name}")" @onclick="() => EditFoodItemAsync(item)">
+                    <div class="flex-grow-1">
+                        <MudText>@item.Name</MudText>
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                            @Nutrition(item.CaloriesPerServing, item.ProteinGramsPerServing, item.CostPerServing)
+                        </MudText>
+                        @Tags(item.Tags)
+                    </div>
+                    <div class="text-right">
+                        <MudText Class="text-nowrap">@UnitFormat.Weight(item.ServingWeightGrams, _unitSystem)</MudText>
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary text-nowrap">
+                            @CalorieDensity.Format(CalorieDensity.PerGram(item), _unitSystem)
+                        </MudText>
+                    </div>
                 </div>
-                <div class="text-right">
-                    <MudText Class="text-nowrap">@UnitFormat.Weight(item.ServingWeightGrams, _unitSystem)</MudText>
-                    <MudText Typo="Typo.body2" Class="mud-text-secondary text-nowrap">
-                        @CalorieDensity.Format(CalorieDensity.PerGram(item), _unitSystem)
-                    </MudText>
-                </div>
-            </div>
-            <MudDivider />
-        }
-    </MudPaper>
+                <MudDivider />
+            }
+        </MudPaper>
+    }
 }
 
-<MudFab Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Class="add-fab" aria-label="Add Food Item"
-        OnClick="AddAsync" />
+<MudFab Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Class="add-fab"
+        aria-label="@(OnMeals ? "Add Meal" : "Add Food Item")" OnClick="AddAsync" />
 
 @code {
+    private const int MealsTab = 1;
+
     private UnitSystem _unitSystem;
+    private int _tab;
     private IReadOnlyList<FoodItem>? _items;
+    private IReadOnlyList<MealView>? _meals;
     private string? _searchText;
 
-    private FoodFilter Filter => new(_searchText);
+    private bool OnMeals => _tab == MealsTab;
 
     protected override async Task OnInitializedAsync()
     {
         _unitSystem = (await App.Settings.GetAsync()).UnitSystem;
-        await LoadFoodAsync();
+        await LoadAsync();
     }
 
-    private async Task LoadFoodAsync() => _items = await App.Food.ListFoodItemsAsync(Filter);
+    private async Task LoadAsync()
+    {
+        if (OnMeals)
+        {
+            _meals = await App.Meals.ListMealsAsync(new MealFilter(_searchText));
+        }
+        else
+        {
+            _items = await App.Food.ListFoodItemsAsync(new FoodFilter(_searchText));
+        }
+    }
+
+    private async Task ChangeTabAsync(int tab)
+    {
+        _tab = tab;
+        await LoadAsync();
+    }
 
     private async Task SearchAsync(string? searchText)
     {
         _searchText = searchText;
-        await LoadFoodAsync();
+        await LoadAsync();
     }
 
-    /// <summary>A serving's calories, then protein and cost where recorded, such as "260 cal · 9 g protein · $1.79".</summary>
-    private static string Nutrition(FoodItem item)
+    /// <summary>Calories, then protein and cost where known, such as "260 cal · 9 g protein · $1.79".</summary>
+    private static string Nutrition(decimal calories, decimal? proteinGrams, decimal? cost)
     {
-        var parts = new List<string> { NutritionInput.Calories(item.CaloriesPerServing) };
-        if (item.ProteinGramsPerServing is { } protein)
+        var parts = new List<string> { NutritionInput.Calories(calories) };
+        if (proteinGrams is { } protein)
         {
             parts.Add(NutritionInput.Protein(protein));
         }
 
-        if (item.CostPerServing is { } cost)
+        if (cost is { } c)
         {
-            parts.Add(PriceInput.Format(cost));
+            parts.Add(PriceInput.Format(c));
         }
 
         return string.Join(" · ", parts);
     }
 
-    private Task AddAsync() => ShowFoodItemDialogAsync("Add Food Item", item: null);
+    /// <summary>A Meal's Food Items with their servings when not one, such as "Ramen · Instant potatoes ×1.5".</summary>
+    private static string Contents(MealView view) => string.Join(" · ", view.Components
+        .Where(c => c.FoodItem is not null)
+        .Select(c => c.Component.Servings == 1m ? c.FoodItem!.Name : $"{c.FoodItem!.Name} ×{ServingsInput.Format(c.Component.Servings)}"));
 
-    private Task EditAsync(FoodItem item) => ShowFoodItemDialogAsync("Edit Food Item", item);
-
-    private async Task ShowFoodItemDialogAsync(string title, FoodItem? item)
-    {
-        var parameters = new DialogParameters<FoodItemDialog>
+    private static RenderFragment Tags(IReadOnlyList<string> tags) => @<text>
+        @if (tags.Count > 0)
         {
-            { d => d.FoodItem, item },
-            { d => d.UnitSystem, _unitSystem },
-        };
+            <div class="gear-tags">
+                @foreach (var tag in tags)
+                {
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@tag</MudChip>
+                }
+            </div>
+        }
+    </text>;
+
+    private Task AddAsync() => OnMeals
+        ? ShowDialogAsync<MealDialog>("New Meal", new DialogParameters<MealDialog> { { d => d.Meal, null }, { d => d.UnitSystem, _unitSystem } })
+        : ShowDialogAsync<FoodItemDialog>("Add Food Item", new DialogParameters<FoodItemDialog> { { d => d.FoodItem, null }, { d => d.UnitSystem, _unitSystem } });
+
+    private Task EditFoodItemAsync(FoodItem item) =>
+        ShowDialogAsync<FoodItemDialog>("Edit Food Item", new DialogParameters<FoodItemDialog> { { d => d.FoodItem, item }, { d => d.UnitSystem, _unitSystem } });
+
+    private Task EditMealAsync(MealView view) =>
+        ShowDialogAsync<MealDialog>("Edit Meal", new DialogParameters<MealDialog> { { d => d.Meal, view }, { d => d.UnitSystem, _unitSystem } });
+
+    private async Task ShowDialogAsync<TDialog>(string title, DialogParameters parameters) where TDialog : IComponent
+    {
         var options = new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Small };
-        var dialog = await DialogService.ShowAsync<FoodItemDialog>(title, parameters, options);
+        var dialog = await DialogService.ShowAsync<TDialog>(title, parameters, options);
         await dialog.Result;
-        await LoadFoodAsync();
+        await LoadAsync();
     }
 }

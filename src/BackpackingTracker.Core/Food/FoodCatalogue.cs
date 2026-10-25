@@ -97,6 +97,18 @@ public sealed class FoodCatalogue
     public async Task<FoodItem?> GetFoodItemAsync(string foodItemId) =>
         (await LoadFoodItemsAsync()).SingleOrDefault(item => item.Id == foodItemId);
 
+    /// <summary>
+    /// The Food Items with these ids, Retired or not, keyed by id, loading the catalogue once.
+    /// Ids of deleted or unknown Food Items are left out.
+    /// </summary>
+    public async Task<IReadOnlyDictionary<string, FoodItem>> GetFoodItemsAsync(IEnumerable<string> foodItemIds)
+    {
+        var wanted = foodItemIds.ToHashSet();
+        return (await LoadFoodItemsAsync())
+            .Where(item => wanted.Contains(item.Id))
+            .ToDictionary(item => item.Id);
+    }
+
     /// <summary>A Food Item by id, Retired or not; refuses if it doesn't exist or was deleted.</summary>
     private async Task<FoodItem> GetExistingFoodItemAsync(string foodItemId) =>
         await GetFoodItemAsync(foodItemId) ?? throw new RuleViolationException("That Food Item no longer exists.");

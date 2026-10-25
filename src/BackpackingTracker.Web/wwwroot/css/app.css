@@ -309,3 +309,18 @@ h1:focus {
     text-transform: none;
     letter-spacing: normal;
 }
+
+/* No capitals on the Food page's tabs, like a Trip's */
+.food-tabs .mud-tab {
+    text-transform: none;
+    letter-spacing: normal;
+}
+
+/* A Food Item in the Meal dialog: a narrow servings field beside its name */
+.meal-component {
+    min-height: 56px;
+}
+
+.meal-servings {
+    flex: 0 0 80px;
+}

@@ -299,8 +299,7 @@ public class FoodItemTests
         Assert.Equal("That Food Item no longer exists.", retire.Message);
     }
 
-    // The refusal when something uses a Food Item is shared with Gear Items (DeletionPlan); Meals become the
-    // first thing to use Food Items in ticket 18, and its tests cover the refusal through them.
+    // The plan's wording on its own; MealTests covers the refusal through a real Meal.
     [Fact]
     public void A_food_item_in_use_cannot_be_deleted_and_retire_is_offered()
     {

@@ -7,56 +7,97 @@
 
 <MudText Typo="Typo.h5" HtmlTag="h1" GutterBottom="true">Retired food</MudText>
 <MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">
-    Food you no longer use. It stays on anything that used it, but is hidden from your food and pickers.
+    Food and Meals you no longer use. They stay on anything that used them, but are hidden from your food and pickers.
 </MudText>
 
-@if (_items is null)
+@if (_items is null || _meals is null)
 {
     <MudProgressLinear Indeterminate="true" />
 }
-else if (_items.Count == 0)
+else if (_items.Count == 0 && _meals.Count == 0)
 {
     <MudText Class="mud-text-secondary">No retired food.</MudText>
 }
 else
 {
-    <MudPaper>
-        @foreach (var item in _items)
-        {
-            <div class="d-flex align-center pl-3 pr-1 py-2 gap-2">
-                <div class="flex-grow-1">
-                    <MudText>@item.Name</MudText>
-                </div>
-                <MudButton Size="Size.Small" OnClick="() => UnretireAsync(item)">Un-retire</MudButton>
-                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small"
-                               aria-label="@($"Delete {item.Name}")" OnClick="() => DeleteAsync(item)" />
-            </div>
-            <MudDivider />
-        }
-    </MudPaper>
+    @if (_items.Count > 0)
+    {
+        <MudText Typo="Typo.subtitle1" Class="mb-1">Food Items</MudText>
+        <MudPaper Class="mb-4">
+            @foreach (var item in _items)
+            {
+                @Row(item.Name, () => UnretireFoodItemAsync(item), () => DeleteFoodItemAsync(item))
+            }
+        </MudPaper>
+    }
+
+    @if (_meals.Count > 0)
+    {
+        <MudText Typo="Typo.subtitle1" Class="mb-1">Meals</MudText>
+        <MudPaper>
+            @foreach (var meal in _meals)
+            {
+                @Row(meal.Name, () => UnretireMealAsync(meal), () => DeleteMealAsync(meal))
+            }
+        </MudPaper>
+    }
 }
 
 @code {
     private IReadOnlyList<FoodItem>? _items;
+    private IReadOnlyList<Meal>? _meals;
 
     protected override async Task OnInitializedAsync() => await LoadAsync();
 
-    private async Task LoadAsync() => _items = await App.Food.ListRetiredFoodItemsAsync();
+    private async Task LoadAsync()
+    {
+        _items = await App.Food.ListRetiredFoodItemsAsync();
+        _meals = await App.Meals.ListRetiredMealsAsync();
+    }
 
-    private async Task UnretireAsync(FoodItem item)
+    private RenderFragment Row(string name, Func<Task> unretire, Func<Task> delete) => @<text>
+        <div class="d-flex align-center pl-3 pr-1 py-2 gap-2">
+            <div class="flex-grow-1">
+                <MudText>@name</MudText>
+            </div>
+            <MudButton Size="Size.Small" OnClick="unretire">Un-retire</MudButton>
+            <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small"
+                           aria-label="@($"Delete {name}")" OnClick="delete" />
+        </div>
+        <MudDivider />
+    </text>;
+
+    private async Task UnretireFoodItemAsync(FoodItem item)
     {
         await App.Food.UnretireFoodItemAsync(item.Id);
         Snackbar.Add($"{item.Name} is back in your food.", Severity.Success);
         await LoadAsync();
     }
 
-    private async Task DeleteAsync(FoodItem item)
+    private async Task UnretireMealAsync(Meal meal)
     {
-        // A Retired Food Item is never offered Retire, so confirming always means delete.
+        await App.Meals.UnretireMealAsync(meal.Id);
+        Snackbar.Add($"{meal.Name} is back in your Meals.", Severity.Success);
+        await LoadAsync();
+    }
+
+    // A Retired item is never offered Retire, so confirming always means delete.
+    private async Task DeleteFoodItemAsync(FoodItem item)
+    {
         var plan = await App.Food.PlanFoodItemDeletionAsync(item.Id);
         if (await DialogService.ConfirmDeletionAsync(plan))
         {
             await App.Food.DeleteFoodItemAsync(item.Id);
+            await LoadAsync();
+        }
+    }
+
+    private async Task DeleteMealAsync(Meal meal)
+    {
+        var plan = await App.Meals.PlanMealDeletionAsync(meal.Id);
+        if (await DialogService.ConfirmDeletionAsync(plan))
+        {
+            await App.Meals.DeleteMealAsync(meal.Id);
             await LoadAsync();
         }
     }

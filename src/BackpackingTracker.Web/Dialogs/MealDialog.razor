@@ -1,0 +1,225 @@
+@* Creates a Meal, or edits one (with Retire and Delete): its name, Food Items with servings, and Tags. Food Items are added
+   by searching and tapping; Retired ones aren't offered. Saves through the core and stays open if it refuses. *@
+@inject AppCore App
+@inject IDialogService DialogService
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="_form">
+            <MudTextField @bind-Value="_name" Label="Name (such as Ramen Bomb)" Required="true"
+                          RequiredError="Give the Meal a name" />
+
+            <MudText Typo="Typo.subtitle2" Class="mt-4">Food Items</MudText>
+            @foreach (var row in _rows)
+            {
+                <div class="d-flex align-center gap-2 meal-component">
+                    <div class="flex-grow-1">
+                        <MudText>@row.FoodItem.Name</MudText>
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                            @UnitFormat.Weight(row.FoodItem.ServingWeightGrams, UnitSystem) · @NutritionInput.Calories(row.FoodItem.CaloriesPerServing) each@(row.FoodItem.Retired ? " · Retired" : "")
+                        </MudText>
+                    </div>
+                    <MudTextField @bind-Value="row.ServingsText" Label="Servings" InputMode="@(InputMode.@decimal)" Immediate="true"
+                                  Validation="@(new Func<string?, string?>(text => ServingsInput.Parse(text).Error))" Class="meal-servings" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" aria-label="@($"Remove {row.FoodItem.Name}")"
+                                   OnClick="() => _rows.Remove(row)" />
+                </div>
+            }
+            @if (_rows.Count == 0)
+            {
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">Search below to add Food Items.</MudText>
+            }
+
+            <MudTextField @bind-Value="_searchText" Label="Add Food Item" Immediate="true" Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search" Clearable="true" Class="mt-2" />
+            @foreach (var item in Matches)
+            {
+                <div class="d-flex align-center py-2 gap-2 pick-row" role="button" tabindex="0"
+                     aria-label="@($"Add {item.Name}")" @onclick="() => Add(item)">
+                    <MudText Class="flex-grow-1">@item.Name</MudText>
+                    <MudIcon Icon="@Icons.Material.Filled.AddCircleOutline" Color="Color.Primary" />
+                </div>
+            }
+            @if (!string.IsNullOrWhiteSpace(_searchText) && Matches.Count == 0)
+            {
+                <MudText Typo="Typo.body2" Class="mud-text-secondary mt-1">No Food Items match.</MudText>
+            }
+
+            @if (Totals is { } totals)
+            {
+                <MudText Class="mt-3 meal-dialog-totals">
+                    Total: @UnitFormat.Weight(totals.WeightGrams, UnitSystem) · @NutritionInput.Calories(totals.Calories) · @CalorieDensity.Format(totals.CaloriesPerGram, UnitSystem)
+                </MudText>
+            }
+
+            <TagEditor @ref="_tagEditor" @bind-Tags="_tags" TagsInUse="_tagsInUse" />
+        </MudForm>
+        @if (_problem is not null)
+        {
+            <MudAlert Severity="Severity.Warning" Class="mt-3" Dense="true">@_problem</MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        @if (Meal is not null)
+        {
+            <MudButton Color="Color.Error" OnClick="DeleteAsync" Disabled="_busy">Delete</MudButton>
+            <MudButton OnClick="RetireAsync" Disabled="_busy">Retire</MudButton>
+            <MudSpacer />
+        }
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SaveAsync" Disabled="_busy">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private const int MostMatches = 6;
+
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    /// <summary>The Meal to edit, or null to create a new one.</summary>
+    [Parameter]
+    public MealView? Meal { get; set; }
+
+    [Parameter]
+    public UnitSystem UnitSystem { get; set; }
+
+    /// <summary>A Food Item in the Meal, with the servings as typed.</summary>
+    private sealed class ComponentRow(FoodItem foodItem, string servingsText)
+    {
+        public FoodItem FoodItem { get; } = foodItem;
+
+        public string? ServingsText { get; set; } = servingsText;
+    }
+
+    private MudForm _form = default!;
+    private TagEditor _tagEditor = default!;
+    private string? _name;
+    private readonly List<ComponentRow> _rows = [];
+    private string? _searchText;
+    private IReadOnlyList<FoodItem> _foodItems = [];
+    private IReadOnlyList<string> _tags = [];
+    private IReadOnlyList<string> _tagsInUse = [];
+    private string? _problem;
+    private bool _busy;
+
+    /// <summary>Food Items in use that match the search and aren't in the Meal yet.</summary>
+    private IReadOnlyList<FoodItem> Matches => string.IsNullOrWhiteSpace(_searchText)
+        ? []
+        : _foodItems
+            .Where(item => _rows.All(row => row.FoodItem.Id != item.Id))
+            .Where(new FoodFilter(_searchText).Matches)
+            .Take(MostMatches)
+            .ToList();
+
+    /// <summary>The totals as typed so far, or null while there's nothing to add up.</summary>
+    private MealTotals? Totals
+    {
+        get
+        {
+            var counted = _rows
+                .Select(row => (row.FoodItem, Servings: ServingsInput.Parse(row.ServingsText).Servings))
+                .Where(c => c.Servings is not null)
+                .Select(c => (c.FoodItem, c.Servings!.Value))
+                .ToList();
+            return counted.Count == 0 ? null : MealTotals.Of(counted);
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _foodItems = await App.Food.ListFoodItemsAsync();
+        _tagsInUse = await App.Meals.ListTagsAsync();
+
+        if (Meal is null)
+        {
+            return;
+        }
+
+        _name = Meal.Meal.Name;
+        _tags = Meal.Meal.Tags;
+        // A Food Item deleted on another device can't be shown or kept, so it drops out when saved.
+        foreach (var component in Meal.Components.Where(c => c.FoodItem is not null))
+        {
+            _rows.Add(new ComponentRow(component.FoodItem!, ServingsInput.Format(component.Component.Servings)));
+        }
+    }
+
+    private void Add(FoodItem item)
+    {
+        _rows.Add(new ComponentRow(item, "1"));
+        _searchText = null;
+        _problem = null;
+    }
+
+    private async Task SaveAsync()
+    {
+        await _form.ValidateAsync();
+        var components = _rows.Select(row => (row.FoodItem, ServingsInput.Parse(row.ServingsText).Servings)).ToList();
+        if (!_form.IsValid || components.Any(c => c.Servings is null))
+        {
+            return;
+        }
+
+        var details = new MealDetails(
+            _name ?? "",
+            components.Select(c => new MealComponent(c.FoodItem.Id, c.Servings!.Value)).ToList(),
+            _tagEditor.TagsIncludingTyped());
+
+        await RunAsync(async () =>
+        {
+            var saved = Meal is null
+                ? await App.Meals.CreateMealAsync(details)
+                : await App.Meals.UpdateMealAsync(Meal.Meal.Id, details);
+            MudDialog.Close(DialogResult.Ok(saved));
+        });
+    }
+
+    private Task RetireAsync() => RunAsync(async () =>
+    {
+        await App.Meals.RetireMealAsync(Meal!.Meal.Id);
+        MudDialog.Close(DialogResult.Ok(Meal));
+    });
+
+    private async Task DeleteAsync()
+    {
+        var plan = await App.Meals.PlanMealDeletionAsync(Meal!.Meal.Id);
+        if (!await DialogService.ConfirmDeletionAsync(plan))
+        {
+            return;
+        }
+
+        await RunAsync(async () =>
+        {
+            if (plan.CanDelete)
+            {
+                await App.Meals.DeleteMealAsync(Meal.Meal.Id);
+            }
+            else
+            {
+                await App.Meals.RetireMealAsync(Meal.Meal.Id);
+            }
+
+            MudDialog.Close(DialogResult.Ok(Meal));
+        });
+    }
+
+    /// <summary>Runs a change; if the core refuses it, shows why and keeps the dialog open.</summary>
+    private async Task RunAsync(Func<Task> change)
+    {
+        _busy = true;
+        _problem = null;
+        try
+        {
+            await change();
+        }
+        catch (RuleViolationException ex)
+        {
+            _problem = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}
