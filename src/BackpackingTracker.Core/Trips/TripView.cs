@@ -17,8 +17,8 @@ public sealed record TripView(
     /// <summary>How many entries the packing checklist has: one per Packing List entry, whatever its quantity.</summary>
     public int ChecklistCount => Trip.PackingList.Entries.Count;
 
-    /// <summary>Days and nights, route totals and pack weights, to review and compare Trips.</summary>
-    public TripStats Stats => TripStats.For(Trip, Weight);
+    /// <summary>Days and nights, route totals, pack weights and food, to review and compare Trips.</summary>
+    public TripStats Stats => TripStats.For(Trip, Weight, MealPlan);
 }
 
 /// <summary>

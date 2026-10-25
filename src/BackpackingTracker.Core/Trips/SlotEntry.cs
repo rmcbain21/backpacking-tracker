@@ -15,4 +15,10 @@ public sealed record SlotEntry
     public string? FoodItemId { get; init; }
 
     public required decimal Quantity { get; init; }
+
+    /// <summary>
+    /// One Meal's or serving's figures as they were when the Trip was Completed; null on a Planned Trip, whose food
+    /// uses each Meal's and Food Item's current values.
+    /// </summary>
+    public FoodFigures? Frozen { get; init; }
 }

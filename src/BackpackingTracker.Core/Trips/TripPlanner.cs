@@ -86,9 +86,10 @@ public sealed class TripPlanner : IGearItemReferences, IFoodItemReferences, IMea
     // ----- Trip Status, Save as Gear List and delete -----
 
     /// <summary>
-    /// Marks the Trip Completed, copying each Packing List entry's current Gear Item weight onto the entry, so
-    /// re-weighing gear later never changes this Trip's numbers. Its Packing List, checklist and dates are then
-    /// locked until it's Reopened.
+    /// Marks the Trip Completed, copying each Packing List entry's current Gear Item weight onto the entry, and each
+    /// slot entry's current weight, calories, protein and cost (a Meal's through its Food Items) onto the slot entry,
+    /// so later edits to gear or food never change this Trip's numbers. Its Packing List, checklist, Meal Plan and
+    /// dates are then locked until it's Reopened.
     /// </summary>
     public async Task CompleteTripAsync(string tripId)
     {
@@ -99,12 +100,19 @@ public sealed class TripPlanner : IGearItemReferences, IFoodItemReferences, IMea
         }
 
         var items = await _gear.GetGearItemsAsync(trip.PackingList.Entries.Select(entry => entry.GearItemId));
-        await SaveAsync(trip with { Status = TripStatus.Completed, PackingList = trip.PackingList.Freeze(items) });
+        var (meals, foodItems) = await LookUpFoodAsync([trip]);
+        await SaveAsync(trip with
+        {
+            Status = TripStatus.Completed,
+            PackingList = trip.PackingList.Freeze(items),
+            // A slot entry whose Meal or Food Item is gone is left unfrozen, so it still counts for nothing.
+            Days = WithSlotEntries(trip, entry => entry with { Frozen = MealPlanView.CurrentFigures(entry, meals, foodItems) }),
+        });
     }
 
     /// <summary>
-    /// Sets a Completed Trip back to Planned and clears its frozen weights, so it uses each Gear Item's current
-    /// weight again; completing it again takes a fresh freeze.
+    /// Sets a Completed Trip back to Planned and clears its frozen weights and food figures, so it uses each Gear
+    /// Item's, Meal's and Food Item's current values again; completing it again takes a fresh freeze.
     /// </summary>
     public async Task ReopenTripAsync(string tripId)
     {
@@ -114,8 +122,16 @@ public sealed class TripPlanner : IGearItemReferences, IFoodItemReferences, IMea
             throw new RuleViolationException("This Trip is already Planned.");
         }
 
-        await SaveAsync(trip with { Status = TripStatus.Planned, PackingList = trip.PackingList.Unfreeze() });
+        await SaveAsync(trip with
+        {
+            Status = TripStatus.Planned,
+            PackingList = trip.PackingList.Unfreeze(),
+            Days = WithSlotEntries(trip, entry => entry with { Frozen = null }),
+        });
     }
+
+    private static IReadOnlyList<TripDay> WithSlotEntries(Trip trip, Func<SlotEntry, SlotEntry> change) =>
+        trip.Days.Select(day => day with { SlotEntries = day.SlotEntries.Select(change).ToList() }).ToList();
 
     /// <summary>
     /// A new Gear List with copies of the Packing List's Categories and entries (Gear Item, quantity and Carry
@@ -411,9 +427,7 @@ public sealed class TripPlanner : IGearItemReferences, IFoodItemReferences, IMea
     private async Task<IReadOnlyList<TripView>> ViewAsync(IReadOnlyList<Trip> trips)
     {
         var items = await _gear.GetGearItemsAsync(trips.SelectMany(trip => trip.PackingList.Entries).Select(entry => entry.GearItemId));
-        var slotEntries = trips.SelectMany(trip => trip.Days).SelectMany(day => day.SlotEntries).ToList();
-        var meals = await _meals.GetMealsAsync(slotEntries.Select(entry => entry.MealId).OfType<string>());
-        var foodItems = await _food.GetFoodItemsAsync(slotEntries.Select(entry => entry.FoodItemId).OfType<string>());
+        var (meals, foodItems) = await LookUpFoodAsync(trips);
 
         return trips.Select(trip =>
         {
@@ -421,6 +435,16 @@ public sealed class TripPlanner : IGearItemReferences, IFoodItemReferences, IMea
             var view = trip.PackingList.View(items, trip.WaterCarriedGrams ?? 0m, mealPlan.FoodGrams);
             return new TripView(trip, view.Entries, view.Sections, view.Weight, mealPlan);
         }).ToList();
+    }
+
+    /// <summary>The Meals and Food Items the Trips' slot entries use, Retired or not, by id.</summary>
+    private async Task<(IReadOnlyDictionary<string, MealView> Meals, IReadOnlyDictionary<string, FoodItem> FoodItems)> LookUpFoodAsync(
+        IReadOnlyList<Trip> trips)
+    {
+        var slotEntries = trips.SelectMany(trip => trip.Days).SelectMany(day => day.SlotEntries).ToList();
+        var meals = await _meals.GetMealsAsync(slotEntries.Select(entry => entry.MealId).OfType<string>());
+        var foodItems = await _food.GetFoodItemsAsync(slotEntries.Select(entry => entry.FoodItemId).OfType<string>());
+        return (meals, foodItems);
     }
 
     /// <summary>

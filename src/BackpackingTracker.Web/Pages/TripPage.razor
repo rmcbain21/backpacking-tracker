@@ -48,7 +48,7 @@ else if (_view is not null)
     @if (Completed)
     {
         <MudAlert Severity="Severity.Info" Dense="true" Class="mb-2 completed-note">
-            Weights are frozen as they were when completed. Reopen to change the Packing List, checklist, Meal Plan or dates.
+            Weights and food are frozen as they were when completed. Reopen to change the Packing List, checklist, Meal Plan or dates.
         </MudAlert>
     }
 
@@ -280,7 +280,7 @@ else if (_view is not null)
 
     /// <summary>
     /// The Trip's stats: its length, then the route totals typed in on the Itinerary, then the calculated pack
-    /// weights (frozen on a Completed Trip). A route total no day has filled in shows as a dash.
+    /// weights and food (frozen on a Completed Trip). A total with nothing filled in shows as a dash.
     /// </summary>
     private RenderFragment Stats() => __builder =>
     {
@@ -304,6 +304,15 @@ else if (_view is not null)
             </MudText>
             @StatLine(("Starting Pack Weight", "stat-starting", UnitFormat.Weight(stats.StartingPackGrams, _unitSystem)))
             @StatLine(("Base Weight", "stat-base", UnitFormat.Weight(stats.BaseGrams, _unitSystem)))
+        </MudPaper>
+
+        <MudPaper Class="pa-3 mb-4 food-stats">
+            <MudText Typo="Typo.subtitle2" HtmlTag="h2">Food</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">
+                @(Completed ? "Frozen when the Trip was Completed." : "From the Meal Plan and each Meal's and Food Item's current values.")
+            </MudText>
+            @StatLine(("Calories per day", "stat-calories-per-day", stats.CaloriesPerDay is { } perDay ? NutritionInput.Calories(Math.Round(perDay, 0, MidpointRounding.AwayFromZero)) : "—"))
+            @StatLine(("Food cost", "stat-food-cost", stats.FoodCost is { } cost ? PriceInput.Format(cost) : "—"))
         </MudPaper>
     };
 
@@ -454,7 +463,7 @@ else if (_view is not null)
     {
         var confirmed = await DialogService.ShowMessageBoxAsync(
             "Mark Completed",
-            $"Mark {_view!.Trip.Name} Completed? Its weights are frozen as they are now, and its Packing List, checklist, Meal Plan and dates are locked until you Reopen it.",
+            $"Mark {_view!.Trip.Name} Completed? Its weights and food are frozen as they are now, and its Packing List, checklist, Meal Plan and dates are locked until you Reopen it.",
             yesText: "Mark Completed", cancelText: "Cancel");
         if (confirmed == true)
         {
@@ -466,7 +475,7 @@ else if (_view is not null)
     {
         var confirmed = await DialogService.ShowMessageBoxAsync(
             "Reopen Trip",
-            $"Reopen {_view!.Trip.Name}? It goes back to Planned and uses each Gear Item's current weight; completing it again freezes the weights afresh.",
+            $"Reopen {_view!.Trip.Name}? It goes back to Planned and uses the current weights and food; completing it again freezes them afresh.",
             yesText: "Reopen", cancelText: "Cancel");
         if (confirmed == true)
         {
