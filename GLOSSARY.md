@@ -95,6 +95,10 @@ _Avoid_: Itinerary Day, leg, segment, stage
 The route details of a Trip's Trip Days, read in order. A view across the Trip Days, not a separate list.
 _Avoid_: Route, plan
 
+**Skipped**:
+A Trip Day that was planned but not hiked, marked once the Trip has started instead of changing its dates, so the plan is kept. Stats leave it out of what was hiked, but its planned distance and its food still count.
+_Avoid_: Cancelled, missed, zero day
+
 ## Sync
 
 **Sync Conflict**:

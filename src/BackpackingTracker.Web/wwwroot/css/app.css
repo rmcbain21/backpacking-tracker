@@ -391,3 +391,8 @@ h1:focus {
         animation: none;
     }
 }
+
+/* A Skipped Trip Day on the Itinerary: still in order, with its plan, but faded beside the days hiked */
+.trip-day-skipped > :not(:first-child) {
+    opacity: 0.6;
+}

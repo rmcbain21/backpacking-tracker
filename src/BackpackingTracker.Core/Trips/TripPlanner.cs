@@ -249,6 +249,29 @@ public sealed class TripPlanner : IGearItemReferences, IFoodItemReferences, IMea
         return day;
     }
 
+    /// <summary>
+    /// Marks the Trip Day for that date Skipped (planned but not hiked), or not. Its route, notes and meals are
+    /// kept. Marking is refused before the Trip's start date; until then, changing the dates is how to change the
+    /// plan. Allowed on a Completed Trip, like the route.
+    /// </summary>
+    public async Task SetDaySkippedAsync(string tripId, DateOnly date, bool skipped)
+    {
+        var trip = await GetExistingTripAsync(tripId);
+        if (skipped && !HasStarted(trip))
+        {
+            throw new RuleViolationException("A day can be marked Skipped once the Trip has started. Until then, change its dates instead.");
+        }
+
+        if (!trip.Days.Any(day => day.Date == date))
+        {
+            throw new RuleViolationException("That day is no longer part of the Trip.");
+        }
+
+        await SaveAsync(trip with { Days = trip.Days.Select(day => day.Date == date ? day with { Skipped = skipped } : day).ToList() });
+    }
+
+    private bool HasStarted(Trip trip) => _clock.Today >= trip.StartDate;
+
     // ----- The Meal Plan -----
 
     /// <summary>
@@ -515,7 +538,7 @@ public sealed class TripPlanner : IGearItemReferences, IFoodItemReferences, IMea
         {
             var mealPlan = MealPlanView.For(trip, meals, foodItems);
             var view = trip.PackingList.View(items, trip.WaterCarriedGrams ?? 0m, mealPlan.FoodGrams);
-            return new TripView(trip, view.Entries, view.Sections, view.Weight, mealPlan);
+            return new TripView(trip, view.Entries, view.Sections, view.Weight, mealPlan, HasStarted(trip));
         }).ToList();
     }
 

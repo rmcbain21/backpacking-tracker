@@ -191,9 +191,17 @@ else if (_view is not null)
             {
                 var day = trip.Days[i];
                 var dayNumber = i + 1;
-                <div class="pa-3 pick-row trip-day" role="button" tabindex="0" data-date="@day.Date.ToString("yyyy-MM-dd")"
-                     aria-label="@($"Edit Day {dayNumber}")" @onclick="() => EditDayAsync(day, dayNumber)">
-                    <MudText Typo="Typo.subtitle2">Day @dayNumber · @TripDates.Day(day.Date)</MudText>
+                <div class="@($"pa-3 pick-row trip-day{(day.Skipped ? " trip-day-skipped" : "")}")" role="button" tabindex="0"
+                     data-date="@day.Date.ToString("yyyy-MM-dd")"
+                     aria-label="@($"Edit Day {dayNumber}{(day.Skipped ? ", Skipped" : "")}")" @onclick="() => EditDayAsync(day, dayNumber)">
+                    <div class="d-flex align-center gap-2">
+                        <MudText Typo="Typo.subtitle2">Day @dayNumber · @TripDates.Day(day.Date)</MudText>
+                        @if (day.Skipped)
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Outlined"
+                                     Icon="@Icons.Material.Filled.DoNotDisturbOn" Class="day-skipped-chip ma-0">Skipped</MudChip>
+                        }
+                    </div>
                     @if (!day.HasContent())
                     {
                         <MudText Typo="Typo.body2" Class="mud-text-secondary">Nothing yet. Tap to add the route and notes.</MudText>
@@ -292,9 +300,15 @@ else if (_view is not null)
     private RenderFragment Stats() => __builder =>
     {
         var stats = _view!.Stats;
-        <MudText Typo="Typo.h6" HtmlTag="p" Class="mb-3 trip-length">
-            @Plural(stats.Days, "day") · @Plural(stats.Nights, "night")
+        <MudText Typo="Typo.h6" HtmlTag="p" Class="@(stats.AnySkipped ? "trip-length" : "mb-3 trip-length")">
+            @Plural(stats.Days, "day") · @Plural(stats.Nights, "night")@(stats.AnySkipped ? " hiked" : "")
         </MudText>
+        @if (stats.AnySkipped)
+        {
+            <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3 trip-length-planned">
+                (@stats.PlannedDays planned)
+            </MudText>
+        }
 
         <MudPaper Class="pa-3 mb-4 route-stats">
             <MudText Typo="Typo.subtitle2" HtmlTag="h2">Route</MudText>
@@ -382,6 +396,7 @@ else if (_view is not null)
             { d => d.TripId, TripId },
             { d => d.Day, day },
             { d => d.UnitSystem, _unitSystem },
+            { d => d.CanSkip, _view!.HasStarted },
         };
         var options = new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Small };
         var dialog = await DialogService.ShowAsync<TripDayDialog>($"Day {dayNumber} · {TripDates.Day(day.Date)}", parameters, options);

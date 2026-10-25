@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace BackpackingTracker.Core.Trips;
 
 /// <summary>
@@ -24,20 +26,27 @@ public sealed record TripDay
 
     public string? JournalNotes { get; init; }
 
+    /// <summary>
+    /// Planned but not hiked, such as a first day lost to a late arrival. Set once the Trip has started instead of
+    /// changing its dates, so the plan is kept; stats leave the day out, except its planned distance and its food.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool Skipped { get; init; }
+
     /// <summary>The day's Meal Plan: what's in its Breakfast, Lunch, Dinner and Snacks slots, in the order added.</summary>
     public IReadOnlyList<SlotEntry> SlotEntries { get; init; } = [];
 
-    /// <summary>True when anything has been filled in or planned, so removing the day would lose it.</summary>
+    /// <summary>True when anything has been filled in, planned or marked, so removing the day would lose it.</summary>
     public bool HasContent() =>
         Start is not null || End is not null || Campsite is not null ||
         PlannedDistanceMetres is not null || ActualDistanceMetres is not null || ElevationGainMetres is not null ||
-        JournalNotes is not null || SlotEntries.Count > 0;
+        JournalNotes is not null || SlotEntries.Count > 0 || Skipped;
 
     /// <summary>Compares the slot entries one by one, so two days with the same plan are equal.</summary>
     public bool Equals(TripDay? other) =>
         other is not null &&
-        (Date, Start, End, Campsite, PlannedDistanceMetres, ActualDistanceMetres, ElevationGainMetres, JournalNotes) ==
-        (other.Date, other.Start, other.End, other.Campsite, other.PlannedDistanceMetres, other.ActualDistanceMetres, other.ElevationGainMetres, other.JournalNotes) &&
+        (Date, Start, End, Campsite, PlannedDistanceMetres, ActualDistanceMetres, ElevationGainMetres, JournalNotes, Skipped) ==
+        (other.Date, other.Start, other.End, other.Campsite, other.PlannedDistanceMetres, other.ActualDistanceMetres, other.ElevationGainMetres, other.JournalNotes, other.Skipped) &&
         SlotEntries.SequenceEqual(other.SlotEntries);
 
     public override int GetHashCode() => HashCode.Combine(Date, Start, End, Campsite, JournalNotes, SlotEntries.Count);

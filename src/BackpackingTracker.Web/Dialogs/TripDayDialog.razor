@@ -1,11 +1,20 @@
 @using BackpackingTracker.Core.Trips
-@* Edits one Trip Day: its route (start, end, campsite, distances, elevation gain) and journal notes.
+@* Edits one Trip Day: its route (start, end, campsite, distances, elevation gain), journal notes and, once the
+   Trip has started, whether it was Skipped.
    Distances and elevation are typed in the chosen units. A refusal is shown here so nothing typed is lost. *@
 @inject AppCore App
 
 <MudDialog>
     <DialogContent>
         <MudForm @ref="_form">
+            @if (CanSkip || Day.Skipped)
+            {
+                <MudSwitch T="bool" @bind-Value="_skipped" Color="Color.Warning" Class="day-skipped"
+                           Label="Skipped: planned but not hiked" />
+                <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">
+                    The plan is kept. Stats leave the day out, except its planned distance and its food.
+                </MudText>
+            }
             <MudTextField @bind-Value="_start" Label="Start (optional)" Class="day-start" />
             <MudTextField @bind-Value="_end" Label="End (optional)" Class="day-end" />
             <MudTextField @bind-Value="_campsite" Label="Campsite (optional)" Class="day-campsite" />
@@ -46,6 +55,10 @@
     [Parameter]
     public UnitSystem UnitSystem { get; set; }
 
+    /// <summary>The Trip has started, so the day can be marked Skipped (a Skipped day can always be un-marked).</summary>
+    [Parameter]
+    public bool CanSkip { get; set; }
+
     private MudForm _form = default!;
     private string? _start;
     private string? _end;
@@ -54,6 +67,7 @@
     private string? _actualText;
     private string? _elevationText;
     private string? _notes;
+    private bool _skipped;
     private string? _refusal;
 
     protected override void OnInitialized()
@@ -65,6 +79,7 @@
         _actualText = RouteInput.DistanceText(Day.ActualDistanceMetres, UnitSystem);
         _elevationText = RouteInput.ElevationText(Day.ElevationGainMetres, UnitSystem);
         _notes = Day.JournalNotes;
+        _skipped = Day.Skipped;
     }
 
     private LengthParseResult ParsePlanned(string? text) => RouteInput.ParseDistance(text, UnitSystem, Day.PlannedDistanceMetres);
@@ -88,6 +103,11 @@
         {
             await App.Trips.UpdateDayAsync(TripId, Day.Date, new TripDayDetails(
                 _start, _end, _campsite, planned.Metres, actual.Metres, elevation.Metres, _notes));
+            if (_skipped != Day.Skipped)
+            {
+                await App.Trips.SetDaySkippedAsync(TripId, Day.Date, _skipped);
+            }
+
             MudDialog.Close(DialogResult.Ok(true));
         }
         catch (RuleViolationException ex)

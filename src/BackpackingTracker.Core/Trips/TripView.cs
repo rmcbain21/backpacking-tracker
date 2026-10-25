@@ -8,8 +8,14 @@ namespace BackpackingTracker.Core.Trips;
 /// carried included). Sections lists every Category on the Packing List, in order, even empty ones, plus
 /// "No Category" last if any entry's Category is gone.
 /// </summary>
+/// <param name="HasStarted">Today is on or after the start date, so its days can be marked Skipped.</param>
 public sealed record TripView(
-    Trip Trip, IReadOnlyList<ListEntryView> Entries, IReadOnlyList<CategorySection> Sections, PackWeight Weight, MealPlanView MealPlan)
+    Trip Trip,
+    IReadOnlyList<ListEntryView> Entries,
+    IReadOnlyList<CategorySection> Sections,
+    PackWeight Weight,
+    MealPlanView MealPlan,
+    bool HasStarted)
 {
     /// <summary>How many Packing List entries are ticked on the packing checklist.</summary>
     public int PackedCount => Trip.PackingList.Entries.Count(entry => entry.Packed);
