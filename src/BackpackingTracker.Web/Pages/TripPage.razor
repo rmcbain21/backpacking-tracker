@@ -84,7 +84,7 @@ else if (_view is not null)
 
     private RenderFragment PackingList(Trip trip) => __builder =>
     {
-        <PackTotals Weight="_view!.Weight" UnitSystem="_unitSystem">
+        <PackTotals Weight="_view!.Weight" UnitSystem="_unitSystem" ShrinksToTop="true">
             <MudDivider Class="my-2" />
             <div class="d-flex align-center pick-row water-carried" role="button" tabindex="0" aria-label="Set water carried"
                  @onclick="SetWaterAsync">
