@@ -52,10 +52,11 @@ else if (_view is not null)
         </MudAlert>
     }
 
-    <MudTabs @bind-ActivePanelIndex="_tab" Elevation="0" TabPanelsClass="pt-3" MinimumTabWidth="80px" Class="trip-tabs">
+    <MudTabs @bind-ActivePanelIndex="_tab" Elevation="0" TabPanelsClass="pt-3" MinimumTabWidth="64px" Class="trip-tabs">
         <MudTabPanel Text="Packing List">@PackingList(trip)</MudTabPanel>
         <MudTabPanel Text="Checklist">@Checklist()</MudTabPanel>
         <MudTabPanel Text="Itinerary">@Itinerary(trip)</MudTabPanel>
+        <MudTabPanel Text="Stats">@Stats()</MudTabPanel>
     </MudTabs>
 
     @if (_tab == PackingListTab && !Completed)
@@ -217,6 +218,47 @@ else if (_view is not null)
             }
         </MudPaper>
     };
+
+    /// <summary>
+    /// The Trip's stats: its length, then the route totals typed in on the Itinerary, then the calculated pack
+    /// weights (frozen on a Completed Trip). A route total no day has filled in shows as a dash.
+    /// </summary>
+    private RenderFragment Stats() => __builder =>
+    {
+        var stats = _view!.Stats;
+        <MudText Typo="Typo.h6" HtmlTag="p" Class="mb-3 trip-length">
+            @Plural(stats.Days, "day") · @Plural(stats.Nights, "night")
+        </MudText>
+
+        <MudPaper Class="pa-3 mb-4 route-stats">
+            <MudText Typo="Typo.subtitle2" HtmlTag="h2">Route</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">Totals of what's typed in on the Itinerary.</MudText>
+            @StatLine(("Planned distance", "stat-planned", Recorded(stats.PlannedDistanceMetres, m => UnitFormat.Distance(m, _unitSystem))))
+            @StatLine(("Actual distance", "stat-actual", Recorded(stats.ActualDistanceMetres, m => UnitFormat.Distance(m, _unitSystem))))
+            @StatLine(("Elevation gain", "stat-gain", Recorded(stats.ElevationGainMetres, m => UnitFormat.Elevation(m, _unitSystem))))
+        </MudPaper>
+
+        <MudPaper Class="pa-3 mb-4 weight-stats">
+            <MudText Typo="Typo.subtitle2" HtmlTag="h2">Pack weight</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">
+                @(Completed ? "Frozen when the Trip was Completed." : "From the Packing List and each Gear Item's current weight.")
+            </MudText>
+            @StatLine(("Starting Pack Weight", "stat-starting", UnitFormat.Weight(stats.StartingPackGrams, _unitSystem)))
+            @StatLine(("Base Weight", "stat-base", UnitFormat.Weight(stats.BaseGrams, _unitSystem)))
+        </MudPaper>
+    };
+
+    private static RenderFragment StatLine((string Label, string Class, string Value) line) => __builder =>
+    {
+        <div class="d-flex justify-space-between py-1">
+            <MudText Typo="Typo.body2">@line.Label</MudText>
+            <MudText Typo="Typo.body2" Class="@($"text-nowrap {line.Class}")">@line.Value</MudText>
+        </div>
+    };
+
+    private static string Recorded(decimal? metres, Func<decimal, string> format) => metres is { } m ? format(m) : "—";
+
+    private static string Plural(int count, string noun) => $"{count} {noun}{(count == 1 ? "" : "s")}";
 
     /// <summary>"Start → End", or whichever of the two is filled in; null when neither is.</summary>
     private static string? RouteLine(TripDay day) => (day.Start, day.End) switch

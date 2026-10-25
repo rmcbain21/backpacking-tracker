@@ -18,3 +18,4 @@
 
 - Decided with the backpacker: the status is just "Skipped" (a hiked day needs no mark); stats leave Skipped days out except planned distance; their food still counts; it's offered from the start date. Add **Skipped** to `GLOSSARY.md` under Trips when this is built.
 - Open: whether "days and nights" in the stats should show the planned count too, for example "3 days hiked of 4 planned".
+- From ticket 16: `TripStats.For` counts every Trip Day for Days/Nights and sums every day's distances; leave out Skipped days there if the spec says so.

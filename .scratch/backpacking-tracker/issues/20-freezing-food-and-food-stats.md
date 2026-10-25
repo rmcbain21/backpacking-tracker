@@ -14,3 +14,4 @@
 
 ## Comments
 - From ticket 15: freeze the slot entries in `TripPlanner.CompleteTripAsync` and clear them in `ReopenTripAsync`, as `ListContents.Freeze` / `Unfreeze` do for Packing List weights.
+- From ticket 16: add calories per day and food cost to `TripStats` (`TripStats.For`, shown on the Stats tab's cards), and decide whether they're null like the route totals when the Meal Plan is empty.
