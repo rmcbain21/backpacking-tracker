@@ -12,6 +12,9 @@ public sealed record Category
     /// </summary>
     public static Category None { get; } = new() { Id = "", Name = "No Category" };
 
+    /// <summary>Names a Trip's Meal Plan food in the Category breakdown, where it has its own line. Never stored.</summary>
+    public static Category Food { get; } = new() { Id = "food", Name = "Food" };
+
     /// <summary>Names the water carried on a Trip in the Category breakdown, where it has its own line. Never stored.</summary>
     public static Category Water { get; } = new() { Id = "water", Name = "Water" };
 

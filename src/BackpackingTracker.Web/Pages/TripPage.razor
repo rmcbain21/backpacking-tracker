@@ -48,7 +48,7 @@ else if (_view is not null)
     @if (Completed)
     {
         <MudAlert Severity="Severity.Info" Dense="true" Class="mb-2 completed-note">
-            Weights are frozen as they were when completed. Reopen to change the Packing List, checklist or dates.
+            Weights are frozen as they were when completed. Reopen to change the Packing List, checklist, Meal Plan or dates.
         </MudAlert>
     }
 
@@ -56,6 +56,7 @@ else if (_view is not null)
         <MudTabPanel Text="Packing List">@PackingList(trip)</MudTabPanel>
         <MudTabPanel Text="Checklist">@Checklist()</MudTabPanel>
         <MudTabPanel Text="Itinerary">@Itinerary(trip)</MudTabPanel>
+        <MudTabPanel Text="Meals">@MealPlan()</MudTabPanel>
         <MudTabPanel Text="Stats">@Stats()</MudTabPanel>
     </MudTabs>
 
@@ -220,6 +221,64 @@ else if (_view is not null)
     };
 
     /// <summary>
+    /// The Meal Plan: each Trip Day's Breakfast, Lunch, Dinner and Snacks with what's in them, and the day's calories
+    /// and food weight. On a Planned Trip, a slot's + adds to it and tapping an entry changes or removes it.
+    /// </summary>
+    private RenderFragment MealPlan() => __builder =>
+    {
+        var plan = _view!.MealPlan;
+        <MudPaper Class="pa-3 mb-3 meal-plan-total">
+            <div class="d-flex justify-space-between">
+                <MudText Typo="Typo.body2">Food for the Trip</MudText>
+                <MudText Typo="Typo.body2" Class="text-nowrap">
+                    @NutritionInput.Calories(plan.Calories) · @UnitFormat.Weight(plan.FoodGrams, _unitSystem)
+                </MudText>
+            </div>
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">Counted in the Consumable Weight.</MudText>
+        </MudPaper>
+
+        @foreach (var dayPlan in plan.Days)
+        {
+            <MudPaper Class="mb-3 meal-plan-day" data-date="@dayPlan.Day.Date.ToString("yyyy-MM-dd")">
+                <div class="d-flex align-center px-3 pt-3 pb-1">
+                    <MudText Typo="Typo.subtitle2" Class="flex-grow-1">Day @dayPlan.DayNumber · @TripDates.Day(dayPlan.Day.Date)</MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary text-nowrap day-food-total">
+                        @(dayPlan.Day.SlotEntries.Count == 0 ? "Nothing planned" : $"{NutritionInput.Calories(dayPlan.Calories)} · {UnitFormat.Weight(dayPlan.FoodGrams, _unitSystem)}")
+                    </MudText>
+                </div>
+                @foreach (var slotView in dayPlan.Slots)
+                {
+                    var slot = slotView.Slot;
+                    <div class="d-flex align-center pl-3 pr-1 meal-slot-heading">
+                        <MudText Typo="Typo.caption" Class="flex-grow-1 mud-text-secondary meal-slot-name">@slot</MudText>
+                        @if (!Completed)
+                        {
+                            <MudIconButton Icon="@Icons.Material.Filled.Add" Size="Size.Small"
+                                           aria-label="@($"Add to Day {dayPlan.DayNumber} {slot}")"
+                                           OnClick="() => AddToSlotAsync(dayPlan, slot)" />
+                        }
+                    </div>
+                    @foreach (var entryView in slotView.Entries)
+                    {
+                        var name = entryView.Name ?? (entryView.IsMeal ? "Deleted Meal" : "Deleted Food Item");
+                        <div class="d-flex align-center px-3 py-1 gap-2 slot-entry @(Completed ? "" : "pick-row")"
+                             role="button" tabindex="@(Completed ? -1 : 0)" aria-label="@($"Change {name}")"
+                             @onclick="() => Completed ? Task.CompletedTask : EditSlotEntryAsync(dayPlan, entryView, name)">
+                            <MudText Typo="Typo.body2" Class="flex-grow-1">
+                                @name@(entryView.Entry.Quantity == 1m ? "" : $" ×{ServingsInput.Format(entryView.Entry.Quantity)}")
+                            </MudText>
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary text-nowrap">
+                                @NutritionInput.Calories(entryView.Calories) · @UnitFormat.Weight(entryView.WeightGrams, _unitSystem)
+                            </MudText>
+                        </div>
+                    }
+                }
+                <div class="pb-2"></div>
+            </MudPaper>
+        }
+    };
+
+    /// <summary>
     /// The Trip's stats: its length, then the route totals typed in on the Itinerary, then the calculated pack
     /// weights (frozen on a Completed Trip). A route total no day has filled in shows as a dash.
     /// </summary>
@@ -314,6 +373,34 @@ else if (_view is not null)
         await LoadAsync();
     }
 
+    private async Task AddToSlotAsync(DayMealPlan dayPlan, MealSlot slot)
+    {
+        var parameters = new DialogParameters<AddToSlotDialog>
+        {
+            { d => d.TripId, TripId },
+            { d => d.Date, dayPlan.Day.Date },
+            { d => d.Slot, slot },
+        };
+        var options = new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Small };
+        var dialog = await DialogService.ShowAsync<AddToSlotDialog>($"Day {dayPlan.DayNumber} · {slot}", parameters, options);
+        await dialog.Result;
+        await LoadAsync();
+    }
+
+    private async Task EditSlotEntryAsync(DayMealPlan dayPlan, SlotEntryView entryView, string name)
+    {
+        var parameters = new DialogParameters<SlotEntryDialog>
+        {
+            { d => d.TripId, TripId },
+            { d => d.Date, dayPlan.Day.Date },
+            { d => d.Entry, entryView.Entry },
+        };
+        var options = new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.ExtraSmall };
+        var dialog = await DialogService.ShowAsync<SlotEntryDialog>(name, parameters, options);
+        await dialog.Result;
+        await LoadAsync();
+    }
+
     private async Task SetWaterAsync()
     {
         var parameters = new DialogParameters<WaterDialog>
@@ -367,7 +454,7 @@ else if (_view is not null)
     {
         var confirmed = await DialogService.ShowMessageBoxAsync(
             "Mark Completed",
-            $"Mark {_view!.Trip.Name} Completed? Its weights are frozen as they are now, and its Packing List, checklist and dates are locked until you Reopen it.",
+            $"Mark {_view!.Trip.Name} Completed? Its weights are frozen as they are now, and its Packing List, checklist, Meal Plan and dates are locked until you Reopen it.",
             yesText: "Mark Completed", cancelText: "Cancel");
         if (confirmed == true)
         {

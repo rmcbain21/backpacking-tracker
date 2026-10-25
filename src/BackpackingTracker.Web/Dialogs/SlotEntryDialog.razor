@@ -1,0 +1,70 @@
+@using BackpackingTracker.Core.Trips
+@* Changes how many of a Meal (or servings of a Food Item) a meal slot has, or takes it out of the slot. *@
+@inject AppCore App
+
+<MudDialog>
+    <DialogContent>
+        <MudTextField @bind-Value="_quantityText" Label="@(Entry.MealId is null ? "Servings" : "How many")" InputMode="@(InputMode.@decimal)"
+                      Immediate="true" Validation="@(new Func<string?, string?>(text => ServingsInput.Parse(text).Error))" Class="slot-quantity" />
+        @if (_problem is not null)
+        {
+            <MudAlert Severity="Severity.Warning" Class="mt-3" Dense="true">@_problem</MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton Color="Color.Error" OnClick="RemoveAsync" Disabled="_busy">Remove</MudButton>
+        <MudSpacer />
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SaveAsync" Disabled="_busy">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter, EditorRequired]
+    public string TripId { get; set; } = "";
+
+    [Parameter, EditorRequired]
+    public DateOnly Date { get; set; }
+
+    [Parameter, EditorRequired]
+    public SlotEntry Entry { get; set; } = default!;
+
+    private string? _quantityText;
+    private string? _problem;
+    private bool _busy;
+
+    protected override void OnInitialized() => _quantityText = ServingsInput.Format(Entry.Quantity);
+
+    private Task SaveAsync()
+    {
+        var quantity = ServingsInput.Parse(_quantityText);
+        return quantity.Servings is { } amount
+            ? RunAsync(() => App.Trips.UpdateSlotEntryAsync(TripId, Date, Entry.Id, amount))
+            : Task.CompletedTask;
+    }
+
+    private Task RemoveAsync() => RunAsync(() => App.Trips.RemoveSlotEntryAsync(TripId, Date, Entry.Id));
+
+    /// <summary>Runs a change and closes; if the core refuses it, shows why and keeps the dialog open.</summary>
+    private async Task RunAsync(Func<Task> change)
+    {
+        _busy = true;
+        _problem = null;
+        try
+        {
+            await change();
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (RuleViolationException ex)
+        {
+            _problem = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

@@ -1,3 +1,4 @@
+using BackpackingTracker.Core.Food;
 using BackpackingTracker.Core.Gear;
 using BackpackingTracker.Core.Lists;
 using BackpackingTracker.Core.Ports;
@@ -6,11 +7,12 @@ namespace BackpackingTracker.Core.Trips;
 
 /// <summary>
 /// Trips, each with its own Packing List copied from a Gear List (or started empty) and then edited on
-/// that Trip only, and one Trip Day per calendar day. A Planned Trip's weights always come from each Gear
-/// Item's current weight; a Completed Trip's are frozen, and its Packing List, checklist and dates are locked
-/// until it's Reopened. Its Trip Days' route and journal notes, and its water carried, stay editable.
+/// that Trip only, and one Trip Day per calendar day with its route, journal notes and Meal Plan. A Planned
+/// Trip's weights always come from each Gear Item's current weight, and its food from each Meal's and Food
+/// Item's current values; a Completed Trip's weights are frozen, and its Packing List, checklist, Meal Plan and
+/// dates are locked until it's Reopened. Its Trip Days' route and journal notes, and its water carried, stay editable.
 /// </summary>
-public sealed class TripPlanner : IGearItemReferences
+public sealed class TripPlanner : IGearItemReferences, IFoodItemReferences, IMealReferences
 {
     internal const string Table = "trips";
 
@@ -20,13 +22,17 @@ public sealed class TripPlanner : IGearItemReferences
     private readonly IClock _clock;
     private readonly GearCatalogue _gear;
     private readonly GearLists _lists;
+    private readonly FoodCatalogue _food;
+    private readonly MealCatalogue _meals;
 
-    public TripPlanner(IRecordStore store, IClock clock, GearCatalogue gear, GearLists lists)
+    public TripPlanner(IRecordStore store, IClock clock, GearCatalogue gear, GearLists lists, FoodCatalogue food, MealCatalogue meals)
     {
         _store = store;
         _clock = clock;
         _gear = gear;
         _lists = lists;
+        _food = food;
+        _meals = meals;
     }
 
     /// <summary>
@@ -57,9 +63,7 @@ public sealed class TripPlanner : IGearItemReferences
 
     public async Task<TripListing> ListTripsAsync()
     {
-        var trips = await LoadTripsAsync();
-        var items = await _gear.GetGearItemsAsync(trips.SelectMany(trip => trip.PackingList.Entries).Select(entry => entry.GearItemId));
-        var views = trips.Select(trip => View(trip, items)).ToList();
+        var views = await ViewAsync(await LoadTripsAsync());
 
         return new TripListing(
             views.Where(view => view.Trip.Status == TripStatus.Planned)
@@ -72,17 +76,11 @@ public sealed class TripPlanner : IGearItemReferences
                 .ToList());
     }
 
-    /// <summary>A Trip with its Packing List's current weights and totals, or null if there's no such Trip.</summary>
+    /// <summary>A Trip with its Packing List's current weights, its Meal Plan and its totals, or null if there's no such Trip.</summary>
     public async Task<TripView?> GetTripAsync(string tripId)
     {
         var trip = await FindTripAsync(tripId);
-        if (trip is null)
-        {
-            return null;
-        }
-
-        var items = await _gear.GetGearItemsAsync(trip.PackingList.Entries.Select(entry => entry.GearItemId));
-        return View(trip, items);
+        return trip is null ? null : (await ViewAsync([trip]))[0];
     }
 
     // ----- Trip Status, Save as Gear List and delete -----
@@ -235,6 +233,114 @@ public sealed class TripPlanner : IGearItemReferences
         return day;
     }
 
+    // ----- The Meal Plan -----
+
+    /// <summary>
+    /// Puts a Meal in one of the Trip Day's slots with the quantity (1 unless given). If the slot already has that
+    /// Meal, adds to its quantity instead. Retired Meals can't be added.
+    /// </summary>
+    public async Task<SlotEntry> AddMealToSlotAsync(string tripId, DateOnly date, MealSlot slot, string mealId, decimal quantity = 1m)
+    {
+        var meal = await _meals.GetMealAsync(mealId) ?? throw new RuleViolationException("That Meal no longer exists.");
+        if (meal.Meal.Retired)
+        {
+            throw new RuleViolationException($"{meal.Meal.Name} is Retired, so it can't be added to the Meal Plan.");
+        }
+
+        return await AddToSlotAsync(tripId, date, slot, quantity, entry => entry.MealId == mealId,
+            new SlotEntry { Id = Guid.NewGuid().ToString(), Slot = slot, MealId = mealId, Quantity = quantity });
+    }
+
+    /// <summary>
+    /// Puts servings of a Food Item in one of the Trip Day's slots (1 unless given). If the slot already has that
+    /// Food Item, adds to its servings instead. Retired Food Items can't be added.
+    /// </summary>
+    public async Task<SlotEntry> AddFoodItemToSlotAsync(string tripId, DateOnly date, MealSlot slot, string foodItemId, decimal quantity = 1m)
+    {
+        var item = await _food.GetFoodItemAsync(foodItemId) ?? throw new RuleViolationException("That Food Item no longer exists.");
+        if (item.Retired)
+        {
+            throw new RuleViolationException($"{item.Name} is Retired, so it can't be added to the Meal Plan.");
+        }
+
+        return await AddToSlotAsync(tripId, date, slot, quantity, entry => entry.FoodItemId == foodItemId,
+            new SlotEntry { Id = Guid.NewGuid().ToString(), Slot = slot, FoodItemId = foodItemId, Quantity = quantity });
+    }
+
+    private async Task<SlotEntry> AddToSlotAsync(
+        string tripId, DateOnly date, MealSlot slot, decimal quantity, Func<SlotEntry, bool> sameThing, SlotEntry newEntry)
+    {
+        CheckSlot(slot);
+        var amount = CheckedQuantity(quantity);
+        SlotEntry added = newEntry with { Quantity = amount };
+        await ChangeDayAsync(tripId, date, day =>
+        {
+            var existing = day.SlotEntries.FirstOrDefault(entry => entry.Slot == slot && sameThing(entry));
+            if (existing is null)
+            {
+                return day with { SlotEntries = [.. day.SlotEntries, added] };
+            }
+
+            added = existing with { Quantity = existing.Quantity + amount };
+            return day with { SlotEntries = day.SlotEntries.Select(entry => entry.Id == existing.Id ? added : entry).ToList() };
+        });
+        return added;
+    }
+
+    /// <summary>Changes how many of a Meal, or servings of a Food Item, a slot entry has.</summary>
+    public async Task UpdateSlotEntryAsync(string tripId, DateOnly date, string slotEntryId, decimal quantity)
+    {
+        var amount = CheckedQuantity(quantity);
+        await ChangeDayAsync(tripId, date, day =>
+        {
+            FindSlotEntry(day, slotEntryId);
+            return day with
+            {
+                SlotEntries = day.SlotEntries.Select(entry => entry.Id == slotEntryId ? entry with { Quantity = amount } : entry).ToList(),
+            };
+        });
+    }
+
+    public async Task RemoveSlotEntryAsync(string tripId, DateOnly date, string slotEntryId) =>
+        await ChangeDayAsync(tripId, date, day =>
+        {
+            FindSlotEntry(day, slotEntryId);
+            return day with { SlotEntries = day.SlotEntries.Where(entry => entry.Id != slotEntryId).ToList() };
+        });
+
+    /// <summary>Changes the Meal Plan of the Trip Day for that date; refused on a Completed Trip.</summary>
+    private async Task ChangeDayAsync(string tripId, DateOnly date, Func<TripDay, TripDay> change)
+    {
+        var trip = await GetPlannedTripAsync(tripId, "its Meal Plan");
+        var index = trip.Days.ToList().FindIndex(day => day.Date == date);
+        if (index < 0)
+        {
+            throw new RuleViolationException("That day is no longer part of the Trip.");
+        }
+
+        var changed = change(trip.Days[index]);
+        await SaveAsync(trip with { Days = trip.Days.Select((d, i) => i == index ? changed : d).ToList() });
+    }
+
+    private static SlotEntry FindSlotEntry(TripDay day, string slotEntryId) =>
+        day.SlotEntries.SingleOrDefault(entry => entry.Id == slotEntryId)
+            ?? throw new RuleViolationException("That is no longer in the Meal Plan.");
+
+    private static void CheckSlot(MealSlot slot)
+    {
+        if (!Enum.IsDefined(slot))
+        {
+            throw new RuleViolationException("Choose Breakfast, Lunch, Dinner or Snacks.");
+        }
+    }
+
+    /// <summary>The quantity to 0.01, refused unless it's more than zero.</summary>
+    private static decimal CheckedQuantity(decimal quantity)
+    {
+        var rounded = ServingsInput.Round(quantity);
+        return rounded > 0 ? rounded : throw new RuleViolationException("A quantity must be more than zero.");
+    }
+
     /// <summary>
     /// What changing the Trip's start or end date would do, with each day staying on its date: the dates it
     /// adds, and the days it removes and whether each has content.
@@ -301,10 +407,20 @@ public sealed class TripPlanner : IGearItemReferences
 
     // ----- Views, loading and saving -----
 
-    private static TripView View(Trip trip, IReadOnlyDictionary<string, GearItem> items)
+    /// <summary>The Trips as views, looking up the Gear Items, Meals and Food Items they use once for all of them.</summary>
+    private async Task<IReadOnlyList<TripView>> ViewAsync(IReadOnlyList<Trip> trips)
     {
-        var view = trip.PackingList.View(items, trip.WaterCarriedGrams ?? 0m);
-        return new TripView(trip, view.Entries, view.Sections, view.Weight);
+        var items = await _gear.GetGearItemsAsync(trips.SelectMany(trip => trip.PackingList.Entries).Select(entry => entry.GearItemId));
+        var slotEntries = trips.SelectMany(trip => trip.Days).SelectMany(day => day.SlotEntries).ToList();
+        var meals = await _meals.GetMealsAsync(slotEntries.Select(entry => entry.MealId).OfType<string>());
+        var foodItems = await _food.GetFoodItemsAsync(slotEntries.Select(entry => entry.FoodItemId).OfType<string>());
+
+        return trips.Select(trip =>
+        {
+            var mealPlan = MealPlanView.For(trip, meals, foodItems);
+            var view = trip.PackingList.View(items, trip.WaterCarriedGrams ?? 0m, mealPlan.FoodGrams);
+            return new TripView(trip, view.Entries, view.Sections, view.Weight, mealPlan);
+        }).ToList();
     }
 
     /// <summary>
@@ -341,6 +457,21 @@ public sealed class TripPlanner : IGearItemReferences
     public async Task<IReadOnlyList<string>> FindUsesAsync(string gearItemId) =>
         (await LoadTripsAsync())
             .Where(trip => trip.PackingList.Entries.Any(entry => entry.GearItemId == gearItemId))
+            .OrderBy(trip => trip.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(trip => $"Trip \"{trip.Name}\"")
+            .ToList();
+
+    /// <summary>The Trips whose Meal Plans have the Food Item in a slot, by name, each once.</summary>
+    async Task<IReadOnlyList<string>> IFoodItemReferences.FindUsesAsync(string foodItemId) =>
+        await FindMealPlanUsesAsync(entry => entry.FoodItemId == foodItemId);
+
+    /// <summary>The Trips whose Meal Plans have the Meal in a slot, by name, each once.</summary>
+    async Task<IReadOnlyList<string>> IMealReferences.FindUsesAsync(string mealId) =>
+        await FindMealPlanUsesAsync(entry => entry.MealId == mealId);
+
+    private async Task<IReadOnlyList<string>> FindMealPlanUsesAsync(Func<SlotEntry, bool> uses) =>
+        (await LoadTripsAsync())
+            .Where(trip => trip.Days.SelectMany(day => day.SlotEntries).Any(uses))
             .OrderBy(trip => trip.Name, StringComparer.OrdinalIgnoreCase)
             .Select(trip => $"Trip \"{trip.Name}\"")
             .ToList();

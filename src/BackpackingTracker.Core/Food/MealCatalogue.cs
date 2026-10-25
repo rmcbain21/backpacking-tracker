@@ -125,6 +125,17 @@ public sealed class MealCatalogue : IFoodItemReferences
         return meal is null ? null : (await ViewAsync([meal]))[0];
     }
 
+    /// <summary>
+    /// The Meals with these ids, Retired or not, with their totals, keyed by id, loading everything once.
+    /// Ids of deleted or unknown Meals are left out.
+    /// </summary>
+    public async Task<IReadOnlyDictionary<string, MealView>> GetMealsAsync(IEnumerable<string> mealIds)
+    {
+        var wanted = mealIds.ToHashSet();
+        var meals = (await LoadMealsAsync()).Where(meal => wanted.Contains(meal.Id)).ToList();
+        return (await ViewAsync(meals)).ToDictionary(view => view.Meal.Id);
+    }
+
     /// <summary>Looks up each Meal's Food Items (loading the catalogue once) and adds up its totals.</summary>
     private async Task<IReadOnlyList<MealView>> ViewAsync(IReadOnlyList<Meal> meals)
     {

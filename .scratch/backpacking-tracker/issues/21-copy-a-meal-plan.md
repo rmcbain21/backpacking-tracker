@@ -11,3 +11,4 @@
 - [ ] Copying is refused when the target Trip is Completed.
 - [ ] Copied slot entries reference the same Meals and Food Items (not frozen values from a Completed source).
 - [ ] Core tests cover day mapping, length mismatch in both directions, the confirmation and the Completed refusal.
+- From ticket 19: a day's Meal Plan is `TripDay.SlotEntries`; copying means giving each copied entry a new `Id` and saving through the Planned-only path (`GetPlannedTripAsync(..., "its Meal Plan")`). `HasContent`-style check for "target slot already has content": `day.SlotEntries.Any(e => e.Slot == slot)`.

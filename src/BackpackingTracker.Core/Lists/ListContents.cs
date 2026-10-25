@@ -132,7 +132,8 @@ public sealed record ListContents
     /// </summary>
     /// <param name="items">The Gear Items the entries use, by id; a missing one was deleted on another device.</param>
     /// <param name="waterGrams">Water carried, on a Trip; counted as Consumable Weight.</param>
-    internal ListContentsView View(IReadOnlyDictionary<string, GearItem> items, decimal waterGrams = 0m)
+    /// <param name="foodGrams">Meal Plan food, on a Trip; counted as Consumable Weight.</param>
+    internal ListContentsView View(IReadOnlyDictionary<string, GearItem> items, decimal waterGrams = 0m, decimal foodGrams = 0m)
     {
         var entries = Entries
             .Select(entry =>
@@ -148,7 +149,7 @@ public sealed record ListContents
             .ToList();
 
         var views = entries.Select(e => e.View).ToList();
-        var weight = WeightCalculator.Calculate(entries.Select(e => e.Weighed), Categories, waterGrams);
+        var weight = WeightCalculator.Calculate(entries.Select(e => e.Weighed), Categories, waterGrams, foodGrams);
         return new ListContentsView(views, Sections(views), weight);
     }
 

@@ -4,12 +4,12 @@ using BackpackingTracker.Core.Weight;
 namespace BackpackingTracker.Core.Trips;
 
 /// <summary>
-/// A Trip with its Packing List entries' current weights and its totals (water carried included). Sections
-/// lists every Category on the Packing List, in order, even empty ones, plus "No Category" last if any
-/// entry's Category is gone.
+/// A Trip with its Packing List entries' current weights, its Meal Plan, and its totals (Meal Plan food and water
+/// carried included). Sections lists every Category on the Packing List, in order, even empty ones, plus
+/// "No Category" last if any entry's Category is gone.
 /// </summary>
 public sealed record TripView(
-    Trip Trip, IReadOnlyList<ListEntryView> Entries, IReadOnlyList<CategorySection> Sections, PackWeight Weight)
+    Trip Trip, IReadOnlyList<ListEntryView> Entries, IReadOnlyList<CategorySection> Sections, PackWeight Weight, MealPlanView MealPlan)
 {
     /// <summary>How many Packing List entries are ticked on the packing checklist.</summary>
     public int PackedCount => Trip.PackingList.Entries.Count(entry => entry.Packed);

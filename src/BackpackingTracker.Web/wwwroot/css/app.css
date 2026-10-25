@@ -324,3 +324,12 @@ h1:focus {
 .meal-servings {
     flex: 0 0 80px;
 }
+
+/* A Trip's Meal Plan: small slot headings with their + button, and compact entry rows under each */
+.meal-slot-heading {
+    min-height: 32px;
+}
+
+.slot-entry {
+    min-height: 36px;
+}
