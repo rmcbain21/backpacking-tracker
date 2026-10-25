@@ -1,6 +1,9 @@
 @page "/settings"
+@using System.Text
+@using BackpackingTracker.Core.Sync
 @inject AppCore App
 @inject ThemeState Theme
+@inject IJSRuntime JS
 
 <PageTitle>Settings</PageTitle>
 
@@ -68,8 +71,54 @@
     </MudButton>
 </MudPaper>
 
+<MudPaper Class="pa-4 mt-4">
+    <MudText Typo="Typo.subtitle1">Backup</MudText>
+    <MudText Typo="Typo.body2" Class="mud-text-secondary mt-1">
+        Export saves all your data to a file. Importing a file merges it with what's here: for anything in both,
+        the more recently changed version is kept.
+    </MudText>
+    <div class="d-flex flex-wrap gap-2 mt-2">
+        <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Download" OnClick="ExportAsync" Disabled="_busy">
+            Export
+        </MudButton>
+        <MudButton HtmlTag="label" for="backup-file" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.UploadFile"
+                   Disabled="_busy">Import</MudButton>
+        <InputFile id="backup-file" OnChange="ImportAsync" accept=".json,application/json" hidden />
+    </div>
+
+    @if (_busy)
+    {
+        <MudProgressLinear Indeterminate="true" Class="mt-2" />
+    }
+
+    @if (_backupProblem is not null)
+    {
+        <MudAlert Severity="Severity.Error" Class="mt-2">@_backupProblem</MudAlert>
+    }
+
+    @if (_importSummary is not null)
+    {
+        <MudAlert Severity="Severity.Success" Class="mt-2">
+            @if (_importSummary.NothingChanged)
+            {
+                <text>Imported. Nothing changed: you already had everything in that file.</text>
+            }
+            else
+            {
+                <text>Imported: @string.Join(" · ", _importSummary.Changes.Select(Describe))</text>
+            }
+        </MudAlert>
+    }
+</MudPaper>
+
 @code {
+    // Room for years of trips; a backup is mostly text.
+    private const long MaxBackupBytes = 50_000_000;
+
     private UnitSystem _unitSystem;
+    private bool _busy;
+    private string? _backupProblem;
+    private ImportSummary? _importSummary;
 
     // Whether the app is showing dark colours now, from MainLayout's MudThemeProvider.
     [CascadingParameter(Name = "IsDarkMode")]
@@ -102,6 +151,62 @@
     {
         await App.Settings.SetTextSizeAsync(textSize);
         Theme.Set(Theme.Palette, Theme.Appearance, textSize);
+    }
+
+    private async Task ExportAsync()
+    {
+        _busy = true;
+        _backupProblem = null;
+        _importSummary = null;
+        try
+        {
+            var json = await App.Backup.ExportAsync();
+            await JS.InvokeVoidAsync("downloadFile", $"backpacking-tracker-{DateTime.Now:yyyy-MM-dd}.json", json, "application/json");
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ImportAsync(InputFileChangeEventArgs e)
+    {
+        _busy = true;
+        _backupProblem = null;
+        _importSummary = null;
+        try
+        {
+            if (e.File.Size > MaxBackupBytes)
+            {
+                _backupProblem = "That file is too big to be a Backpacking Tracker export (over 50 MB).";
+                return;
+            }
+
+            using var reader = new StreamReader(e.File.OpenReadStream(MaxBackupBytes), Encoding.UTF8);
+            _importSummary = await App.Backup.ImportAsync(await reader.ReadToEndAsync());
+
+            // The file may have brought newer Settings.
+            var settings = await App.Settings.GetAsync();
+            _unitSystem = settings.UnitSystem;
+            Theme.Set(settings.Palette, settings.Appearance, settings.TextSize);
+        }
+        catch (RuleViolationException ex)
+        {
+            _backupProblem = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    /// <summary>Such as "Gear Items: 3 added, 1 updated".</summary>
+    private static string Describe(RecordTypeChanges changes)
+    {
+        var parts = new[] { (changes.Added, "added"), (changes.Updated, "updated"), (changes.Deleted, "deleted") }
+            .Where(part => part.Item1 > 0)
+            .Select(part => $"{part.Item1} {part.Item2}");
+        return $"{changes.RecordType}: {string.Join(", ", parts)}";
     }
 
     private static (string Background, string Main, string Accent) Swatch(Palette palette) =>

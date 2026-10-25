@@ -5,7 +5,7 @@ namespace BackpackingTracker.Core.Preferences;
 
 public sealed class UserSettings
 {
-    private const string Table = "settings";
+    internal const string Table = "settings";
 
     // There is only ever one Settings record. A fixed id (rather than a new GUID per device)
     // means every device edits the same record, so sync merges it instead of duplicating it.

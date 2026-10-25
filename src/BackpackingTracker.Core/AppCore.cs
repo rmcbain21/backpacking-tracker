@@ -4,6 +4,7 @@ using BackpackingTracker.Core.Import;
 using BackpackingTracker.Core.Lists;
 using BackpackingTracker.Core.Ports;
 using BackpackingTracker.Core.Preferences;
+using BackpackingTracker.Core.Sync;
 using BackpackingTracker.Core.Trips;
 
 namespace BackpackingTracker.Core;
@@ -22,6 +23,7 @@ public sealed class AppCore
         Food = new FoodCatalogue(store, clock);
         Meals = new MealCatalogue(store, clock, Food);
         Trips = new TripPlanner(store, clock, Gear, Lists, Food, Meals);
+        Backup = new Backup(store);
 
         // Every area that refers to Gear Items takes part in the Gear Item delete check.
         Gear.AddReferences(Lists);
@@ -46,4 +48,6 @@ public sealed class AppCore
     public FoodCatalogue Food { get; }
 
     public MealCatalogue Meals { get; }
+
+    public Backup Backup { get; }
 }
