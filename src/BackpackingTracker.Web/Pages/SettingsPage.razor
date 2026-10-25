@@ -5,8 +5,9 @@
 @using BackpackingTracker.Web.Adapters
 @inject AppCore App
 @inject GoogleDriveFileStore Drive
+@inject AutoSyncRunner Runner
+@implements IDisposable
 @inject ThemeState Theme
-@inject PendingConflicts Pending
 @inject IJSRuntime JS
 
 <PageTitle>Settings</PageTitle>
@@ -84,7 +85,7 @@
             hidden file there, not your other files.
         </MudText>
         <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.CloudSync" Class="mt-2"
-                   OnClick="ConnectAsync" Disabled="_syncing">Connect Google Drive</MudButton>
+                   OnClick="ConnectAsync" Disabled="Syncing">Connect Google Drive</MudButton>
     }
     else if (_syncStatus is { Connected: true })
     {
@@ -93,9 +94,9 @@
         </MudText>
         <div class="d-flex flex-wrap gap-2 mt-2">
             <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Sync"
-                       OnClick="SyncNowAsync" Disabled="_syncing">Sync now</MudButton>
+                       OnClick="SyncNowAsync" Disabled="Syncing">Sync now</MudButton>
             <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.CloudOff"
-                       OnClick="DisconnectAsync" Disabled="_syncing">Disconnect</MudButton>
+                       OnClick="DisconnectAsync" Disabled="Syncing">Disconnect</MudButton>
         </div>
     }
 
@@ -105,14 +106,20 @@
                    Class="mt-2">@pending Sync @(pending == 1 ? "Conflict" : "Conflicts") to settle</MudButton>
     }
 
-    @if (_syncing)
+    @if (Syncing)
     {
         <MudProgressLinear Indeterminate="true" Class="mt-2" />
     }
 
-    @if (_syncProblem is not null)
+    @if (_signInProblem is not null)
     {
-        <MudAlert Severity="Severity.Error" Class="mt-2">@_syncProblem</MudAlert>
+        <MudAlert Severity="Severity.Error" Class="mt-2">@_signInProblem</MudAlert>
+    }
+    else if (_syncStatus is { Connected: true } && App.AutoSync is { Syncing: false, Problem: not SyncProblem.None, Message: { } problem })
+    {
+        <MudAlert Severity="@(App.AutoSync.Problem == SyncProblem.Offline ? Severity.Info : Severity.Warning)" Class="mt-2">
+            @problem
+        </MudAlert>
     }
 
     @if (_syncSummary is not null)
@@ -174,9 +181,10 @@
     private string? _backupProblem;
     private ChangeSummary? _importSummary;
     private SyncStatus? _syncStatus;
-    private bool _syncing;
-    private string? _syncProblem;
+    private string? _signInProblem;
     private ChangeSummary? _syncSummary;
+
+    private bool Syncing => App.AutoSync.Syncing;
 
     // Whether the app is showing dark colours now, from MainLayout's MudThemeProvider.
     [CascadingParameter(Name = "IsDarkMode")]
@@ -186,64 +194,53 @@
     {
         _unitSystem = (await App.Settings.GetAsync()).UnitSystem;
         _syncStatus = await App.Sync.GetStatusAsync();
-        await Drive.PreloadAsync();
+        App.AutoSync.Changed += OnSyncChanged;
     }
 
-    private async Task ConnectAsync()
+    // Automatic sync can run while this page is open: show its outcome.
+    private void OnSyncChanged() => InvokeAsync(async () =>
     {
-        await RunSyncAsync(async () =>
-        {
-            await Drive.SignInAsync();
-            await App.Sync.ConnectAsync();
-            await SyncAndShowAsync();
-        });
-    }
+        _syncStatus = await App.Sync.GetStatusAsync();
+        _unitSystem = (await App.Settings.GetAsync()).UnitSystem;
+        StateHasChanged();
+    });
 
-    private Task SyncNowAsync() =>
+    private Task ConnectAsync() =>
         RunSyncAsync(async () =>
         {
-            // The token is in memory only, so after a reload (or when it expires) this signs in again first.
-            if (!await Drive.IsSignedInAsync())
-            {
-                await Drive.SignInAsync();
-            }
-
-            await SyncAndShowAsync();
+            await Drive.SignInAsync();
+            _syncSummary = await App.AutoSync.ConnectAsync();
         });
+
+    private Task SyncNowAsync() => RunSyncAsync(async () => _syncSummary = await Runner.SignInAndSyncAsync());
 
     private Task DisconnectAsync() =>
         RunSyncAsync(async () =>
         {
             await Drive.SignOutAsync();
-            await App.Sync.DisconnectAsync();
+            await App.AutoSync.DisconnectAsync();
         });
 
-    private async Task SyncAndShowAsync()
-    {
-        _syncSummary = await App.Sync.SyncNowAsync();
-        await ApplySavedSettingsAsync();
-    }
-
+    /// <summary>Runs a sync action from a tap. Sync failures show as the sync's problem; sign-in failures show here.</summary>
     private async Task RunSyncAsync(Func<Task> action)
     {
-        _syncing = true;
-        _syncProblem = null;
+        _signInProblem = null;
         _syncSummary = null;
         try
         {
             await action();
         }
-        catch (Exception ex) when (ex is RuleViolationException or CloudFileStoreException)
+        catch (CloudFileStoreException ex)
         {
-            _syncProblem = ex.Message;
+            _signInProblem = ex.Message;
         }
         finally
         {
             _syncStatus = await App.Sync.GetStatusAsync();
-            Pending.Set(_syncStatus.PendingConflicts);
-            _syncing = false;
         }
     }
+
+    public void Dispose() => App.AutoSync.Changed -= OnSyncChanged;
 
     /// <summary>Shows Settings that an import or sync may have brought from elsewhere.</summary>
     private async Task ApplySavedSettingsAsync()

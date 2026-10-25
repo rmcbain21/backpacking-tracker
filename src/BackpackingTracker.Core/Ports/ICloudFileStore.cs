@@ -23,7 +23,15 @@ public interface ICloudFileStore
 /// </summary>
 public sealed class CloudFileStoreException : Exception
 {
-    public CloudFileStoreException(string message, Exception? innerException = null) : base(message, innerException)
+    public CloudFileStoreException(string message, Exception? innerException = null, bool signInNeeded = false)
+        : base(message, innerException)
     {
+        SignInNeeded = signInNeeded;
     }
+
+    /// <summary>
+    /// The backpacker must sign in again (no access token, or it expired). Signing in needs their tap, so
+    /// automatic sync waits for it rather than retrying.
+    /// </summary>
+    public bool SignInNeeded { get; }
 }

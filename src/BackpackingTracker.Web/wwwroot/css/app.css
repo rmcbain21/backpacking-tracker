@@ -361,3 +361,33 @@ h1:focus {
     top: 3px;
     bottom: auto;
 }
+
+/* "Sync is paused · Sign in": a slim bar kept under the top bar while sync needs the backpacker */
+.sync-banner {
+    position: sticky;
+    top: calc(var(--mud-appbar-height) * 3 / 4);
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 4px 4px 16px;
+    background: color-mix(in srgb, var(--mud-palette-warning) 22%, var(--mud-palette-surface));
+    color: var(--mud-palette-text-primary);
+}
+
+/* The top bar's sync icon turns while a sync runs */
+.sync-spinning .mud-icon-root {
+    animation: sync-spin 1.2s linear infinite;
+}
+
+@keyframes sync-spin {
+    to {
+        transform: rotate(-360deg);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .sync-spinning .mud-icon-root {
+        animation: none;
+    }
+}

@@ -3,7 +3,11 @@
 @inject AppCore App
 @inject ThemeState Theme
 @inject PendingConflicts Pending
+@inject AutoSyncRunner Runner
+@inject ISnackbar Snackbar
 @inject IJSRuntime JS
+@using BackpackingTracker.Core.Ports
+@using BackpackingTracker.Core.Sync
 
 <MudThemeProvider @ref="_themeProvider" Theme="AppThemes.For(Theme.Palette).Theme" IsDarkMode="IsDarkMode" />
 <MudPopoverProvider />
@@ -15,6 +19,12 @@
         <MudAppBar Elevation="1" Dense="true">
             <MudText Typo="Typo.h6">Backpacking Tracker</MudText>
             <MudSpacer />
+            @if (_connected)
+            {
+                var (icon, label, spinning) = SyncIcon();
+                <MudIconButton Href="settings" Icon="@icon" Color="Color.Inherit" aria-label="@label" title="@label"
+                               Class="@(spinning ? "sync-spinning" : "")" />
+            }
             <MudBadge Content="Pending.Count" Visible="Pending.Count > 0" Color="Color.Error" Overlap="true" Bordered="true" Class="settings-badge">
                 <MudIconButton Href="settings" Icon="@Icons.Material.Filled.Settings" Color="Color.Inherit"
                                aria-label="@(Pending.Count switch { 0 => "Settings", 1 => "Settings, 1 Sync Conflict to settle", var n => $"Settings, {n} Sync Conflicts to settle" })" />
@@ -34,6 +44,27 @@
         </MudHidden>
 
         <MudMainContent>
+            @if (BannerShown)
+            {
+                <div class="sync-banner" role="status">
+                    <MudIcon Icon="@Icons.Material.Filled.SyncProblem" Size="Size.Small" />
+                    <MudText Typo="Typo.body2" Class="flex-grow-1">
+                        @(App.AutoSync.Problem == SyncProblem.SignInNeeded ? "Sync is paused" : App.AutoSync.Message)
+                    </MudText>
+                    @if (App.AutoSync.Problem == SyncProblem.SignInNeeded)
+                    {
+                        <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small" OnClick="SignInAndSyncAsync"
+                                   Disabled="App.AutoSync.Syncing">Sign in</MudButton>
+                    }
+                    else
+                    {
+                        <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small" OnClick="SignInAndSyncAsync"
+                                   Disabled="App.AutoSync.Syncing">Try now</MudButton>
+                    }
+                    <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" aria-label="Hide"
+                                   OnClick="() => _bannerHidden = true" />
+                </div>
+            }
             <MudContainer MaxWidth="MaxWidth.Large" Class="pt-4 main-content">
                 @Body
             </MudContainer>
@@ -51,6 +82,23 @@
     private bool _deviceIsDark;
     private string? _statusBarColour;
     private string? _rootFontSize;
+    private bool _connected;
+
+    // Hidden with its × until the problem clears (or the app is opened again).
+    private bool _bannerHidden;
+
+    private bool BannerShown =>
+        _connected && !_bannerHidden && App.AutoSync.Problem is SyncProblem.SignInNeeded or SyncProblem.Failed;
+
+    private (string Icon, string Label, bool Spinning) SyncIcon() =>
+        App.AutoSync switch
+        {
+            { Syncing: true } => (Icons.Material.Filled.Sync, "Syncing", true),
+            { Problem: SyncProblem.Offline } => (Icons.Material.Filled.CloudOff, "Offline: changes will sync when you're back online", false),
+            { Problem: SyncProblem.SignInNeeded } => (Icons.Material.Filled.SyncProblem, "Sync is paused: sign in to Google", false),
+            { Problem: SyncProblem.Failed } => (Icons.Material.Filled.SyncProblem, "Sync failed: it will try again", false),
+            _ => (Icons.Material.Filled.CloudDone, "Synced", false),
+        };
 
     private bool IsDarkMode => Theme.Appearance switch
     {
@@ -63,9 +111,47 @@
     {
         Theme.Changed += OnThemeChanged;
         Pending.Changed += OnPendingChanged;
+        App.AutoSync.Changed += OnSyncChanged;
         var settings = await App.Settings.GetAsync();
         Theme.Set(settings.Palette, settings.Appearance, settings.TextSize);
-        Pending.Set((await App.Sync.GetStatusAsync()).PendingConflicts);
+        await RefreshSyncStatusAsync();
+    }
+
+    private void OnSyncChanged() => InvokeAsync(async () =>
+    {
+        if (App.AutoSync.Problem == SyncProblem.None)
+        {
+            _bannerHidden = false;
+        }
+
+        // A sync that ended may have brought Settings from another device.
+        if (!App.AutoSync.Syncing)
+        {
+            var settings = await App.Settings.GetAsync();
+            Theme.Set(settings.Palette, settings.Appearance, settings.TextSize);
+        }
+
+        await RefreshSyncStatusAsync();
+        StateHasChanged();
+    });
+
+    private async Task RefreshSyncStatusAsync()
+    {
+        var status = await App.Sync.GetStatusAsync();
+        _connected = status.Connected;
+        Pending.Set(status.PendingConflicts);
+    }
+
+    private async Task SignInAndSyncAsync()
+    {
+        try
+        {
+            await Runner.SignInAndSyncAsync();
+        }
+        catch (CloudFileStoreException ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Warning);
+        }
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -80,6 +166,7 @@
                 return InvokeAsync(StateHasChanged);
             });
             StateHasChanged();
+            await Runner.StartAsync();
         }
 
         // The phone's status bar takes the top bar's colour.
@@ -107,5 +194,6 @@
     {
         Theme.Changed -= OnThemeChanged;
         Pending.Changed -= OnPendingChanged;
+        App.AutoSync.Changed -= OnSyncChanged;
     }
 }

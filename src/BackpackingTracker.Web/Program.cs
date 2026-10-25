@@ -20,5 +20,6 @@ builder.Services.AddSingleton<ICloudFileStore>(services => services.GetRequiredS
 builder.Services.AddSingleton<AppCore>();
 builder.Services.AddSingleton<ThemeState>();
 builder.Services.AddSingleton<PendingConflicts>();
+builder.Services.AddSingleton<AutoSyncRunner>();
 
 await builder.Build().RunAsync();

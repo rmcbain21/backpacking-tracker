@@ -17,15 +17,18 @@ public sealed class AppCore
     /// <param name="cloud">The cloud drive to sync through; null where there is none, such as tests that don't sync.</param>
     public AppCore(IRecordStore store, IClock clock, ICloudFileStore? cloud = null)
     {
-        Gear = new GearCatalogue(store, clock);
-        Settings = new UserSettings(store, clock);
-        Lists = new GearLists(store, clock, Gear);
-        Import = new GearImport(store, Gear, Lists);
-        Food = new FoodCatalogue(store, clock);
-        Meals = new MealCatalogue(store, clock, Food);
-        Trips = new TripPlanner(store, clock, Gear, Lists, Food, Meals);
-        Backup = new Backup(store);
-        Sync = new CloudSync(store, clock, cloud, Settings);
+        // The areas save through a store that tells automatic sync about each change; sync uses the plain one.
+        var watched = new ChangeWatchingRecordStore(store, () => AutoSync.LocalChanged());
+        Gear = new GearCatalogue(watched, clock);
+        Settings = new UserSettings(watched, clock);
+        Lists = new GearLists(watched, clock, Gear);
+        Import = new GearImport(watched, Gear, Lists);
+        Food = new FoodCatalogue(watched, clock);
+        Meals = new MealCatalogue(watched, clock, Food);
+        Trips = new TripPlanner(watched, clock, Gear, Lists, Food, Meals);
+        Backup = new Backup(watched);
+        Sync = new CloudSync(store, clock, cloud, Settings, settled: () => AutoSync.LocalChanged());
+        AutoSync = new AutoSync(Sync, clock);
 
         // Every area that refers to Gear Items takes part in the Gear Item delete check.
         Gear.AddReferences(Lists);
@@ -54,4 +57,6 @@ public sealed class AppCore
     public Backup Backup { get; }
 
     public CloudSync Sync { get; }
+
+    public AutoSync AutoSync { get; }
 }

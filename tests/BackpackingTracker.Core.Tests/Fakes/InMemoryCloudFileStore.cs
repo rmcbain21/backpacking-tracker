@@ -12,14 +12,25 @@ public sealed class InMemoryCloudFileStore : ICloudFileStore
 
     public DateTimeOffset? LastModified { get; private set; }
 
+    /// <summary>How many times the file has been read: how many syncs got going.</summary>
+    public int Reads { get; private set; }
+
+    /// <summary>When false, every call fails asking for sign-in, as when Google's access token has expired.</summary>
+    public bool SignedIn { get; set; } = true;
+
+    /// <summary>How many calls were refused for want of a sign-in: how many syncs tried while signed out.</summary>
+    public int SignInRefusals { get; private set; }
+
     /// <summary>When true, writing fails, as it would with no signal.</summary>
     public bool FailWrites { get; set; }
 
-    /// <summary>Runs once, just after the next read: lets a test have another device sync in the middle of a sync.</summary>
+    /// <summary>Runs once, just after the next read: lets a test act in the middle of a sync.</summary>
     public Func<Task>? AfterNextRead { get; set; }
 
     public async Task<string?> ReadAsync()
     {
+        RequireSignIn();
+        Reads++;
         var text = Text;
         if (AfterNextRead is { } afterRead)
         {
@@ -32,6 +43,7 @@ public sealed class InMemoryCloudFileStore : ICloudFileStore
 
     public Task WriteAsync(string text)
     {
+        RequireSignIn();
         if (FailWrites)
         {
             throw new CloudFileStoreException("No connection.");
@@ -42,5 +54,18 @@ public sealed class InMemoryCloudFileStore : ICloudFileStore
         return Task.CompletedTask;
     }
 
-    public Task<DateTimeOffset?> GetLastModifiedAsync() => Task.FromResult(LastModified);
+    public Task<DateTimeOffset?> GetLastModifiedAsync()
+    {
+        RequireSignIn();
+        return Task.FromResult(LastModified);
+    }
+
+    private void RequireSignIn()
+    {
+        if (!SignedIn)
+        {
+            SignInRefusals++;
+            throw new CloudFileStoreException("Sign in again.", signInNeeded: true);
+        }
+    }
 }

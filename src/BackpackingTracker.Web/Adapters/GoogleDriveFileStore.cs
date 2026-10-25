@@ -53,15 +53,14 @@ public sealed class GoogleDriveFileStore : ICloudFileStore, IAsyncDisposable
         }
         catch (JSException exception)
         {
-            throw new CloudFileStoreException(Describe(exception), exception);
+            throw new CloudFileStoreException(Describe(exception), exception, signInNeeded: Code(exception) == "signin-required");
         }
     }
 
     /// <summary>The words for an error code thrown by googleDrive.js.</summary>
     private static string Describe(JSException exception)
     {
-        // The message starts with the code; Blazor may add the JavaScript stack after it.
-        var code = exception.Message.Split('\n')[0].Trim();
+        var code = Code(exception);
         return code switch
         {
             "offline" => "Couldn't reach Google Drive. Check your connection and try again.",
@@ -69,12 +68,15 @@ public sealed class GoogleDriveFileStore : ICloudFileStore, IAsyncDisposable
             "popup_failed_to_open" => "The Google sign-in window was blocked. Allow pop-ups for this site and try again.",
             "scope-denied" or "access_denied" =>
                 "Google Drive access wasn't allowed, so the app can't sync. Connect again and allow access to the app's own data.",
-            "signin-required" => "Your Google sign-in has expired. Tap Sync now to sign in again.",
+            "signin-required" => "Sync is paused until you sign in to Google again.",
             _ when code.StartsWith("http-", StringComparison.Ordinal) =>
                 $"Google Drive refused the request (error {code["http-".Length..]}). Try again later.",
             _ => $"Google Drive sync failed ({code}).",
         };
     }
+
+    // The message starts with the code; Blazor may add the JavaScript stack after it.
+    private static string Code(JSException exception) => exception.Message.Split('\n')[0].Trim();
 
     public async ValueTask DisposeAsync()
     {

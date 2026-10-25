@@ -20,13 +20,16 @@ public sealed class CloudSync
     private readonly IClock _clock;
     private readonly ICloudFileStore? _cloud;
     private readonly UserSettings _settings;
+    private readonly Action _settled;
 
-    public CloudSync(IRecordStore store, IClock clock, ICloudFileStore? cloud, UserSettings settings)
+    /// <param name="settled">Called after a Sync Conflict is settled, a local change the next sync must send.</param>
+    public CloudSync(IRecordStore store, IClock clock, ICloudFileStore? cloud, UserSettings settings, Action settled)
     {
         _store = store;
         _clock = clock;
         _cloud = cloud;
         _settings = settings;
+        _settled = settled;
     }
 
     public async Task<SyncStatus> GetStatusAsync()
@@ -160,6 +163,7 @@ public sealed class CloudSync
             Conflicts = state.Conflicts.Where(pending => pending.Id != conflictId).ToList(),
         };
         await _store.SaveAllAsync([new RecordToSave(table.Name, chosen), new RecordToSave(SyncState.Table, settled)]);
+        _settled();
     }
 
     private async Task<(RecordTable Table, StoredRecord Mine, StoredRecord Theirs)> VersionsAsync(PendingConflict conflict)
