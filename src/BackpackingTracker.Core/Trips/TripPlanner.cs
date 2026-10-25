@@ -324,6 +324,88 @@ public sealed class TripPlanner : IGearItemReferences, IFoodItemReferences, IMea
             return day with { SlotEntries = day.SlotEntries.Where(entry => entry.Id != slotEntryId).ToList() };
         });
 
+    /// <summary>What copying the source Trip's Meal Plan onto this Trip would do (see MealPlanCopyPlan).</summary>
+    public async Task<MealPlanCopyPlan> PlanMealPlanCopyAsync(string tripId, string sourceTripId)
+    {
+        var (_, plan, _) = await PrepareMealPlanCopyAsync(tripId, sourceTripId);
+        return plan;
+    }
+
+    /// <summary>
+    /// Copies the source Trip's Meal Plan onto this Trip as PlanMealPlanCopyAsync describes: each copied entry refers to
+    /// the same Meal or Food Item with the same quantity, gets a new id, and carries no frozen figures. If that replaces
+    /// days with food planned, it's refused unless replaceExisting confirms it.
+    /// </summary>
+    public async Task CopyMealPlanAsync(string tripId, string sourceTripId, bool replaceExisting = false)
+    {
+        var (trip, plan, copiedDays) = await PrepareMealPlanCopyAsync(tripId, sourceTripId);
+        if (plan.NeedsConfirmation && !replaceExisting)
+        {
+            throw new RuleViolationException($"{plan.ReplacedDaysText} already {(plan.ReplacedDays.Count == 1 ? "has" : "have")} food planned. Confirm to replace it.");
+        }
+
+        await SaveAsync(trip with
+        {
+            Days = trip.Days.Select((day, i) => i < copiedDays.Count ? day with { SlotEntries = copiedDays[i] } : day).ToList(),
+        });
+    }
+
+    /// <summary>The target Trip, what copying would do, and the copied slot entries for each of its first days.</summary>
+    private async Task<(Trip Trip, MealPlanCopyPlan Plan, IReadOnlyList<IReadOnlyList<SlotEntry>> CopiedDays)> PrepareMealPlanCopyAsync(
+        string tripId, string sourceTripId)
+    {
+        var trip = await GetPlannedTripAsync(tripId, "its Meal Plan");
+        if (sourceTripId == tripId)
+        {
+            throw new RuleViolationException("Choose another Trip to copy from.");
+        }
+
+        var source = await FindTripAsync(sourceTripId) ?? throw new RuleViolationException("That Trip no longer exists.");
+        if (source.Days.All(day => day.SlotEntries.Count == 0))
+        {
+            throw new RuleViolationException($"{source.Name} has no Meal Plan to copy.");
+        }
+
+        var (meals, foodItems) = await LookUpFoodAsync([source]);
+        var skipped = new List<string>();
+
+        (string Name, bool Retired)? Describe(SlotEntry entry) =>
+            entry.MealId is { } mealId
+                ? meals.TryGetValue(mealId, out var meal) ? (meal.Meal.Name, meal.Meal.Retired) : null
+                : foodItems.TryGetValue(entry.FoodItemId ?? "", out var item) ? (item.Name, item.Retired) : null;
+
+        // Kept: what's still in use. Retired things are hidden from new plans; deleted ones can't be referred to.
+        bool Keep(SlotEntry entry)
+        {
+            if (Describe(entry) is not { } found)
+            {
+                return false;
+            }
+
+            if (found.Retired && !skipped.Contains(found.Name))
+            {
+                skipped.Add(found.Name);
+            }
+
+            return !found.Retired;
+        }
+
+        var dayCount = Math.Min(trip.Days.Count, source.Days.Count);
+        var copiedDays = source.Days.Take(dayCount)
+            .Select(day => (IReadOnlyList<SlotEntry>)day.SlotEntries
+                .Where(Keep)
+                .Select(entry => entry with { Id = Guid.NewGuid().ToString(), Frozen = null })
+                .ToList())
+            .ToList();
+        var replacedDays = trip.Days.Take(dayCount)
+            .Select((day, i) => (day, Number: i + 1))
+            .Where(d => d.day.SlotEntries.Count > 0)
+            .Select(d => d.Number)
+            .ToList();
+
+        return (trip, new MealPlanCopyPlan(source.Name, dayCount, replacedDays, skipped), copiedDays);
+    }
+
     /// <summary>Changes the Meal Plan of the Trip Day for that date; refused on a Completed Trip.</summary>
     private async Task ChangeDayAsync(string tripId, DateOnly date, Func<TripDay, TripDay> change)
     {

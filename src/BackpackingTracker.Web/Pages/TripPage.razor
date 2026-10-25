@@ -236,6 +236,13 @@ else if (_view is not null)
             </div>
             <MudText Typo="Typo.caption" Class="mud-text-secondary">Counted in the Consumable Weight.</MudText>
         </MudPaper>
+        @if (!Completed)
+        {
+            <div class="d-flex justify-end mt-n2 mb-1">
+                <MudButton Variant="Variant.Text" Size="Size.Small" StartIcon="@Icons.Material.Filled.ContentCopy"
+                           OnClick="CopyMealPlanAsync" Class="copy-meal-plan">Copy from another Trip</MudButton>
+            </div>
+        }
 
         @foreach (var dayPlan in plan.Days)
         {
@@ -392,6 +399,15 @@ else if (_view is not null)
         };
         var options = new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Small };
         var dialog = await DialogService.ShowAsync<AddToSlotDialog>($"Day {dayPlan.DayNumber} · {slot}", parameters, options);
+        await dialog.Result;
+        await LoadAsync();
+    }
+
+    private async Task CopyMealPlanAsync()
+    {
+        var parameters = new DialogParameters<CopyMealPlanDialog> { { d => d.TripId, TripId } };
+        var options = new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Small };
+        var dialog = await DialogService.ShowAsync<CopyMealPlanDialog>("Copy a Meal Plan", parameters, options);
         await dialog.Result;
         await LoadAsync();
     }

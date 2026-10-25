@@ -1,0 +1,112 @@
+@using BackpackingTracker.Core.Trips
+@* Copies another Trip's Meal Plan onto this one, by day position. Picking the source shows what the copy would do: how
+   many days, which days with food planned it replaces (the button then says so), and any Retired food it leaves out. *@
+@inject AppCore App
+
+<MudDialog>
+    <DialogContent>
+        @if (_sources is null)
+        {
+            <MudProgressLinear Indeterminate="true" />
+        }
+        else if (_sources.Count == 0)
+        {
+            <MudText Class="mud-text-secondary">No other Trip has a Meal Plan to copy yet.</MudText>
+        }
+        else
+        {
+            <MudSelect T="string" Value="_sourceId" ValueChanged="ChooseAsync" Label="Copy from" Class="copy-source">
+                @foreach (var source in _sources)
+                {
+                    <MudSelectItem Value="source.Trip.Id">@source.Trip.Name · @TripDates.Format(source.Trip)</MudSelectItem>
+                }
+            </MudSelect>
+            @if (_plan is { } plan)
+            {
+                <MudText Typo="Typo.body2" Class="mt-3 copy-summary">
+                    Copies @(plan.DayCount == 1 ? "Day 1" : $"Days 1–{plan.DayCount}") of @plan.SourceName onto the same days of this Trip, replacing their Meal Plan.
+                </MudText>
+                @if (plan.NeedsConfirmation)
+                {
+                    <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2 copy-replaces">
+                        @plan.ReplacedDaysText already @(plan.ReplacedDays.Count == 1 ? "has" : "have") food planned, which will be replaced.
+                    </MudAlert>
+                }
+                @if (plan.Skipped.Count > 0)
+                {
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary mt-2 copy-skipped">
+                        Left out because Retired: @string.Join(", ", plan.Skipped).
+                    </MudText>
+                }
+            }
+        }
+        @if (_problem is not null)
+        {
+            <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-3">@_problem</MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="CopyAsync" Disabled="_plan is null || _busy">
+            @(_plan?.NeedsConfirmation == true ? "Replace and copy" : "Copy")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter, EditorRequired]
+    public string TripId { get; set; } = "";
+
+    private IReadOnlyList<TripView>? _sources;
+    private string? _sourceId;
+    private MealPlanCopyPlan? _plan;
+    private string? _problem;
+    private bool _busy;
+
+    /// <summary>Every other Trip with something in its Meal Plan: upcoming ones first, then past ones, most recent first.</summary>
+    protected override async Task OnInitializedAsync()
+    {
+        var listing = await App.Trips.ListTripsAsync();
+        _sources = listing.Upcoming.Concat(listing.Past)
+            .Where(view => view.Trip.Id != TripId && !view.MealPlan.IsEmpty)
+            .ToList();
+    }
+
+    private async Task ChooseAsync(string sourceId)
+    {
+        _sourceId = sourceId;
+        _plan = null;
+        _problem = null;
+        try
+        {
+            _plan = await App.Trips.PlanMealPlanCopyAsync(TripId, sourceId);
+        }
+        catch (RuleViolationException ex)
+        {
+            _problem = ex.Message;
+        }
+    }
+
+    private async Task CopyAsync()
+    {
+        _busy = true;
+        _problem = null;
+        try
+        {
+            // The button said "Replace and copy" when it would replace planned days, so pressing it confirms.
+            await App.Trips.CopyMealPlanAsync(TripId, _sourceId!, replaceExisting: _plan!.NeedsConfirmation);
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (RuleViolationException ex)
+        {
+            _problem = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}
