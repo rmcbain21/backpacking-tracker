@@ -269,6 +269,82 @@ public class AutoSyncTests
         Assert.Contains("Duplex", _drive.Text);
     }
 
+    /// <summary>Counts the phone's ChangesArrived signals.</summary>
+    private Func<int> CountArrivals()
+    {
+        var arrivals = 0;
+        _phone.AutoSync.ChangesArrived += () => arrivals++;
+        return () => arrivals;
+    }
+
+    [Fact]
+    public async Task Pages_hear_when_a_sync_brings_in_a_record_from_another_device()
+    {
+        await _phone.Sync.ConnectAsync();
+        await _laptop.Sync.ConnectAsync();
+        await AddGearAsync(_laptop, "Stove");
+        await _laptop.Sync.SyncNowAsync();
+        var arrivals = CountArrivals();
+
+        await _phone.AutoSync.SyncNowAsync();
+
+        Assert.Equal(1, arrivals());
+    }
+
+    [Fact]
+    public async Task Pages_hear_when_a_sync_brings_in_a_deletion()
+    {
+        await _phone.Sync.ConnectAsync();
+        await _laptop.Sync.ConnectAsync();
+        var stove = await AddGearAsync(_laptop, "Stove");
+        await _laptop.Sync.SyncNowAsync();
+        await _phone.AutoSync.SyncNowAsync();
+        Wait(60);
+        await _laptop.Gear.DeleteGearItemAsync(stove.Id);
+        await _laptop.Sync.SyncNowAsync();
+        var arrivals = CountArrivals();
+
+        await _phone.AutoSync.SyncNowAsync();
+
+        Assert.Equal(1, arrivals());
+    }
+
+    [Fact]
+    public async Task Pages_hear_when_a_sync_finds_a_new_sync_conflict()
+    {
+        await _phone.Sync.ConnectAsync();
+        await _laptop.Sync.ConnectAsync();
+        var tent = await AddGearAsync(_phone, "Duplex");
+        await _phone.Sync.SyncNowAsync();
+        await _laptop.Sync.SyncNowAsync();
+        Wait(60);
+        await _laptop.Gear.UpdateGearItemAsync(tent.Id, new GearItemDetails("Duplex", "Tent", 900m));
+        await _laptop.Sync.SyncNowAsync();
+        Wait(60);
+        await _phone.Gear.UpdateGearItemAsync(tent.Id, new GearItemDetails("Duplex", "Tent", 950m));
+        var arrivals = CountArrivals();
+
+        await _phone.AutoSync.SyncNowAsync();
+        Assert.Equal(1, (await _phone.Sync.GetStatusAsync()).PendingConflicts);
+        Assert.Equal(1, arrivals());
+
+        await _phone.AutoSync.SyncNowAsync();
+        Assert.Equal(1, arrivals());
+    }
+
+    [Fact]
+    public async Task Pages_hear_nothing_when_a_sync_brings_in_nothing_or_only_sends_this_devices_changes()
+    {
+        await _phone.Sync.ConnectAsync();
+        var arrivals = CountArrivals();
+
+        await _phone.AutoSync.SyncNowAsync();
+        await AddGearAsync(_phone, "Duplex");
+        await _phone.AutoSync.SyncNowAsync();
+
+        Assert.Equal(0, arrivals());
+    }
+
     [Fact]
     public async Task Listeners_hear_when_a_sync_starts_and_ends()
     {

@@ -120,7 +120,7 @@ public sealed class CloudSync
             }
 
             await SaveStateAsync(state with { LastSyncedAt = _clock.UtcNow, Bases = bases, Conflicts = conflicts });
-            return new ChangeSummary(changes);
+            return new ChangeSummary(changes, ConflictsChanged: !state.Conflicts.SequenceEqual(conflicts));
         }
 
         throw new RuleViolationException("Another device kept syncing at the same time. Try again in a moment.");

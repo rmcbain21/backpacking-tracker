@@ -52,6 +52,12 @@ public sealed class AutoSync
     /// <summary>Raised when a sync starts or ends, or the connection comes or goes.</summary>
     public event Action? Changed;
 
+    /// <summary>
+    /// Raised after a sync that changed records on this device (added, updated or deleted something from
+    /// another device), so pages showing records can reload. Not raised when a sync only sent this device's changes.
+    /// </summary>
+    public event Action? ChangesArrived;
+
     /// <summary>The app has opened, or come back to the front: sync now.</summary>
     public void AppOpened() => _dueAt = _clock.UtcNow;
 
@@ -157,6 +163,11 @@ public sealed class AutoSync
         {
             var summary = await _sync.SyncNowAsync();
             SetProblem(SyncProblem.None, null);
+            if (!summary.NothingChanged)
+            {
+                ChangesArrived?.Invoke();
+            }
+
             return summary;
         }
         catch (CloudFileStoreException signIn) when (signIn.SignInNeeded)

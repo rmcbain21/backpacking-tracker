@@ -72,9 +72,10 @@ public sealed class Backup
 }
 
 /// <summary>What an import or a sync changed on this device, per record type; only the types with changes are listed.</summary>
-public sealed record ChangeSummary(IReadOnlyList<RecordTypeChanges> Changes)
+/// <param name="ConflictsChanged">A sync found new Sync Conflicts, or ones waiting went away by themselves.</param>
+public sealed record ChangeSummary(IReadOnlyList<RecordTypeChanges> Changes, bool ConflictsChanged = false)
 {
-    public bool NothingChanged => Changes.Count == 0;
+    public bool NothingChanged => Changes.Count == 0 && !ConflictsChanged;
 }
 
 /// <summary>How many records of one type, such as "Gear Items", were added, updated and deleted on this device.</summary>

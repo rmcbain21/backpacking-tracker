@@ -127,7 +127,9 @@
         <MudAlert Severity="Severity.Success" Class="mt-2">
             @(_syncSummary.NothingChanged
                 ? "Synced. Nothing new from your other devices."
-                : $"Synced: {string.Join(" · ", _syncSummary.Changes.Select(Describe))}")
+                : _syncSummary.Changes.Count == 0
+                    ? "Synced."
+                    : $"Synced: {string.Join(" · ", _syncSummary.Changes.Select(Describe))}")
         </MudAlert>
     }
 </MudPaper>

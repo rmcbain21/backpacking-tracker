@@ -1,0 +1,17 @@
+@* Put on a page that shows records: when a sync brings in changes from another device, runs the page's
+   reload, and the page redraws in place (its tab, search, filters and scroll stay as they are). Stops
+   listening when the page goes away. *@
+@implements IDisposable
+@inject AppCore App
+
+@code {
+    /// <summary>Loads the page's data again, as when it opened.</summary>
+    [Parameter, EditorRequired]
+    public EventCallback OnChangesArrived { get; set; }
+
+    protected override void OnInitialized() => App.AutoSync.ChangesArrived += Refresh;
+
+    private void Refresh() => InvokeAsync(() => OnChangesArrived.InvokeAsync());
+
+    public void Dispose() => App.AutoSync.ChangesArrived -= Refresh;
+}
