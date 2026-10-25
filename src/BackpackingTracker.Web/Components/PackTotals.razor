@@ -1,7 +1,9 @@
 @using BackpackingTracker.Core.Weight
+@implements IAsyncDisposable
+@inject IJSRuntime JS
 @* A Gear List's or Trip's weight figures: Starting Pack Weight first, then what it's made of. *@
 <MudPaper Class="pa-3 mb-4 pack-totals">
-    <div class="d-flex justify-space-between">
+    <div class="d-flex justify-space-between" @ref="_startingRow">
         <MudText Typo="Typo.subtitle1"><b>Starting Pack Weight</b></MudText>
         <MudText Typo="Typo.subtitle1" Class="total-starting"><b>@Format(Weight.StartingPackGrams)</b></MudText>
     </div>
@@ -19,6 +21,16 @@
     </div>
     @ChildContent
 </MudPaper>
+
+@if (ShrinksToTop)
+{
+    @* Once the figures scroll away, they shrink to this bar under the top bar; tapping it goes back up to them. *@
+    <button class="pack-weight-bar mud-elevation-2" @ref="_bar" inert aria-label="Back to the pack weight figures">
+        <MudText Typo="Typo.body2" Class="flex-grow-1 text-left"><b>Starting Pack Weight</b></MudText>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary">Base @Format(Weight.BaseGrams)</MudText>
+        <MudText Typo="Typo.subtitle1" Class="bar-starting"><b>@Format(Weight.StartingPackGrams)</b></MudText>
+    </button>
+}
 
 @if (Weight.ByCategory.Count > 0)
 {
@@ -50,5 +62,40 @@
     [Parameter]
     public RenderFragment? ChildContent { get; set; }
 
+    /// <summary>Keep the Starting Pack Weight in sight, in a bar under the top bar, once the figures scroll away.</summary>
+    [Parameter]
+    public bool ShrinksToTop { get; set; }
+
+    private ElementReference _startingRow;
+    private ElementReference _bar;
+    private IJSObjectReference? _watcher;
+
     private string Format(decimal grams) => UnitFormat.Weight(grams, UnitSystem);
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && ShrinksToTop)
+        {
+            await using var module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/packTotals.js");
+            _watcher = await module.InvokeAsync<IJSObjectReference>("watch", _startingRow, _bar);
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_watcher is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await _watcher.InvokeVoidAsync("stop");
+            await _watcher.DisposeAsync();
+        }
+        catch (JSDisconnectedException)
+        {
+            // The app is closing; nothing left to stop.
+        }
+    }
 }

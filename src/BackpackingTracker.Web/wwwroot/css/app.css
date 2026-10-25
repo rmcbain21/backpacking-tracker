@@ -218,6 +218,56 @@ h1:focus {
     color: var(--mud-palette-text-secondary);
 }
 
+/* A Gear List's weight bar: slides down under the top bar once the Starting Pack Weight scrolls away (Components/PackTotals.razor) */
+.pack-weight-bar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    top: calc(var(--mud-appbar-height) * 3 / 4);
+    z-index: calc(var(--mud-zindex-appbar) - 1);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 6px 16px;
+    border: 0;
+    background-color: var(--mud-palette-surface);
+    color: var(--mud-palette-text-primary);
+    font: inherit;
+    cursor: pointer;
+    transform: translateY(-110%);
+    opacity: 0;
+    transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+    /* One line: the figures stay whole and the label gives way on a narrow phone */
+    .pack-weight-bar > * {
+        white-space: nowrap;
+    }
+
+    .pack-weight-bar > :first-child {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .pack-weight-bar.shown {
+        transform: none;
+        opacity: 1;
+    }
+
+/* Beside the drawer on tablets and desktops, not under it */
+@media (min-width: 600px) {
+    .pack-weight-bar {
+        left: var(--mud-drawer-width-left);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .pack-weight-bar {
+        transition: none;
+    }
+}
+
 /* Settings: colour palette choices, each a swatch of its main and accent colours on its background */
 .palette-choices {
     display: grid;
