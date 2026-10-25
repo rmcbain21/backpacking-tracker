@@ -213,6 +213,10 @@ internal sealed class ConflictDescriber
         ColourPalette.CanyonSandstone => "Canyon Sandstone",
         ColourPalette.MossAndLichen => "Moss & Lichen",
         ColourPalette.TwilightCampfire => "Twilight Campfire",
+        ColourPalette.TopoMap => "Topo Map",
+        ColourPalette.AutumnLarch => "Autumn Larch",
+        ColourPalette.TrailBlaze => "Trail Blaze",
+        ColourPalette.NorthernLights => "Northern Lights",
         _ => palette.ToString(),
     };
 

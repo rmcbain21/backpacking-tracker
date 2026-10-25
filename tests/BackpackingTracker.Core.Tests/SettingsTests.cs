@@ -75,12 +75,14 @@ public class SettingsTests
         Assert.Equal(Appearance.MatchDevice, settings.Appearance);
     }
 
-    [Fact]
-    public async Task A_chosen_palette_is_remembered_after_the_app_is_reopened()
+    [Theory]
+    [InlineData(ColourPalette.CanyonSandstone)]
+    [InlineData(ColourPalette.NorthernLights)]
+    public async Task A_chosen_palette_is_remembered_after_the_app_is_reopened(ColourPalette palette)
     {
-        await CreateApp().Settings.SetPaletteAsync(ColourPalette.CanyonSandstone);
+        await CreateApp().Settings.SetPaletteAsync(palette);
 
-        Assert.Equal(ColourPalette.CanyonSandstone, (await CreateApp().Settings.GetAsync()).Palette);
+        Assert.Equal(palette, (await CreateApp().Settings.GetAsync()).Palette);
     }
 
     [Fact]

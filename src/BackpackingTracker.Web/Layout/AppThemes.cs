@@ -4,7 +4,7 @@ using MudBlazor;
 namespace BackpackingTracker.Web.Layout;
 
 /// <summary>
-/// The app's colour palettes (ticket 30), each with a light and a dark version, chosen in Settings.
+/// The app's colour palettes (tickets 30 and 35), each with a light and a dark version, chosen in Settings.
 /// </summary>
 public static class AppThemes
 {
@@ -111,6 +111,106 @@ public static class AppThemes
                 AppbarBackground = "#161826", AppbarText = "#E3E5F5",
                 DrawerBackground = "#171926", DrawerText = "#C5CEF3", DrawerIcon = "#C5CEF3",
                 TextPrimary = "#E6E7F0", TextSecondary = "#A0A3B8", ActionDefault = "#A0A3B8", Divider = "#2E3142",
+            })),
+
+        new(ColourPalette.Glacier, "Glacier", Theme(
+            new PaletteLight
+            {
+                Primary = "#3B5B7A", PrimaryDarken = "#2A4560", PrimaryLighten = "#5E7F9E",
+                Secondary = "#C9553B", SecondaryDarken = "#A5412B", SecondaryLighten = "#DD7B64",
+                Background = "#EEF3F6", Surface = "#FFFFFF",
+                AppbarBackground = "#2A4560", AppbarText = "#F2F7FB",
+                DrawerBackground = "#E2EAF0", DrawerText = "#2A4560", DrawerIcon = "#2A4560",
+                TextPrimary = "#1C2A36", TextSecondary = "#5B6E7D", ActionDefault = "#5B6E7D", Divider = "#D2DCE3",
+            },
+            new PaletteDark
+            {
+                Primary = "#8EB8DC", PrimaryDarken = "#6A98C0", PrimaryLighten = "#B4D2EC", PrimaryContrastText = "#0C1C2A",
+                Secondary = "#F28C74", SecondaryContrastText = "#2E0F07",
+                Background = "#0F161C", Surface = "#18222B",
+                AppbarBackground = "#121B23", AppbarText = "#DCE8F2",
+                DrawerBackground = "#131D25", DrawerText = "#B4D2EC", DrawerIcon = "#B4D2EC",
+                TextPrimary = "#E2EAF0", TextSecondary = "#9AABB8", ActionDefault = "#9AABB8", Divider = "#2A3843",
+            })),
+
+        new(ColourPalette.TopoMap, "Topo Map", Theme(
+            new PaletteLight
+            {
+                Primary = "#8A5A2B", PrimaryDarken = "#6B4520", PrimaryLighten = "#A9784A",
+                Secondary = "#2F6E9E", SecondaryDarken = "#235679", SecondaryLighten = "#5591BE",
+                Background = "#F4EEDC", Surface = "#FFFCF3",
+                AppbarBackground = "#5C3D1E", AppbarText = "#FBF3E2",
+                DrawerBackground = "#EBE2CA", DrawerText = "#5C3D1E", DrawerIcon = "#5C3D1E",
+                TextPrimary = "#2D2418", TextSecondary = "#6E604C", ActionDefault = "#6E604C", Divider = "#DDD2B8",
+            },
+            new PaletteDark
+            {
+                Primary = "#D6A06A", PrimaryDarken = "#B98148", PrimaryLighten = "#E8C095", PrimaryContrastText = "#2A1906",
+                Secondary = "#7FB3DB", SecondaryContrastText = "#0A1D2C",
+                Background = "#1A1712", Surface = "#26211A",
+                AppbarBackground = "#1F1B15", AppbarText = "#F0E4CF",
+                DrawerBackground = "#201C16", DrawerText = "#E8C095", DrawerIcon = "#E8C095",
+                TextPrimary = "#ECE3D2", TextSecondary = "#AE9F88", ActionDefault = "#AE9F88", Divider = "#3A3227",
+            })),
+
+        new(ColourPalette.AutumnLarch, "Autumn Larch", Theme(
+            new PaletteLight
+            {
+                Primary = "#7A2E3B", PrimaryDarken = "#5A1F2A", PrimaryLighten = "#9C4A58",
+                Secondary = "#B8860B", SecondaryDarken = "#8F6808", SecondaryLighten = "#D4A72E",
+                Background = "#F7F1EC", Surface = "#FFFFFF",
+                AppbarBackground = "#5A1F2A", AppbarText = "#FBEFF1",
+                DrawerBackground = "#EFE4DE", DrawerText = "#5A1F2A", DrawerIcon = "#5A1F2A",
+                TextPrimary = "#2B1D20", TextSecondary = "#6E5A5E", ActionDefault = "#6E5A5E", Divider = "#E3D6D0",
+            },
+            new PaletteDark
+            {
+                Primary = "#E2909C", PrimaryDarken = "#C86F7D", PrimaryLighten = "#F0B5BE", PrimaryContrastText = "#2E0C12",
+                Secondary = "#E8C150", SecondaryContrastText = "#2A1F02",
+                Background = "#1A1214", Surface = "#261B1E",
+                AppbarBackground = "#1F1517", AppbarText = "#F3E2E5",
+                DrawerBackground = "#201618", DrawerText = "#F0B5BE", DrawerIcon = "#F0B5BE",
+                TextPrimary = "#EDE1E3", TextSecondary = "#B39FA3", ActionDefault = "#B39FA3", Divider = "#3D2D31",
+            })),
+
+        new(ColourPalette.TrailBlaze, "Trail Blaze", Theme(
+            new PaletteLight
+            {
+                Primary = "#B84A00", PrimaryDarken = "#923B00", PrimaryLighten = "#E0661A",
+                Secondary = "#2F5F5A", SecondaryDarken = "#224844", SecondaryLighten = "#4A807A",
+                Background = "#F4F4F2", Surface = "#FFFFFF",
+                AppbarBackground = "#222628", AppbarText = "#FFFFFF",
+                DrawerBackground = "#E8E9E7", DrawerText = "#222628", DrawerIcon = "#222628",
+                TextPrimary = "#1F2326", TextSecondary = "#5C6368", ActionDefault = "#5C6368", Divider = "#DADCDD",
+            },
+            new PaletteDark
+            {
+                Primary = "#FF8A3D", PrimaryDarken = "#E86F1E", PrimaryLighten = "#FFAD75", PrimaryContrastText = "#2B1100",
+                Secondary = "#7FB8B0", SecondaryContrastText = "#0B201D",
+                Background = "#121416", Surface = "#1C1F22",
+                AppbarBackground = "#0E1012", AppbarText = "#F2F2F2",
+                DrawerBackground = "#15181A", DrawerText = "#FFAD75", DrawerIcon = "#FFAD75",
+                TextPrimary = "#ECECEC", TextSecondary = "#A3A8AC", ActionDefault = "#A3A8AC", Divider = "#2E3236",
+            })),
+
+        new(ColourPalette.NorthernLights, "Northern Lights", Theme(
+            new PaletteLight
+            {
+                Primary = "#16806F", PrimaryDarken = "#0F5F53", PrimaryLighten = "#3AA08E",
+                Secondary = "#A8387A", SecondaryDarken = "#842B5F", SecondaryLighten = "#C45F9A",
+                Background = "#EFF5F4", Surface = "#FFFFFF",
+                AppbarBackground = "#0F3B40", AppbarText = "#E8FBF7",
+                DrawerBackground = "#E2EDEB", DrawerText = "#0F3B40", DrawerIcon = "#0F3B40",
+                TextPrimary = "#17282A", TextSecondary = "#56696B", ActionDefault = "#56696B", Divider = "#D0DFDD",
+            },
+            new PaletteDark
+            {
+                Primary = "#5FE0C2", PrimaryDarken = "#36C2A3", PrimaryLighten = "#93ECD7", PrimaryContrastText = "#04231C",
+                Secondary = "#E58CC0", SecondaryContrastText = "#2E0A1E",
+                Background = "#0B1216", Surface = "#131D22",
+                AppbarBackground = "#0A1014", AppbarText = "#D9F7EF",
+                DrawerBackground = "#0D161A", DrawerText = "#93ECD7", DrawerIcon = "#93ECD7",
+                TextPrimary = "#E1ECEC", TextSecondary = "#94A9AB", ActionDefault = "#94A9AB", Divider = "#24343A",
             })),
     ];
 

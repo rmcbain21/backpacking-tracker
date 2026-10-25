@@ -20,4 +20,19 @@ public enum ColourPalette
 
     /// <summary>Dusk indigo and campfire orange.</summary>
     TwilightCampfire,
+
+    /// <summary>Slate blue and coral on icy grey.</summary>
+    Glacier,
+
+    /// <summary>Contour brown and water blue on map paper.</summary>
+    TopoMap,
+
+    /// <summary>Burgundy and larch gold.</summary>
+    AutumnLarch,
+
+    /// <summary>Safety orange and charcoal.</summary>
+    TrailBlaze,
+
+    /// <summary>Aurora teal and magenta.</summary>
+    NorthernLights,
 }
