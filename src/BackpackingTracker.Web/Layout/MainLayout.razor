@@ -47,6 +47,7 @@
     private MudThemeProvider _themeProvider = default!;
     private bool _deviceIsDark;
     private string? _statusBarColour;
+    private string? _rootFontSize;
 
     private bool IsDarkMode => Theme.Appearance switch
     {
@@ -59,7 +60,7 @@
     {
         Theme.Changed += OnThemeChanged;
         var settings = await App.Settings.GetAsync();
-        Theme.Set(settings.Palette, settings.Appearance);
+        Theme.Set(settings.Palette, settings.Appearance, settings.TextSize);
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -83,6 +84,13 @@
         {
             _statusBarColour = barColour;
             await JS.InvokeVoidAsync("setThemeColor", barColour);
+        }
+
+        var fontSize = ThemeState.RootFontSize(Theme.TextSize);
+        if (fontSize != _rootFontSize)
+        {
+            _rootFontSize = fontSize;
+            await JS.InvokeVoidAsync("setRootFontSize", fontSize);
         }
     }
 

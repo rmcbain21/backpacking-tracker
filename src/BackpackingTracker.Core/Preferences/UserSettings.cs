@@ -39,6 +39,11 @@ public sealed class UserSettings
             ? ChangeAsync(settings => settings with { Appearance = appearance })
             : throw new RuleViolationException("Choose Match my device, Light or Dark.");
 
+    public Task SetTextSizeAsync(TextSize textSize) =>
+        Enum.IsDefined(textSize)
+            ? ChangeAsync(settings => settings with { TextSize = textSize })
+            : throw new RuleViolationException("Choose one of the text sizes.");
+
     private async Task ChangeAsync(Func<Settings, Settings> change)
     {
         var settings = await GetAsync();

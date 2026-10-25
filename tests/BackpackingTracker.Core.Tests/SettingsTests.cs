@@ -92,6 +92,40 @@ public class SettingsTests
     }
 
     [Fact]
+    public async Task Text_size_is_default_until_changed_and_then_remembered_after_the_app_is_reopened()
+    {
+        Assert.Equal(TextSize.Default, (await CreateApp().Settings.GetAsync()).TextSize);
+
+        await CreateApp().Settings.SetTextSizeAsync(TextSize.Small);
+
+        Assert.Equal(TextSize.Small, (await CreateApp().Settings.GetAsync()).TextSize);
+    }
+
+    [Fact]
+    public async Task Changing_text_size_leaves_the_colours_alone()
+    {
+        var app = CreateApp();
+        await app.Settings.SetPaletteAsync(ColourPalette.MossAndLichen);
+        await app.Settings.SetAppearanceAsync(Appearance.Dark);
+
+        await app.Settings.SetTextSizeAsync(TextSize.ExtraSmall);
+
+        var settings = await CreateApp().Settings.GetAsync();
+        Assert.Equal((ColourPalette.MossAndLichen, Appearance.Dark, TextSize.ExtraSmall), (settings.Palette, settings.Appearance, settings.TextSize));
+    }
+
+    [Fact]
+    public async Task An_unknown_text_size_is_refused()
+    {
+        var app = CreateApp();
+
+        var error = await Assert.ThrowsAsync<RuleViolationException>(() => app.Settings.SetTextSizeAsync((TextSize)99));
+
+        Assert.Equal("Choose one of the text sizes.", error.Message);
+        Assert.Equal(TextSize.Default, (await app.Settings.GetAsync()).TextSize);
+    }
+
+    [Fact]
     public async Task Each_setting_changes_without_resetting_the_others()
     {
         var app = CreateApp();

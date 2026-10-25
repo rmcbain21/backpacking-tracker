@@ -10,4 +10,6 @@ public sealed record Settings : StoredRecord
     public ColourPalette Palette { get; init; } = ColourPalette.Camping;
 
     public Appearance Appearance { get; init; } = Appearance.MatchDevice;
+
+    public TextSize TextSize { get; init; } = TextSize.Default;
 }

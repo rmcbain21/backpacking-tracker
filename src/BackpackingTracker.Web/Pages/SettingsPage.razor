@@ -47,6 +47,18 @@
 </MudPaper>
 
 <MudPaper Class="pa-4 mt-4">
+    <MudText Typo="Typo.subtitle1">Text size</MudText>
+    <div class="stacked-radios">
+        <MudRadioGroup T="TextSize" Value="Theme.TextSize" ValueChanged="SetTextSizeAsync">
+            <MudRadio Value="TextSize.ExtraSmall" Color="Color.Primary">Extra small</MudRadio>
+            <MudRadio Value="TextSize.Small" Color="Color.Primary">Small</MudRadio>
+            <MudRadio Value="TextSize.Default" Color="Color.Primary">Default</MudRadio>
+            <MudRadio Value="TextSize.Large" Color="Color.Primary">Large</MudRadio>
+        </MudRadioGroup>
+    </div>
+</MudPaper>
+
+<MudPaper Class="pa-4 mt-4">
     <MudText Typo="Typo.subtitle1">Gear</MudText>
     <MudButton Href="categories" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Category" Class="mt-1">
         Edit Default Categories
@@ -77,13 +89,19 @@
     private async Task SetPaletteAsync(ColourPalette palette)
     {
         await App.Settings.SetPaletteAsync(palette);
-        Theme.Set(palette, Theme.Appearance);
+        Theme.Set(palette, Theme.Appearance, Theme.TextSize);
     }
 
     private async Task SetAppearanceAsync(Appearance appearance)
     {
         await App.Settings.SetAppearanceAsync(appearance);
-        Theme.Set(Theme.Palette, appearance);
+        Theme.Set(Theme.Palette, appearance, Theme.TextSize);
+    }
+
+    private async Task SetTextSizeAsync(TextSize textSize)
+    {
+        await App.Settings.SetTextSizeAsync(textSize);
+        Theme.Set(Theme.Palette, Theme.Appearance, textSize);
     }
 
     private static (string Background, string Main, string Accent) Swatch(Palette palette) =>
