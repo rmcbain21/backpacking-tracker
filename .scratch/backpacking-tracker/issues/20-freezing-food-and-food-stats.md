@@ -11,3 +11,6 @@
 - [ ] Stats include calories per day (total Meal Plan calories divided by number of Trip Days) and total food cost (sum over slot entries with a cost).
 - [ ] Editing a Food Item or Meal after completion changes Planned Trips but not Completed ones.
 - [ ] Core tests cover nutrition freezing, Reopen and both food stats.
+
+## Comments
+- From ticket 15: freeze the slot entries in `TripPlanner.CompleteTripAsync` and clear them in `ReopenTripAsync`, as `ListContents.Freeze` / `Unfreeze` do for Packing List weights.

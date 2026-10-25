@@ -61,6 +61,17 @@ public sealed class GearLists : IGearItemReferences
         return copy;
     }
 
+    /// <summary>
+    /// Makes a Gear List with these Categories and entries (a Trip's Packing List, copied by the caller) and
+    /// saves it. Each entry must be in one of the Categories.
+    /// </summary>
+    internal async Task<GearList> CreateGearListAsync(string name, ListContents contents)
+    {
+        var list = NewGearList(name, contents.Categories, contents.Entries);
+        await _store.SaveAsync(Table, list);
+        return list;
+    }
+
     /// <summary>Deletes the Gear List. Kept as a tombstone so the deletion syncs; its Gear Items are untouched.</summary>
     public async Task DeleteGearListAsync(string gearListId)
     {

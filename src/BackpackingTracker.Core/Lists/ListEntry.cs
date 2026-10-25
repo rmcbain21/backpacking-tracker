@@ -24,4 +24,11 @@ public sealed record ListEntry
     /// <summary>Ticked on a Trip's packing checklist. Only used on Packing Lists; a copied entry starts unpacked.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool Packed { get; init; }
+
+    /// <summary>
+    /// The Gear Item's weight in grams when the Trip was Completed, used instead of its current weight. Only
+    /// set on a Completed Trip's Packing List.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public decimal? FrozenWeightGrams { get; init; }
 }

@@ -4,6 +4,7 @@
 @inject AppCore App
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
+@inject NavigationManager Navigation
 
 <PageTitle>@(_view?.Trip.Name ?? "Trip")</PageTitle>
 
@@ -18,15 +19,38 @@
 else if (_view is not null)
 {
     var trip = _view.Trip;
-    <MudText Typo="Typo.h5" HtmlTag="h1">@trip.Name</MudText>
+    <div class="d-flex align-center">
+        <MudText Typo="Typo.h5" HtmlTag="h1" Class="flex-grow-1">@trip.Name</MudText>
+        <MudMenu Icon="@Icons.Material.Filled.MoreVert" Dense="true" AriaLabel="Trip options">
+            @if (Completed)
+            {
+                <MudMenuItem OnClick="ReopenAsync">Reopen</MudMenuItem>
+            }
+            else
+            {
+                <MudMenuItem OnClick="CompleteAsync">Mark Completed</MudMenuItem>
+            }
+            <MudMenuItem OnClick="SaveAsGearListAsync">Save as Gear List</MudMenuItem>
+            <MudMenuItem OnClick="DeleteAsync">Delete</MudMenuItem>
+        </MudMenu>
+    </div>
     <div class="d-flex align-center">
         <MudText Typo="Typo.body2" Class="mud-text-secondary trip-dates">@TripDates.Format(trip)</MudText>
-        <MudIconButton Icon="@Icons.Material.Filled.EditCalendar" Size="Size.Small" aria-label="Change dates"
-                       Class="change-dates" OnClick="ChangeDatesAsync" />
+        @if (!Completed)
+        {
+            <MudIconButton Icon="@Icons.Material.Filled.EditCalendar" Size="Size.Small" aria-label="Change dates"
+                           Class="change-dates" OnClick="ChangeDatesAsync" />
+        }
     </div>
     <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2 trip-created-from">
         @trip.Status@(trip.CreatedFrom is null ? "" : $" · from Gear List \"{trip.CreatedFrom}\"")
     </MudText>
+    @if (Completed)
+    {
+        <MudAlert Severity="Severity.Info" Dense="true" Class="mb-2 completed-note">
+            Weights are frozen as they were when completed. Reopen to change the Packing List, checklist or dates.
+        </MudAlert>
+    }
 
     <MudTabs @bind-ActivePanelIndex="_tab" Elevation="0" TabPanelsClass="pt-3" MinimumTabWidth="80px" Class="trip-tabs">
         <MudTabPanel Text="Packing List">@PackingList(trip)</MudTabPanel>
@@ -34,7 +58,7 @@ else if (_view is not null)
         <MudTabPanel Text="Itinerary">@Itinerary(trip)</MudTabPanel>
     </MudTabs>
 
-    @if (_tab == PackingListTab)
+    @if (_tab == PackingListTab && !Completed)
     {
         <MudFab Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Class="add-fab" aria-label="Add gear to Packing List"
                 OnClick="() => AddGearAsync(null)" />
@@ -52,6 +76,9 @@ else if (_view is not null)
     private bool _loaded;
     private int _tab = PackingListTab;
 
+    /// <summary>A Completed Trip's Packing List, checklist and dates are locked until it's Reopened.</summary>
+    private bool Completed => _view?.Trip.Status == TripStatus.Completed;
+
     private RenderFragment PackingList(Trip trip) => __builder =>
     {
         <PackTotals Weight="_view!.Weight" UnitSystem="_unitSystem">
@@ -66,7 +93,10 @@ else if (_view is not null)
             </div>
         </PackTotals>
 
-        <MudText Typo="Typo.body2" Class="mud-text-secondary mt-2">Changes here are for this Trip only.</MudText>
+        @if (!Completed)
+        {
+            <MudText Typo="Typo.body2" Class="mud-text-secondary mt-2">Changes here are for this Trip only.</MudText>
+        }
 
         @foreach (var categorySection in _view.Sections)
         {
@@ -76,7 +106,7 @@ else if (_view is not null)
                 <MudText Typo="Typo.body2" Class="mud-text-secondary text-nowrap category-subtotal">
                     @(categorySection.Entries.Count == 0 ? "Empty" : UnitFormat.Weight(categorySection.SubtotalGrams, _unitSystem))
                 </MudText>
-                @if (categorySection.IsOnList)
+                @if (categorySection.IsOnList && !Completed)
                 {
                     <MudIconButton Icon="@Icons.Material.Filled.Add" Size="Size.Small" aria-label="@($"Add gear to {category.Name}")"
                                    OnClick="() => AddGearAsync(category.Id)" />
@@ -88,7 +118,7 @@ else if (_view is not null)
                     @foreach (var entryView in categorySection.Entries)
                     {
                         var entry = entryView.Entry;
-                        <ListEntryRow EntryView="entryView" Categories="trip.PackingList.Categories" UnitSystem="_unitSystem"
+                        <ListEntryRow EntryView="entryView" Categories="trip.PackingList.Categories" UnitSystem="_unitSystem" ReadOnly="Completed"
                                       OnChange="change => TryAsync(() => App.Trips.UpdateEntryAsync(TripId, entry.Id, change.Quantity, change.CarryMode))"
                                       OnMove="target => TryAsync(() => App.Trips.MoveEntryAsync(TripId, entry.Id, target.Id))"
                                       OnRemove="() => TryAsync(() => App.Trips.RemoveEntryAsync(TripId, entry.Id))" />
@@ -101,7 +131,7 @@ else if (_view is not null)
 
     /// <summary>
     /// The packing checklist: progress and Reset, then each Packing List entry by Category as a full-width
-    /// row that ticks or unticks with one tap anywhere on it.
+    /// row that ticks or unticks with one tap anywhere on it. Read-only on a Completed Trip.
     /// </summary>
     private RenderFragment Checklist() => __builder =>
     {
@@ -111,8 +141,11 @@ else if (_view is not null)
                 <MudText Class="flex-grow-1 packed-count">
                     @(view.ChecklistCount == 0 ? "Nothing on the Packing List yet" : $"{view.PackedCount} of {view.ChecklistCount} packed")
                 </MudText>
-                <MudButton Variant="Variant.Text" Size="Size.Small" StartIcon="@Icons.Material.Filled.RestartAlt"
-                           Disabled="view.PackedCount == 0" OnClick="ResetPackedAsync" Class="reset-packed">Reset</MudButton>
+                @if (!Completed)
+                {
+                    <MudButton Variant="Variant.Text" Size="Size.Small" StartIcon="@Icons.Material.Filled.RestartAlt"
+                               Disabled="view.PackedCount == 0" OnClick="ResetPackedAsync" Class="reset-packed">Reset</MudButton>
+                }
             </div>
             <MudProgressLinear Value="@(view.ChecklistCount == 0 ? 0 : 100.0 * view.PackedCount / view.ChecklistCount)"
                                Color="Color.Primary" Rounded="true" Class="mt-1" />
@@ -126,9 +159,10 @@ else if (_view is not null)
                 {
                     var entry = entryView.Entry;
                     var name = entryView.GearItem?.Name ?? "Deleted Gear Item";
-                    <div class="d-flex align-center px-2 pick-row checklist-row @(entry.Packed ? "packed" : "")"
-                         role="checkbox" aria-checked="@(entry.Packed ? "true" : "false")" tabindex="0" aria-label="@name"
-                         @onclick="() => TryAsync(() => App.Trips.SetPackedAsync(TripId, entry.Id, !entry.Packed))">
+                    <div class="d-flex align-center px-2 checklist-row @(Completed ? "" : "pick-row") @(entry.Packed ? "packed" : "")"
+                         role="checkbox" aria-checked="@(entry.Packed ? "true" : "false")" aria-readonly="@(Completed ? "true" : "false")"
+                         tabindex="@(Completed ? -1 : 0)" aria-label="@name"
+                         @onclick="() => Completed ? Task.CompletedTask : TryAsync(() => App.Trips.SetPackedAsync(TripId, entry.Id, !entry.Packed))">
                         <MudIcon Icon="@(entry.Packed ? Icons.Material.Filled.CheckBox : Icons.Material.Filled.CheckBoxOutlineBlank)"
                                  Color="@(entry.Packed ? Color.Primary : Color.Default)" Class="mr-3" />
                         <MudText Class="flex-grow-1 checklist-name">@name</MudText>
@@ -285,6 +319,72 @@ else if (_view is not null)
         var dialog = await DialogService.ShowAsync<AddGearDialog>("Add gear", parameters, options);
         await dialog.Result;
         await LoadAsync();
+    }
+
+    private async Task CompleteAsync()
+    {
+        var confirmed = await DialogService.ShowMessageBoxAsync(
+            "Mark Completed",
+            $"Mark {_view!.Trip.Name} Completed? Its weights are frozen as they are now, and its Packing List, checklist and dates are locked until you Reopen it.",
+            yesText: "Mark Completed", cancelText: "Cancel");
+        if (confirmed == true)
+        {
+            await TryAsync(() => App.Trips.CompleteTripAsync(TripId));
+        }
+    }
+
+    private async Task ReopenAsync()
+    {
+        var confirmed = await DialogService.ShowMessageBoxAsync(
+            "Reopen Trip",
+            $"Reopen {_view!.Trip.Name}? It goes back to Planned and uses each Gear Item's current weight; completing it again freezes the weights afresh.",
+            yesText: "Reopen", cancelText: "Cancel");
+        if (confirmed == true)
+        {
+            await TryAsync(() => App.Trips.ReopenTripAsync(TripId));
+        }
+    }
+
+    /// <summary>Asks for the new Gear List's name and opens it.</summary>
+    private async Task SaveAsGearListAsync()
+    {
+        var parameters = new DialogParameters<NameDialog> { { d => d.CurrentName, _view!.Trip.Name }, { d => d.SaveText, "Save" } };
+        var dialog = await DialogService.ShowAsync<NameDialog>("Save as Gear List", parameters);
+        if (await dialog.Result is not { Canceled: false, Data: string name })
+        {
+            return;
+        }
+
+        try
+        {
+            var list = await App.Trips.SaveAsGearListAsync(TripId, name);
+            Navigation.NavigateTo($"lists/{list.Id}");
+        }
+        catch (RuleViolationException ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Warning);
+        }
+    }
+
+    private async Task DeleteAsync()
+    {
+        var confirmed = await DialogService.ShowMessageBoxAsync(
+            "Delete Trip", $"Delete {_view!.Trip.Name}? Its Packing List, itinerary and journal notes go with it. Its gear stays in your catalogue.",
+            yesText: "Delete", cancelText: "Cancel");
+        if (confirmed != true)
+        {
+            return;
+        }
+
+        try
+        {
+            await App.Trips.DeleteTripAsync(TripId);
+            Navigation.NavigateTo("trips");
+        }
+        catch (RuleViolationException ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Warning);
+        }
     }
 
     /// <summary>Runs a change, shows the reason if the core refuses it, and reloads the Trip.</summary>

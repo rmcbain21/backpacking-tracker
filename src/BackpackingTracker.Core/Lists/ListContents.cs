@@ -14,9 +14,33 @@ public sealed record ListContents
 
     public IReadOnlyList<ListEntry> Entries { get; init; } = [];
 
-    /// <summary>A copy for another list: the same Categories, and the same entries each with a new id, none ticked as packed.</summary>
+    /// <summary>
+    /// A copy for another list: the same Categories, and the same entries each with a new id, none ticked as
+    /// packed and none with a frozen weight.
+    /// </summary>
     internal ListContents Copy() =>
-        this with { Entries = Entries.Select(entry => entry with { Id = Guid.NewGuid().ToString(), Packed = false }).ToList() };
+        this with
+        {
+            Entries = Entries
+                .Select(entry => entry with { Id = Guid.NewGuid().ToString(), Packed = false, FrozenWeightGrams = null })
+                .ToList(),
+        };
+
+    /// <summary>
+    /// Copies each entry's Gear Item's current weight onto the entry, for a Completed Trip. An entry whose Gear
+    /// Item is gone is left unfrozen, so it still weighs nothing.
+    /// </summary>
+    internal ListContents Freeze(IReadOnlyDictionary<string, GearItem> items) =>
+        this with
+        {
+            Entries = Entries
+                .Select(entry => entry with { FrozenWeightGrams = items.GetValueOrDefault(entry.GearItemId)?.WeightGrams })
+                .ToList(),
+        };
+
+    /// <summary>Clears every frozen weight, so the entries use their Gear Items' current weights again.</summary>
+    internal ListContents Unfreeze() =>
+        this with { Entries = Entries.Select(entry => entry with { FrozenWeightGrams = null }).ToList() };
 
     /// <summary>
     /// Adds the Gear Item into one of the list's Categories, with quantity 1 and Carry Mode base. If it's
@@ -102,7 +126,10 @@ public sealed record ListContents
 
     // ----- Views -----
 
-    /// <summary>The entries with their Gear Items' current weights, arranged by Category, and the list's totals.</summary>
+    /// <summary>
+    /// The entries with their Gear Items' current weights (their frozen weights, on a Completed Trip), arranged
+    /// by Category, and the list's totals.
+    /// </summary>
     /// <param name="items">The Gear Items the entries use, by id; a missing one was deleted on another device.</param>
     /// <param name="waterGrams">Water carried, on a Trip; counted as Consumable Weight.</param>
     internal ListContentsView View(IReadOnlyDictionary<string, GearItem> items, decimal waterGrams = 0m)
@@ -110,9 +137,12 @@ public sealed record ListContents
         var entries = Entries
             .Select(entry =>
             {
-                // A Gear Item deleted on another device before a sync is shown as missing and weighs nothing.
+                // A Gear Item deleted on another device before a sync is shown as missing and weighs nothing,
+                // unless its weight was frozen on the entry first.
                 var item = items.GetValueOrDefault(entry.GearItemId);
-                var weighed = new WeighedEntry(item?.WeightGrams ?? 0m, entry.Quantity, entry.CarryMode, item is null ? null : entry.CategoryId);
+                var weighed = entry.FrozenWeightGrams is { } frozen
+                    ? new WeighedEntry(frozen, entry.Quantity, entry.CarryMode, entry.CategoryId)
+                    : new WeighedEntry(item?.WeightGrams ?? 0m, entry.Quantity, entry.CarryMode, item is null ? null : entry.CategoryId);
                 return (View: new ListEntryView(entry, item, WeightCalculator.EntryWeight(weighed)), Weighed: weighed);
             })
             .ToList();

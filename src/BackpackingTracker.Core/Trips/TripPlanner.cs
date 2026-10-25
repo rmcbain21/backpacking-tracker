@@ -7,7 +7,8 @@ namespace BackpackingTracker.Core.Trips;
 /// <summary>
 /// Trips, each with its own Packing List copied from a Gear List (or started empty) and then edited on
 /// that Trip only, and one Trip Day per calendar day. A Planned Trip's weights always come from each Gear
-/// Item's current weight.
+/// Item's current weight; a Completed Trip's are frozen, and its Packing List, checklist and dates are locked
+/// until it's Reopened. Its Trip Days' route and journal notes, and its water carried, stay editable.
 /// </summary>
 public sealed class TripPlanner : IGearItemReferences
 {
@@ -84,6 +85,69 @@ public sealed class TripPlanner : IGearItemReferences
         return View(trip, items);
     }
 
+    // ----- Trip Status, Save as Gear List and delete -----
+
+    /// <summary>
+    /// Marks the Trip Completed, copying each Packing List entry's current Gear Item weight onto the entry, so
+    /// re-weighing gear later never changes this Trip's numbers. Its Packing List, checklist and dates are then
+    /// locked until it's Reopened.
+    /// </summary>
+    public async Task CompleteTripAsync(string tripId)
+    {
+        var trip = await GetExistingTripAsync(tripId);
+        if (trip.Status == TripStatus.Completed)
+        {
+            throw new RuleViolationException("This Trip is already Completed.");
+        }
+
+        var items = await _gear.GetGearItemsAsync(trip.PackingList.Entries.Select(entry => entry.GearItemId));
+        await SaveAsync(trip with { Status = TripStatus.Completed, PackingList = trip.PackingList.Freeze(items) });
+    }
+
+    /// <summary>
+    /// Sets a Completed Trip back to Planned and clears its frozen weights, so it uses each Gear Item's current
+    /// weight again; completing it again takes a fresh freeze.
+    /// </summary>
+    public async Task ReopenTripAsync(string tripId)
+    {
+        var trip = await GetExistingTripAsync(tripId);
+        if (trip.Status != TripStatus.Completed)
+        {
+            throw new RuleViolationException("This Trip is already Planned.");
+        }
+
+        await SaveAsync(trip with { Status = TripStatus.Planned, PackingList = trip.PackingList.Unfreeze() });
+    }
+
+    /// <summary>
+    /// A new Gear List with copies of the Packing List's Categories and entries (Gear Item, quantity and Carry
+    /// Mode, each with a new id, none packed). Later changes to either don't change the other.
+    /// </summary>
+    public async Task<GearList> SaveAsGearListAsync(string tripId, string name)
+    {
+        var trip = await GetExistingTripAsync(tripId);
+        var contents = trip.PackingList.Copy();
+        if (contents.Categories.Count > 0)
+        {
+            // An entry whose Category isn't on the list (only from a hand-edited file) goes in the first one.
+            var known = contents.Categories.Select(category => category.Id).ToHashSet();
+            var first = contents.Categories[0].Id;
+            contents = contents with
+            {
+                Entries = contents.Entries.Select(e => known.Contains(e.CategoryId) ? e : e with { CategoryId = first }).ToList(),
+            };
+        }
+
+        return await _lists.CreateGearListAsync(name, contents);
+    }
+
+    /// <summary>Deletes the Trip, Planned or Completed. Kept as a tombstone so the deletion syncs.</summary>
+    public async Task DeleteTripAsync(string tripId)
+    {
+        var trip = await GetExistingTripAsync(tripId);
+        await SaveAsync(trip with { Deleted = true });
+    }
+
     // ----- The Packing List -----
 
     /// <summary>
@@ -92,7 +156,7 @@ public sealed class TripPlanner : IGearItemReferences
     /// </summary>
     public async Task<ListEntry> AddEntryAsync(string tripId, string gearItemId, string categoryId)
     {
-        var trip = await GetExistingTripAsync(tripId);
+        var trip = await GetPlannedTripAsync(tripId, "its Packing List");
         var (packingList, entry) = trip.PackingList.AddEntry(await _gear.GetGearItemAsync(gearItemId), categoryId, ListKind);
         await SaveAsync(trip with { PackingList = packingList });
         return entry;
@@ -100,20 +164,20 @@ public sealed class TripPlanner : IGearItemReferences
 
     public async Task UpdateEntryAsync(string tripId, string entryId, int quantity, CarryMode carryMode)
     {
-        var trip = await GetExistingTripAsync(tripId);
+        var trip = await GetPlannedTripAsync(tripId, "its Packing List");
         await SaveAsync(trip with { PackingList = trip.PackingList.UpdateEntry(entryId, quantity, carryMode, ListKind) });
     }
 
     /// <summary>Moves an entry to another of the Packing List's Categories.</summary>
     public async Task MoveEntryAsync(string tripId, string entryId, string categoryId)
     {
-        var trip = await GetExistingTripAsync(tripId);
+        var trip = await GetPlannedTripAsync(tripId, "its Packing List");
         await SaveAsync(trip with { PackingList = trip.PackingList.MoveEntry(entryId, categoryId, ListKind) });
     }
 
     public async Task RemoveEntryAsync(string tripId, string entryId)
     {
-        var trip = await GetExistingTripAsync(tripId);
+        var trip = await GetPlannedTripAsync(tripId, "its Packing List");
         await SaveAsync(trip with { PackingList = trip.PackingList.RemoveEntry(entryId, ListKind) });
     }
 
@@ -122,14 +186,14 @@ public sealed class TripPlanner : IGearItemReferences
     /// <summary>Ticks or unticks a Packing List entry on the packing checklist.</summary>
     public async Task SetPackedAsync(string tripId, string entryId, bool packed)
     {
-        var trip = await GetExistingTripAsync(tripId);
+        var trip = await GetPlannedTripAsync(tripId, "its packing checklist");
         await SaveAsync(trip with { PackingList = trip.PackingList.SetPacked(entryId, packed, ListKind) });
     }
 
     /// <summary>Unticks every entry on the packing checklist, to check the packing again.</summary>
     public async Task ResetPackedAsync(string tripId)
     {
-        var trip = await GetExistingTripAsync(tripId);
+        var trip = await GetPlannedTripAsync(tripId, "its packing checklist");
         await SaveAsync(trip with { PackingList = trip.PackingList.ResetPacked() });
     }
 
@@ -178,7 +242,7 @@ public sealed class TripPlanner : IGearItemReferences
     public async Task<DateChangePlan> PlanDateChangeAsync(string tripId, DateOnly startDate, DateOnly endDate)
     {
         CheckDates(startDate, endDate);
-        return PlanDateChange(await GetExistingTripAsync(tripId), startDate, endDate);
+        return PlanDateChange(await GetPlannedTripAsync(tripId, "its dates"), startDate, endDate);
     }
 
     /// <summary>
@@ -188,7 +252,7 @@ public sealed class TripPlanner : IGearItemReferences
     public async Task<Trip> ChangeDatesAsync(string tripId, DateOnly startDate, DateOnly endDate, bool removeDaysWithContent = false)
     {
         CheckDates(startDate, endDate);
-        var trip = await GetExistingTripAsync(tripId);
+        var trip = await GetPlannedTripAsync(tripId, "its dates");
         var plan = PlanDateChange(trip, startDate, endDate);
         if (plan.NeedsConfirmation && !removeDaysWithContent)
         {
@@ -206,7 +270,7 @@ public sealed class TripPlanner : IGearItemReferences
     /// </summary>
     public async Task<Trip> MoveTripAsync(string tripId, DateOnly startDate)
     {
-        var trip = await GetExistingTripAsync(tripId);
+        var trip = await GetPlannedTripAsync(tripId, "its dates");
         var endDate = startDate.AddDays(trip.EndDate.DayNumber - trip.StartDate.DayNumber);
         var moved = trip with { StartDate = startDate, EndDate = endDate, Days = trip.DaysMovedTo(startDate) };
         await SaveAsync(moved);
@@ -260,6 +324,16 @@ public sealed class TripPlanner : IGearItemReferences
 
     private async Task<Trip> GetExistingTripAsync(string tripId) =>
         await FindTripAsync(tripId) ?? throw new RuleViolationException("That Trip no longer exists.");
+
+    /// <summary>The Trip, refused if it's Completed: its Packing List, checklist and dates are locked until Reopen.</summary>
+    /// <param name="what">What's locked, for the message: "its Packing List", "its dates" and so on.</param>
+    private async Task<Trip> GetPlannedTripAsync(string tripId, string what)
+    {
+        var trip = await GetExistingTripAsync(tripId);
+        return trip.Status == TripStatus.Completed
+            ? throw new RuleViolationException($"This Trip is Completed. Reopen it to change {what}.")
+            : trip;
+    }
 
     private Task SaveAsync(Trip trip) => _store.SaveAsync(Table, trip with { UpdatedAt = _clock.UtcNow });
 
