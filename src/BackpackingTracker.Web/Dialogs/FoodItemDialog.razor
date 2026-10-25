@@ -1,0 +1,180 @@
+@* Adds a Food Item, or edits one (with Retire and Delete). Saves through the core and stays open if it refuses. *@
+@inject AppCore App
+@inject IDialogService DialogService
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="_form">
+            <MudTextField @bind-Value="_name" Label="Name (such as Clif Bar)" Required="true"
+                          RequiredError="Give the Food Item a name" />
+            <div class="d-flex gap-3">
+                <MudTextField @bind-Value="_weightText" Label="Serving weight" InputMode="@(InputMode.@decimal)"
+                              Validation="@(new Func<string?, string?>(ValidateWeight))" Class="flex-grow-1" />
+                <MudSelect T="WeightUnit" Value="_weightUnit" ValueChanged="ChangeWeightUnit" Label="Unit" Class="weight-unit">
+                    @foreach (var unit in WeightInput.GearUnits)
+                    {
+                        <MudSelectItem Value="unit">@WeightInput.Label(unit)</MudSelectItem>
+                    }
+                </MudSelect>
+            </div>
+            <MudTextField @bind-Value="_caloriesText" Label="Calories per serving" InputMode="@(InputMode.@decimal)"
+                          Validation="@(new Func<string?, string?>(text => NutritionInput.ParseCalories(text).Error))" />
+            <div class="d-flex gap-3">
+                <MudTextField @bind-Value="_proteinText" Label="Protein (g)" InputMode="@(InputMode.@decimal)" Class="flex-grow-1"
+                              Validation="@(new Func<string?, string?>(text => NutritionInput.ParseProtein(text).Error))" />
+                <MudTextField @bind-Value="_costText" Label="Cost" InputMode="@(InputMode.@decimal)"
+                              Adornment="Adornment.Start" AdornmentText="$" Class="flex-grow-1"
+                              Validation="@(new Func<string?, string?>(text => PriceInput.Parse(text).Error))" />
+            </div>
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">Protein and cost are optional, per serving.</MudText>
+            <TagEditor @ref="_tagEditor" @bind-Tags="_tags" TagsInUse="_tagsInUse" />
+        </MudForm>
+        @if (_problem is not null)
+        {
+            <MudAlert Severity="Severity.Warning" Class="mt-3" Dense="true">@_problem</MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        @if (FoodItem is not null)
+        {
+            <MudButton Color="Color.Error" OnClick="DeleteAsync" Disabled="_busy">Delete</MudButton>
+            <MudButton OnClick="RetireAsync" Disabled="_busy">Retire</MudButton>
+            <MudSpacer />
+        }
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SaveAsync" Disabled="_busy">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    /// <summary>The Food Item to edit, or null to add a new one.</summary>
+    [Parameter]
+    public FoodItem? FoodItem { get; set; }
+
+    [Parameter]
+    public UnitSystem UnitSystem { get; set; }
+
+    private MudForm _form = default!;
+    private TagEditor _tagEditor = default!;
+    private string? _name;
+    private string? _weightText;
+    private WeightUnit _weightUnit;
+    private string? _caloriesText;
+    private string? _proteinText;
+    private string? _costText;
+    private IReadOnlyList<string> _tags = [];
+    private IReadOnlyList<string> _tagsInUse = [];
+    private string? _problem;
+    private bool _busy;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _tagsInUse = await App.Food.ListTagsAsync();
+        _weightUnit = WeightInput.DefaultUnit(UnitSystem);
+
+        if (FoodItem is null)
+        {
+            return;
+        }
+
+        _name = FoodItem.Name;
+        _weightText = WeightInput.TextForEditing(FoodItem.ServingWeightGrams, _weightUnit);
+        _caloriesText = NutritionInput.TextForEditing(FoodItem.CaloriesPerServing);
+        _proteinText = NutritionInput.TextForEditing(FoodItem.ProteinGramsPerServing);
+        _costText = PriceInput.TextForEditing(FoodItem.CostPerServing);
+        _tags = FoodItem.Tags;
+    }
+
+    private WeightParseResult ParseWeight(string? text) => FoodItem is null
+        ? WeightInput.Parse(text, _weightUnit)
+        : WeightInput.ParseEdited(text, _weightUnit, FoodItem.ServingWeightGrams);
+
+    private string? ValidateWeight(string? text) => ParseWeight(text).Error;
+
+    /// <summary>Switching unit on an untouched weight shows the same weight in the new unit.</summary>
+    private void ChangeWeightUnit(WeightUnit unit)
+    {
+        if (FoodItem is not null && WeightInput.IsUnchanged(_weightText, _weightUnit, FoodItem.ServingWeightGrams))
+        {
+            _weightText = WeightInput.TextForEditing(FoodItem.ServingWeightGrams, unit);
+        }
+
+        _weightUnit = unit;
+    }
+
+    private async Task SaveAsync()
+    {
+        await _form.ValidateAsync();
+        var weight = ParseWeight(_weightText);
+        var calories = NutritionInput.ParseCalories(_caloriesText);
+        var protein = NutritionInput.ParseProtein(_proteinText);
+        var cost = PriceInput.Parse(_costText);
+        if (!_form.IsValid || weight.Grams is null || calories.Amount is null || protein.Error is not null || cost.Error is not null)
+        {
+            return;
+        }
+
+        var details = new FoodItemDetails(
+            _name ?? "", weight.Grams.Value, calories.Amount.Value,
+            protein.Amount, cost.Price, _tagEditor.TagsIncludingTyped());
+
+        await RunAsync(async () =>
+        {
+            var saved = FoodItem is null
+                ? await App.Food.AddFoodItemAsync(details)
+                : await App.Food.UpdateFoodItemAsync(FoodItem.Id, details);
+            MudDialog.Close(DialogResult.Ok(saved));
+        });
+    }
+
+    private Task RetireAsync() => RunAsync(async () =>
+    {
+        await App.Food.RetireFoodItemAsync(FoodItem!.Id);
+        MudDialog.Close(DialogResult.Ok(FoodItem));
+    });
+
+    private async Task DeleteAsync()
+    {
+        var plan = await App.Food.PlanFoodItemDeletionAsync(FoodItem!.Id);
+        if (!await DialogService.ConfirmDeletionAsync(plan))
+        {
+            return;
+        }
+
+        await RunAsync(async () =>
+        {
+            if (plan.CanDelete)
+            {
+                await App.Food.DeleteFoodItemAsync(FoodItem.Id);
+            }
+            else
+            {
+                await App.Food.RetireFoodItemAsync(FoodItem.Id);
+            }
+
+            MudDialog.Close(DialogResult.Ok(FoodItem));
+        });
+    }
+
+    /// <summary>Runs a change; if the core refuses it, shows why and keeps the dialog open.</summary>
+    private async Task RunAsync(Func<Task> change)
+    {
+        _busy = true;
+        _problem = null;
+        try
+        {
+            await change();
+        }
+        catch (RuleViolationException ex)
+        {
+            _problem = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

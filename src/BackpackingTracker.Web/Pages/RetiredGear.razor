@@ -58,7 +58,7 @@ else
     {
         // A Retired Gear Item is never offered Retire, so confirming always means delete.
         var plan = await App.Gear.PlanGearItemDeletionAsync(item.Id);
-        if (await DialogService.ConfirmGearItemDeletionAsync(plan))
+        if (await DialogService.ConfirmDeletionAsync(plan))
         {
             await App.Gear.DeleteGearItemAsync(item.Id);
             await LoadAsync();

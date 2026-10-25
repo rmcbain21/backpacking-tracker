@@ -1,6 +1,117 @@
 @page "/food"
+@inject AppCore App
+@inject IDialogService DialogService
 
 <PageTitle>Food</PageTitle>
 
 <MudText Typo="Typo.h5" HtmlTag="h1" GutterBottom="true">Food</MudText>
-<MudText Class="mud-text-secondary">Coming soon.</MudText>
+
+<MudTextField T="string" Value="_searchText" ValueChanged="SearchAsync" Label="Search food" Immediate="true"
+              DebounceInterval="200" Clearable="true" Adornment="Adornment.Start"
+              AdornmentIcon="@Icons.Material.Filled.Search" />
+
+<div class="d-flex justify-end mt-1">
+    <MudButton Href="food/retired" Variant="Variant.Text" Size="Size.Small"
+               StartIcon="@Icons.Material.Filled.Inventory2">Retired</MudButton>
+</div>
+
+@if (_items is null)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else if (_items.Count == 0)
+{
+    <MudText Class="mud-text-secondary mt-4">
+        @(Filter.IsEmpty ? "No food yet. Tap + to add your first Food Item." : "No Food Items match.")
+    </MudText>
+}
+else
+{
+    <MudPaper Class="mt-2">
+        @foreach (var item in _items)
+        {
+            <div class="d-flex align-center pa-3 gap-3 gear-row" role="button" tabindex="0"
+                 aria-label="@($"Edit {item.Name}")" @onclick="() => EditAsync(item)">
+                <div class="flex-grow-1">
+                    <MudText>@item.Name</MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">@Nutrition(item)</MudText>
+                    @if (item.Tags.Count > 0)
+                    {
+                        <div class="gear-tags">
+                            @foreach (var tag in item.Tags)
+                            {
+                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@tag</MudChip>
+                            }
+                        </div>
+                    }
+                </div>
+                <div class="text-right">
+                    <MudText Class="text-nowrap">@UnitFormat.Weight(item.ServingWeightGrams, _unitSystem)</MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary text-nowrap">
+                        @CalorieDensity.Format(CalorieDensity.PerGram(item), _unitSystem)
+                    </MudText>
+                </div>
+            </div>
+            <MudDivider />
+        }
+    </MudPaper>
+}
+
+<MudFab Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Class="add-fab" aria-label="Add Food Item"
+        OnClick="AddAsync" />
+
+@code {
+    private UnitSystem _unitSystem;
+    private IReadOnlyList<FoodItem>? _items;
+    private string? _searchText;
+
+    private FoodFilter Filter => new(_searchText);
+
+    protected override async Task OnInitializedAsync()
+    {
+        _unitSystem = (await App.Settings.GetAsync()).UnitSystem;
+        await LoadFoodAsync();
+    }
+
+    private async Task LoadFoodAsync() => _items = await App.Food.ListFoodItemsAsync(Filter);
+
+    private async Task SearchAsync(string? searchText)
+    {
+        _searchText = searchText;
+        await LoadFoodAsync();
+    }
+
+    /// <summary>A serving's calories, then protein and cost where recorded, such as "260 cal · 9 g protein · $1.79".</summary>
+    private static string Nutrition(FoodItem item)
+    {
+        var parts = new List<string> { NutritionInput.Calories(item.CaloriesPerServing) };
+        if (item.ProteinGramsPerServing is { } protein)
+        {
+            parts.Add(NutritionInput.Protein(protein));
+        }
+
+        if (item.CostPerServing is { } cost)
+        {
+            parts.Add(PriceInput.Format(cost));
+        }
+
+        return string.Join(" · ", parts);
+    }
+
+    private Task AddAsync() => ShowFoodItemDialogAsync("Add Food Item", item: null);
+
+    private Task EditAsync(FoodItem item) => ShowFoodItemDialogAsync("Edit Food Item", item);
+
+    private async Task ShowFoodItemDialogAsync(string title, FoodItem? item)
+    {
+        var parameters = new DialogParameters<FoodItemDialog>
+        {
+            { d => d.FoodItem, item },
+            { d => d.UnitSystem, _unitSystem },
+        };
+        var options = new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Small };
+        var dialog = await DialogService.ShowAsync<FoodItemDialog>(title, parameters, options);
+        await dialog.Result;
+        await LoadFoodAsync();
+    }
+}

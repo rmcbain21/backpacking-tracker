@@ -140,12 +140,12 @@ h1:focus {
     flex: 0 0 132px;
 }
 
-/* Tags under a Gear Item in the list */
+/* Tags under a Gear Item or Food Item in the list */
 .gear-tags .mud-chip {
     margin: 2px 4px 0 0;
 }
 
-/* Add button on the Gear page: above the bottom navigation on phones */
+/* Add button on the Gear and Food pages: above the bottom navigation on phones */
 .add-fab {
     position: fixed;
     right: 16px;
@@ -159,7 +159,7 @@ h1:focus {
     }
 }
 
-/* A Gear Item row opens it for editing */
+/* A Gear Item or Food Item row opens it for editing */
 .gear-row {
     cursor: pointer;
 }

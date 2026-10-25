@@ -1,4 +1,4 @@
-@* Edits a Gear Item's Tags: type a new one, or tap one already in use. The rules live in TagRules. *@
+@* Edits a Gear Item's or Food Item's Tags: type a new one, or tap one already in use. The rules live in TagRules. *@
 <div class="tag-editor">
     <div class="d-flex align-center gap-2">
         <MudTextField @bind-Value="_newTag" Label="Add Tag" Immediate="true" Class="flex-grow-1"
@@ -36,7 +36,7 @@
     [Parameter]
     public EventCallback<IReadOnlyList<string>> TagsChanged { get; set; }
 
-    /// <summary>Tags already in use on other Gear Items.</summary>
+    /// <summary>Tags already in use on other items of the same kind (gear or food).</summary>
     [Parameter]
     public IReadOnlyList<string> TagsInUse { get; set; } = [];
 

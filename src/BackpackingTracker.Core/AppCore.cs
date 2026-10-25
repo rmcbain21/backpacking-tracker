@@ -1,3 +1,4 @@
+using BackpackingTracker.Core.Food;
 using BackpackingTracker.Core.Gear;
 using BackpackingTracker.Core.Import;
 using BackpackingTracker.Core.Lists;
@@ -19,6 +20,7 @@ public sealed class AppCore
         Lists = new GearLists(store, clock, Gear);
         Import = new GearImport(store, Gear, Lists);
         Trips = new TripPlanner(store, clock, Gear, Lists);
+        Food = new FoodCatalogue(store, clock);
 
         // Every area that refers to Gear Items takes part in the Gear Item delete check.
         Gear.AddReferences(Lists);
@@ -34,4 +36,6 @@ public sealed class AppCore
     public GearLists Lists { get; }
 
     public TripPlanner Trips { get; }
+
+    public FoodCatalogue Food { get; }
 }

@@ -1,15 +1,15 @@
-using BackpackingTracker.Core.Gear;
+using BackpackingTracker.Core;
 using MudBlazor;
 
 namespace BackpackingTracker.Web.Dialogs;
 
-public static class GearItemDeletionPrompt
+public static class DeletionPrompt
 {
     /// <summary>
     /// Shows the deletion plan's message. Returns true if the backpacker chose the plan's
     /// confirm button (Delete, or Retire instead); a plan with nothing to do just shows OK.
     /// </summary>
-    public static async Task<bool> ConfirmGearItemDeletionAsync(this IDialogService dialogService, GearItemDeletionPlan plan)
+    public static async Task<bool> ConfirmDeletionAsync(this IDialogService dialogService, DeletionPlan plan)
     {
         if (plan.ConfirmButton is null)
         {

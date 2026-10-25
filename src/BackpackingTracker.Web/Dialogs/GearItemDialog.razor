@@ -133,7 +133,7 @@
     private async Task DeleteAsync()
     {
         var plan = await App.Gear.PlanGearItemDeletionAsync(GearItem!.Id);
-        if (!await DialogService.ConfirmGearItemDeletionAsync(plan))
+        if (!await DialogService.ConfirmDeletionAsync(plan))
         {
             return;
         }

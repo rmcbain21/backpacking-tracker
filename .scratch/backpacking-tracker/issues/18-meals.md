@@ -16,3 +16,4 @@
 ## Comments
 
 - From ticket 06: Food Items and Meals follow the same Retire and delete rules as Gear Items (story 69). The Gear catalogue's pattern to copy: a Retired flag hidden from catalogue views but found by id, a deletion plan gathered from registered reference checks (Meals and Meal Plans use Food Items; Meal Plans use Meals), a tombstone on delete. `IGearItemReferences` is Gear-specific, so Food needs its own.
+- From ticket 17: register Meals with `Food.AddReferences(...)` in AppCore by implementing `IFoodItemReferences` (describe uses as `Meal "Ramen Bomb"`), and test the refusal through a real Meal. For a Meal's own delete plan, derive from `DeletionPlan` (see `FoodItemDeletionPlan`). Meal Calorie Density: `CalorieDensity.PerGram(totalCalories, totalGrams)`.
