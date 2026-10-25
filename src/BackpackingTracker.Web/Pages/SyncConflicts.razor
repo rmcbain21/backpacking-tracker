@@ -1,0 +1,95 @@
+@page "/sync/conflicts"
+@using BackpackingTracker.Core.Sync
+@inject AppCore App
+@inject PendingConflicts Pending
+@inject ISnackbar Snackbar
+
+<PageTitle>Sync Conflicts</PageTitle>
+
+<MudText Typo="Typo.h5" HtmlTag="h1" GutterBottom="true">Sync Conflicts</MudText>
+<MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">
+    Each of these was changed on this device and on another device since they last synced. Choose the version
+    to keep. The next sync sends it to your other devices.
+</MudText>
+
+@if (_conflicts is null)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else if (_conflicts.Count == 0)
+{
+    <MudText>Nothing to settle.</MudText>
+    <MudButton Href="settings" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.ArrowBack" Class="mt-2">Settings</MudButton>
+}
+else
+{
+    @foreach (var conflict in _conflicts)
+    {
+        <MudPaper Class="pa-4 mb-4 sync-conflict">
+            <MudText Typo="Typo.h6" HtmlTag="h2">@conflict.Name</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">@conflict.RecordType</MudText>
+
+            <div class="conflict-lines" role="table" aria-label="@($"{conflict.Name}: the two versions")">
+                <div class="conflict-line conflict-heading" role="row">
+                    <span role="columnheader"></span>
+                    <span role="columnheader">This device</span>
+                    <span role="columnheader">Other device</span>
+                </div>
+                @foreach (var line in conflict.Lines)
+                {
+                    <div class="@($"conflict-line{(line.Differs ? " differs" : "")}")" role="row">
+                        <span role="rowheader">@line.Label</span>
+                        <span role="cell">@line.ThisDevice</span>
+                        <span role="cell">@line.OtherDevice</span>
+                    </div>
+                }
+            </div>
+
+            @if (conflict.SameCount > 0)
+            {
+                <MudText Typo="Typo.body2" Class="mud-text-secondary mt-2">
+                    @conflict.SameCount other @(conflict.SameCount == 1 ? "detail is" : "details are") the same
+                </MudText>
+            }
+
+            <div class="d-flex flex-wrap gap-2 mt-3">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_busy"
+                           OnClick="() => SettleAsync(conflict, SyncConflictChoice.ThisDevice)">Keep this device's</MudButton>
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" Disabled="_busy"
+                           OnClick="() => SettleAsync(conflict, SyncConflictChoice.OtherDevice)">Keep other device's</MudButton>
+            </div>
+        </MudPaper>
+    }
+}
+
+@code {
+    private IReadOnlyList<SyncConflictView>? _conflicts;
+    private bool _busy;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _conflicts = await App.Sync.ListConflictsAsync();
+        Pending.Set(_conflicts.Count);
+    }
+
+    private async Task SettleAsync(SyncConflictView conflict, SyncConflictChoice choice)
+    {
+        _busy = true;
+        try
+        {
+            await App.Sync.SettleAsync(conflict.Id, choice);
+            Snackbar.Add($"Kept {(choice == SyncConflictChoice.ThisDevice ? "this" : "the other")} device's {conflict.Name}.", Severity.Success);
+        }
+        catch (RuleViolationException ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Warning);
+        }
+        finally
+        {
+            await LoadAsync();
+            _busy = false;
+        }
+    }
+}

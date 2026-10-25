@@ -144,27 +144,6 @@ public class SyncTests
     }
 
     [Fact]
-    public async Task When_both_devices_changed_a_record_the_later_edit_wins()
-    {
-        // Until Sync Conflicts (ticket 25) let the backpacker choose.
-        await ConnectBothAsync();
-        var tent = await AddGearAsync(_phone, "Duplex", 1000m);
-        await _phone.Sync.SyncNowAsync();
-        await _laptop.Sync.SyncNowAsync();
-        Later();
-        await UpdateWeightAsync(_phone, tent, 950m);
-        Later();
-        await UpdateWeightAsync(_laptop, tent, 900m);
-
-        await _phone.Sync.SyncNowAsync();
-        await _laptop.Sync.SyncNowAsync();
-        await _phone.Sync.SyncNowAsync();
-
-        Assert.Equal(900m, await WeightAsync(_phone, tent));
-        Assert.Equal(900m, await WeightAsync(_laptop, tent));
-    }
-
-    [Fact]
     public async Task A_new_devices_untouched_default_categories_do_not_undo_edits_made_elsewhere()
     {
         await ConnectBothAsync();
@@ -297,10 +276,9 @@ public class SyncTests
 
         await _phone.Sync.DisconnectAsync();
 
-        var status = await _phone.Sync.GetStatusAsync();
-        Assert.False(status.Connected);
-        Assert.Null(status.LastSyncedAt);
+        Assert.False((await _phone.Sync.GetStatusAsync()).Connected);
         Assert.Equal(["Duplex"], await GearNamesAsync(_phone));
+        await Assert.ThrowsAsync<RuleViolationException>(() => _phone.Sync.SyncNowAsync());
     }
 
     [Fact]

@@ -19,5 +19,6 @@ builder.Services.AddSingleton<GoogleDriveFileStore>();
 builder.Services.AddSingleton<ICloudFileStore>(services => services.GetRequiredService<GoogleDriveFileStore>());
 builder.Services.AddSingleton<AppCore>();
 builder.Services.AddSingleton<ThemeState>();
+builder.Services.AddSingleton<PendingConflicts>();
 
 await builder.Build().RunAsync();

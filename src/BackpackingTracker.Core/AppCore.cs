@@ -25,7 +25,7 @@ public sealed class AppCore
         Meals = new MealCatalogue(store, clock, Food);
         Trips = new TripPlanner(store, clock, Gear, Lists, Food, Meals);
         Backup = new Backup(store);
-        Sync = new CloudSync(store, clock, cloud);
+        Sync = new CloudSync(store, clock, cloud, Settings);
 
         // Every area that refers to Gear Items takes part in the Gear Item delete check.
         Gear.AddReferences(Lists);

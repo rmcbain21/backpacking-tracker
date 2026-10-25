@@ -333,3 +333,31 @@ h1:focus {
 .slot-entry {
     min-height: 36px;
 }
+
+/* A Sync Conflict's two versions side by side: label, this device, other device. Differing lines are bold and tinted. */
+.conflict-line {
+    display: grid;
+    grid-template-columns: minmax(6rem, 1.1fr) 1fr 1fr;
+    gap: 8px;
+    padding: 6px 8px;
+    margin: 0 -8px;
+    border-radius: 4px;
+    overflow-wrap: anywhere;
+}
+
+.conflict-heading {
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--mud-palette-text-secondary);
+}
+
+.conflict-line.differs {
+    font-weight: 600;
+    background: color-mix(in srgb, var(--mud-palette-warning) 18%, transparent);
+}
+
+/* The Sync Conflict count on the top bar's Settings icon: moved down so the dense bar doesn't clip it */
+.settings-badge .mud-badge.mud-badge-top.right.mud-badge-overlap {
+    top: 3px;
+    bottom: auto;
+}

@@ -1,7 +1,7 @@
 namespace BackpackingTracker.Core.Sync;
 
 /// <summary>What taking an incoming record does to the device, as the backpacker sees it.</summary>
-public enum MergeChange
+internal enum MergeChange
 {
     /// <summary>A record the backpacker couldn't see before (new, or brought back after a deletion).</summary>
     Added,
@@ -15,20 +15,28 @@ public enum MergeChange
 }
 
 /// <summary>An incoming record that wins over the device's copy, and what taking it does.</summary>
-public sealed record MergedRecord(StoredRecord Record, MergeChange Change);
+internal sealed record MergedRecord(StoredRecord Record, MergeChange Change);
+
+/// <summary>A record both devices changed differently since they last synced: a Sync Conflict.</summary>
+internal sealed record ConflictedRecord(StoredRecord Local, StoredRecord Remote);
 
 /// <summary>The outcome of merging one table with the sync file.</summary>
 /// <param name="ToSaveLocally">The file's records that win over (or are missing from) the device.</param>
-/// <param name="Merged">Every record after the merge: what the device and the file should both hold.</param>
+/// <param name="Merged">Every record as the file should hold it: for a Sync Conflict, the file's own version.</param>
 /// <param name="FileChanged">Whether <paramref name="Merged"/> differs from what the file holds.</param>
-public sealed record SyncMergeResult(IReadOnlyList<MergedRecord> ToSaveLocally, IReadOnlyList<StoredRecord> Merged, bool FileChanged);
+/// <param name="Conflicts">Records left as they are on both sides until the backpacker chooses a version.</param>
+internal sealed record SyncMergeResult(
+    IReadOnlyList<MergedRecord> ToSaveLocally,
+    IReadOnlyList<StoredRecord> Merged,
+    bool FileChanged,
+    IReadOnlyList<ConflictedRecord> Conflicts);
 
 /// <summary>
 /// Merges records from elsewhere (an imported file, or the sync file) into the device's records, record by
 /// record. A record only on one side is taken from that side. Tombstones are records like any other, so a
 /// deletion is merged the same way as an edit.
 /// </summary>
-public static class RecordMerge
+internal static class RecordMerge
 {
     /// <summary>
     /// For an import, which has no record of earlier syncs: when both sides have a record, the one with the
@@ -46,56 +54,80 @@ public static class RecordMerge
     }
 
     /// <summary>
-    /// For sync, comparing each side with its base (its UpdatedAt at the last sync, by record id): when only
-    /// one side has changed since then, that side wins, whatever the clocks say. When both have changed, or
-    /// there is no base yet, the later edit wins, and on a tie the device's copy stays.
+    /// For sync, comparing each side with its base (its UpdatedAt at the last sync, by record id). When only
+    /// one side has changed since then, that side wins, whatever the clocks say. When both have changed, it's
+    /// a Sync Conflict, unless they hold the same contents (or are both deleted), when the later one is taken.
+    /// With no base (this device's first sync of the record) a side counts as changed unless it was never
+    /// edited (UpdatedAt is the Unix epoch, as for the first-run Default Categories).
     /// </summary>
     public static SyncMergeResult WithBase(
-        IEnumerable<StoredRecord> local, IEnumerable<StoredRecord> remote, Func<string, DateTimeOffset?> baseOf)
+        RecordTable table, IEnumerable<StoredRecord> local, IEnumerable<StoredRecord> remote, Func<string, DateTimeOffset?> baseOf)
     {
         var localById = local.ToDictionary(record => record.Id);
         var remoteById = remote.ToDictionary(record => record.Id);
         var toSave = new List<MergedRecord>();
         var merged = new List<StoredRecord>();
+        var conflicts = new List<ConflictedRecord>();
         var fileChanged = false;
 
         foreach (var id in localById.Keys.Union(remoteById.Keys))
         {
             var mine = localById.GetValueOrDefault(id);
             var theirs = remoteById.GetValueOrDefault(id);
-            var takeTheirs = mine is null || (theirs is not null && RemoteWins(mine, theirs, baseOf(id)));
-            if (takeTheirs)
+            var outcome = mine is null ? Outcome.Theirs
+                : theirs is null ? Outcome.Mine
+                : Decide(table, mine, theirs, baseOf(id));
+
+            switch (outcome)
             {
-                toSave.Add(new MergedRecord(theirs!, Classify(mine, theirs!)));
-                merged.Add(theirs!);
-            }
-            else
-            {
-                fileChanged |= theirs is null || theirs.UpdatedAt != mine!.UpdatedAt;
-                merged.Add(mine!);
+                case Outcome.Theirs:
+                    toSave.Add(new MergedRecord(theirs!, Classify(mine, theirs!)));
+                    merged.Add(theirs!);
+                    break;
+                case Outcome.Mine:
+                    fileChanged |= theirs is null || theirs.UpdatedAt != mine!.UpdatedAt;
+                    merged.Add(mine!);
+                    break;
+                case Outcome.Conflict:
+                    conflicts.Add(new ConflictedRecord(mine!, theirs!));
+                    merged.Add(theirs!);
+                    break;
             }
         }
 
-        return new SyncMergeResult(toSave, merged, fileChanged);
+        return new SyncMergeResult(toSave, merged, fileChanged, conflicts);
     }
 
-    private static bool RemoteWins(StoredRecord mine, StoredRecord theirs, DateTimeOffset? @base)
+    private enum Outcome
+    {
+        Mine,
+        Theirs,
+        Conflict,
+    }
+
+    private static Outcome Decide(RecordTable table, StoredRecord mine, StoredRecord theirs, DateTimeOffset? @base)
     {
         if (theirs.UpdatedAt == mine.UpdatedAt)
         {
-            return false;
+            return Outcome.Mine;
         }
 
-        var mineChanged = @base is null || mine.UpdatedAt != @base;
-        var theirsChanged = @base is null || theirs.UpdatedAt != @base;
+        var mineChanged = ChangedSince(mine, @base);
+        var theirsChanged = ChangedSince(theirs, @base);
         if (mineChanged != theirsChanged)
         {
-            return theirsChanged;
+            return theirsChanged ? Outcome.Theirs : Outcome.Mine;
         }
 
-        // Both changed: until Sync Conflicts (ticket 25) let the backpacker choose, the later edit wins.
-        return theirs.UpdatedAt > mine.UpdatedAt;
+        // Both changed (neither can be unchanged, as their times differ): a conflict unless the changes agree.
+        var agree = (mine.Deleted && theirs.Deleted) || table.SameContents(mine, theirs);
+        return !agree ? Outcome.Conflict
+            : theirs.UpdatedAt > mine.UpdatedAt ? Outcome.Theirs
+            : Outcome.Mine;
     }
+
+    private static bool ChangedSince(StoredRecord record, DateTimeOffset? @base) =>
+        @base is { } known ? record.UpdatedAt != known : record.UpdatedAt != DateTimeOffset.UnixEpoch;
 
     private static MergeChange Classify(StoredRecord? existing, StoredRecord incoming) =>
         (existing is { Deleted: false }, incoming.Deleted) switch

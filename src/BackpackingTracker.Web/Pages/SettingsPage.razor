@@ -6,6 +6,7 @@
 @inject AppCore App
 @inject GoogleDriveFileStore Drive
 @inject ThemeState Theme
+@inject PendingConflicts Pending
 @inject IJSRuntime JS
 
 <PageTitle>Settings</PageTitle>
@@ -96,6 +97,12 @@
             <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.CloudOff"
                        OnClick="DisconnectAsync" Disabled="_syncing">Disconnect</MudButton>
         </div>
+    }
+
+    @if (_syncStatus is { PendingConflicts: > 0 and var pending })
+    {
+        <MudButton Href="sync/conflicts" Variant="Variant.Outlined" Color="Color.Warning" StartIcon="@Icons.Material.Filled.Warning"
+                   Class="mt-2">@pending Sync @(pending == 1 ? "Conflict" : "Conflicts") to settle</MudButton>
     }
 
     @if (_syncing)
@@ -233,6 +240,7 @@
         finally
         {
             _syncStatus = await App.Sync.GetStatusAsync();
+            Pending.Set(_syncStatus.PendingConflicts);
             _syncing = false;
         }
     }
