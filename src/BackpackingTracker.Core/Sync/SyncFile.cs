@@ -12,8 +12,6 @@ public static class SyncFile
     /// <summary>The format this app writes, and the only one it reads.</summary>
     public const int FormatVersion = 1;
 
-    private const string NotAnExport = "This file isn't a Backpacking Tracker export, so nothing was imported.";
-
     private static readonly JsonSerializerOptions WriteOptions = new(RecordTable.JsonOptions) { WriteIndented = true };
 
     /// <summary>The records of each table as a file, each table's records in id order so the same data always gives the same file.</summary>
@@ -31,8 +29,8 @@ public static class SyncFile
     }
 
     /// <summary>
-    /// The records of each table in the file. Refuses a file that isn't an export, or is in a format this
-    /// app can't read, with a message for the backpacker.
+    /// The records of each table in the file. Throws <see cref="UnreadableSyncFileException"/> for a file that
+    /// isn't one of these documents, or is in a format this app can't read.
     /// </summary>
     internal static IReadOnlyDictionary<RecordTable, IReadOnlyList<StoredRecord>> Read(string text)
     {
@@ -42,16 +40,15 @@ public static class SyncFile
                 || file["formatVersion"] is not JsonValue versionValue
                 || !versionValue.TryGetValue(out int version))
             {
-                throw new RuleViolationException(NotAnExport);
+                throw new UnreadableSyncFileException(unknownVersion: null);
             }
 
             if (version != FormatVersion)
             {
-                throw new RuleViolationException(
-                    $"This export is in format version {version}, which this version of the app can't read, so nothing was imported.");
+                throw new UnreadableSyncFileException(version);
             }
 
-            var tables = file["records"] as JsonObject ?? throw new RuleViolationException(NotAnExport);
+            var tables = file["records"] as JsonObject ?? throw new UnreadableSyncFileException(unknownVersion: null);
             return RecordTable.All.ToDictionary(
                 table => table,
                 table => (IReadOnlyList<StoredRecord>)(tables[table.Name]?.AsArray() ?? [])
@@ -61,7 +58,23 @@ public static class SyncFile
         catch (Exception exception) when (exception is JsonException or InvalidOperationException)
         {
             // Malformed JSON, or records that aren't what their table holds.
-            throw new RuleViolationException(NotAnExport);
+            throw new UnreadableSyncFileException(unknownVersion: null);
         }
     }
+
+    /// <summary>The records of each table, or no records at all when there's no file yet.</summary>
+    internal static IReadOnlyDictionary<RecordTable, IReadOnlyList<StoredRecord>> ReadOrEmpty(string? text) =>
+        text is null ? RecordTable.All.ToDictionary(table => table, _ => (IReadOnlyList<StoredRecord>)[]) : Read(text);
+}
+
+/// <summary>A file that isn't a <see cref="SyncFile"/>, or one in a format version this app can't read.</summary>
+internal sealed class UnreadableSyncFileException : Exception
+{
+    public UnreadableSyncFileException(int? unknownVersion)
+    {
+        UnknownVersion = unknownVersion;
+    }
+
+    /// <summary>The file's format version when it's one this app doesn't know; null when it isn't a sync file at all.</summary>
+    public int? UnknownVersion { get; }
 }

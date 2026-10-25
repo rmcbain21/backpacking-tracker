@@ -16,3 +16,4 @@
 ## Comments
 
 - From ticket 08: List Entries live inside the Gear List record, so every quantity or Carry Mode change rewrites the whole list. Edits to different entries of the same list on two devices before syncing become one Sync Conflict for the whole list. Showing the two versions side by side should make the entry-level differences easy to see.
+- From ticket 24: the place to detect a Sync Conflict is the "both changed" branch of `RecordMerge.RemoteWins` (both sides' `UpdatedAt` differ from the base), which currently lets the later edit win. Compare serialized contents without `updatedAt` there (see the ticket 05 note) before calling it a conflict. A conflicted record should keep the local version on the device and the remote version in the file, and should keep its old base so it stays detected until settled.

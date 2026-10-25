@@ -1,7 +1,10 @@
 @page "/settings"
 @using System.Text
+@using BackpackingTracker.Core.Ports
 @using BackpackingTracker.Core.Sync
+@using BackpackingTracker.Web.Adapters
 @inject AppCore App
+@inject GoogleDriveFileStore Drive
 @inject ThemeState Theme
 @inject IJSRuntime JS
 
@@ -72,6 +75,50 @@
 </MudPaper>
 
 <MudPaper Class="pa-4 mt-4">
+    <MudText Typo="Typo.subtitle1">Google Drive sync</MudText>
+    @if (_syncStatus is { Connected: false })
+    {
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mt-1">
+            Back up your data to your Google Drive and keep your devices in step. The app can only see its own
+            hidden file there, not your other files.
+        </MudText>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.CloudSync" Class="mt-2"
+                   OnClick="ConnectAsync" Disabled="_syncing">Connect Google Drive</MudButton>
+    }
+    else if (_syncStatus is { Connected: true })
+    {
+        <MudText Typo="Typo.body2" Class="mt-1 sync-last">
+            @(_syncStatus.LastSyncedAt is { } synced ? $"Last synced {synced.ToLocalTime():d MMM yyyy, h:mm tt}" : "Not synced yet")
+        </MudText>
+        <div class="d-flex flex-wrap gap-2 mt-2">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Sync"
+                       OnClick="SyncNowAsync" Disabled="_syncing">Sync now</MudButton>
+            <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.CloudOff"
+                       OnClick="DisconnectAsync" Disabled="_syncing">Disconnect</MudButton>
+        </div>
+    }
+
+    @if (_syncing)
+    {
+        <MudProgressLinear Indeterminate="true" Class="mt-2" />
+    }
+
+    @if (_syncProblem is not null)
+    {
+        <MudAlert Severity="Severity.Error" Class="mt-2">@_syncProblem</MudAlert>
+    }
+
+    @if (_syncSummary is not null)
+    {
+        <MudAlert Severity="Severity.Success" Class="mt-2">
+            @(_syncSummary.NothingChanged
+                ? "Synced. Nothing new from your other devices."
+                : $"Synced: {string.Join(" · ", _syncSummary.Changes.Select(Describe))}")
+        </MudAlert>
+    }
+</MudPaper>
+
+<MudPaper Class="pa-4 mt-4">
     <MudText Typo="Typo.subtitle1">Backup</MudText>
     <MudText Typo="Typo.body2" Class="mud-text-secondary mt-1">
         Export saves all your data to a file. Importing a file merges it with what's here: for anything in both,
@@ -118,7 +165,11 @@
     private UnitSystem _unitSystem;
     private bool _busy;
     private string? _backupProblem;
-    private ImportSummary? _importSummary;
+    private ChangeSummary? _importSummary;
+    private SyncStatus? _syncStatus;
+    private bool _syncing;
+    private string? _syncProblem;
+    private ChangeSummary? _syncSummary;
 
     // Whether the app is showing dark colours now, from MainLayout's MudThemeProvider.
     [CascadingParameter(Name = "IsDarkMode")]
@@ -127,6 +178,71 @@
     protected override async Task OnInitializedAsync()
     {
         _unitSystem = (await App.Settings.GetAsync()).UnitSystem;
+        _syncStatus = await App.Sync.GetStatusAsync();
+        await Drive.PreloadAsync();
+    }
+
+    private async Task ConnectAsync()
+    {
+        await RunSyncAsync(async () =>
+        {
+            await Drive.SignInAsync();
+            await App.Sync.ConnectAsync();
+            await SyncAndShowAsync();
+        });
+    }
+
+    private Task SyncNowAsync() =>
+        RunSyncAsync(async () =>
+        {
+            // The token is in memory only, so after a reload (or when it expires) this signs in again first.
+            if (!await Drive.IsSignedInAsync())
+            {
+                await Drive.SignInAsync();
+            }
+
+            await SyncAndShowAsync();
+        });
+
+    private Task DisconnectAsync() =>
+        RunSyncAsync(async () =>
+        {
+            await Drive.SignOutAsync();
+            await App.Sync.DisconnectAsync();
+        });
+
+    private async Task SyncAndShowAsync()
+    {
+        _syncSummary = await App.Sync.SyncNowAsync();
+        await ApplySavedSettingsAsync();
+    }
+
+    private async Task RunSyncAsync(Func<Task> action)
+    {
+        _syncing = true;
+        _syncProblem = null;
+        _syncSummary = null;
+        try
+        {
+            await action();
+        }
+        catch (Exception ex) when (ex is RuleViolationException or CloudFileStoreException)
+        {
+            _syncProblem = ex.Message;
+        }
+        finally
+        {
+            _syncStatus = await App.Sync.GetStatusAsync();
+            _syncing = false;
+        }
+    }
+
+    /// <summary>Shows Settings that an import or sync may have brought from elsewhere.</summary>
+    private async Task ApplySavedSettingsAsync()
+    {
+        var settings = await App.Settings.GetAsync();
+        _unitSystem = settings.UnitSystem;
+        Theme.Set(settings.Palette, settings.Appearance, settings.TextSize);
     }
 
     private async Task SetUnitSystemAsync(UnitSystem unitSystem)
@@ -184,11 +300,7 @@
 
             using var reader = new StreamReader(e.File.OpenReadStream(MaxBackupBytes), Encoding.UTF8);
             _importSummary = await App.Backup.ImportAsync(await reader.ReadToEndAsync());
-
-            // The file may have brought newer Settings.
-            var settings = await App.Settings.GetAsync();
-            _unitSystem = settings.UnitSystem;
-            Theme.Set(settings.Palette, settings.Appearance, settings.TextSize);
+            await ApplySavedSettingsAsync();
         }
         catch (RuleViolationException ex)
         {

@@ -125,24 +125,6 @@ public class RetireAndDeleteTests
         Assert.Empty(await app.Gear.ListRetiredGearItemsAsync());
     }
 
-    [Fact]
-    public async Task Deleting_keeps_a_tombstone_so_the_deletion_syncs()
-    {
-        // The tombstone is what sync (ticket 24) sends to other devices; until sync exists,
-        // the store is the only place to see it.
-        var app = CreateApp();
-        var tent = await AddAsync(app, "Tent");
-        var later = _clock.UtcNow.AddHours(2);
-        _clock.UtcNow = later;
-
-        await app.Gear.DeleteGearItemAsync(tent.Id);
-
-        var stored = await _store.LoadAsync<GearItem>("gearItems", tent.Id);
-        Assert.NotNull(stored);
-        Assert.True(stored.Deleted);
-        Assert.Equal(later, stored.UpdatedAt);
-    }
-
     private static async Task<string> PutOnGearListAsync(AppCore app, string listName, GearItem item)
     {
         var list = (await app.Lists.ListGearListsAsync()).FirstOrDefault(view => view.GearList.Name == listName)?.GearList

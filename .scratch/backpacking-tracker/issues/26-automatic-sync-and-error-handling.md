@@ -12,3 +12,7 @@
 - [ ] An expired or missing sign-in shows a "sign in to sync" prompt instead of failing silently.
 - [ ] Network and Drive errors show a clear message, keep local data, and retry on the next trigger.
 - [ ] Core tests cover debouncing, skip-when-offline, no overlap and error states, using the fakes and controllable clock.
+
+## Comments
+
+- From ticket 24: Google's access token is held in memory only and lasts about an hour, and getting a new one opens a pop-up, which browsers only allow straight after a tap. So a sync on app open or after changes will usually find no token: it can't sign in by itself and should show the "sign in to sync" prompt (a tap on it can then call `GoogleDriveFileStore.SignInAsync`, and the pop-up closes by itself for an account that already allowed access). Sign-in and network failures arrive as `CloudFileStoreException` (from the adapter) and refusals such as an unreadable sync file as `RuleViolationException`; both messages are ready to show.

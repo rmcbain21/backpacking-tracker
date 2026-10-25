@@ -14,7 +14,8 @@ namespace BackpackingTracker.Core;
 /// </summary>
 public sealed class AppCore
 {
-    public AppCore(IRecordStore store, IClock clock)
+    /// <param name="cloud">The cloud drive to sync through; null where there is none, such as tests that don't sync.</param>
+    public AppCore(IRecordStore store, IClock clock, ICloudFileStore? cloud = null)
     {
         Gear = new GearCatalogue(store, clock);
         Settings = new UserSettings(store, clock);
@@ -24,6 +25,7 @@ public sealed class AppCore
         Meals = new MealCatalogue(store, clock, Food);
         Trips = new TripPlanner(store, clock, Gear, Lists, Food, Meals);
         Backup = new Backup(store);
+        Sync = new CloudSync(store, clock, cloud);
 
         // Every area that refers to Gear Items takes part in the Gear Item delete check.
         Gear.AddReferences(Lists);
@@ -50,4 +52,6 @@ public sealed class AppCore
     public MealCatalogue Meals { get; }
 
     public Backup Backup { get; }
+
+    public CloudSync Sync { get; }
 }

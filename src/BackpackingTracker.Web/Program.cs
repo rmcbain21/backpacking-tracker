@@ -15,6 +15,8 @@ builder.Services.AddMudServices();
 
 builder.Services.AddSingleton<IRecordStore, DexieRecordStore>();
 builder.Services.AddSingleton<IClock, SystemClock>();
+builder.Services.AddSingleton<GoogleDriveFileStore>();
+builder.Services.AddSingleton<ICloudFileStore>(services => services.GetRequiredService<GoogleDriveFileStore>());
 builder.Services.AddSingleton<AppCore>();
 builder.Services.AddSingleton<ThemeState>();
 
