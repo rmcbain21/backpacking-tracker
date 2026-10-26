@@ -223,10 +223,10 @@ Architecture follows ADR 0001 (offline-first Blazor WebAssembly PWA, no server, 
 
 ## Out of Scope
 
-- Accounts, other users, sharing Trips or Gear Lists, and splitting group gear.
+- Accounts, other users, sharing Trips or Gear Lists with other users, and splitting group gear. (Copying a Trip's itinerary as text to send someone is in scope.)
 - Any server or database of our own.
 - OneDrive or other cloud providers (the cloud file store seam allows adding them later).
-- GPX import, live GPS tracking and maps.
+- Live GPS tracking and maps. (Importing a GPX file onto a Trip Day for its distance and elevation gain is in scope; see ADR 0004.)
 - Barcode scanning and nutrition lookup (Open Food Facts).
 - Gear wishlist, gear photos.
 - Combining several Gear Lists into one Trip; bulk-adding gear by Tag.
