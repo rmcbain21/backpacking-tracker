@@ -1,6 +1,6 @@
 # 21: Icons for Carry Mode
 
-**Status:** needs-triage
+**Status:** ready-for-agent
 
 **Idea:** Show Carry Mode (base, worn, consumable) as icons instead of words on List Entries, to save space on a phone.
 
@@ -10,3 +10,10 @@
 - Icons only on the phone layout, or everywhere?
 
 ## Comments
+
+**Triage (2026-10-26):** ready-for-agent.
+
+- Icons everywhere, not just on the phone layout, so the layout stays the same across screen sizes.
+- Base: backpack. Worn: shirt (or similar clothing icon). Consumable: fork and knife. Use the closest MudBlazor Material icons.
+- Each icon has a tooltip (long-press on a phone) with the Carry Mode name, and an aria-label for screen readers.
+- Only the display changes; picking a Carry Mode works as it does now.
