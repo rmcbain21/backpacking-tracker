@@ -218,6 +218,12 @@ h1:focus {
     color: var(--mud-palette-text-secondary);
 }
 
+/* The palette's accent marks the Starting Pack Weight, on the figures and on the bar below */
+.pack-totals,
+.pack-weight-bar {
+    border-left: 4px solid var(--mud-palette-secondary) !important;
+}
+
 /* A Gear List's weight bar: slides down under the top bar once the Starting Pack Weight scrolls away (Components/PackTotals.razor) */
 .pack-weight-bar {
     position: fixed;

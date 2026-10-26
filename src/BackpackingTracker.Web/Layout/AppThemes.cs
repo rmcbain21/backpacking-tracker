@@ -26,7 +26,7 @@ public static class AppThemes
             new PaletteDark
             {
                 Primary = "#4CAF50", PrimaryDarken = "#2E7D32", PrimaryLighten = "#81C784",
-                Secondary = "#FF8A65", SecondaryDarken = "#E65100", SecondaryLighten = "#FFAB91",
+                Secondary = "#FF8A65", SecondaryDarken = "#E65100", SecondaryLighten = "#FFAB91", SecondaryContrastText = "#2E1205",
                 Background = "#1A2520", Surface = "#263833",
                 AppbarBackground = "#1A2520", AppbarText = "#E8F5E9",
                 DrawerBackground = "#1E2D27", DrawerText = "#A5D6A7", DrawerIcon = "#A5D6A7",
@@ -37,7 +37,7 @@ public static class AppThemes
             new PaletteLight
             {
                 Primary = "#1F6F8B", PrimaryDarken = "#155269", PrimaryLighten = "#4D97B0",
-                Secondary = "#D9902F", SecondaryDarken = "#B57421", SecondaryLighten = "#E8AE5E",
+                Secondary = "#D9902F", SecondaryDarken = "#B57421", SecondaryLighten = "#E8AE5E", SecondaryContrastText = "#2B1C05",
                 Background = "#F2F5F4", Surface = "#FFFFFF",
                 AppbarBackground = "#1B4F63", AppbarText = "#FFFFFF",
                 DrawerBackground = "#E6EEEE", DrawerText = "#1B4F63", DrawerIcon = "#1B4F63",
