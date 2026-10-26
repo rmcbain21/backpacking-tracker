@@ -20,3 +20,4 @@
 - Two new optional fields on the Trip: a tracking link (e.g. an inReach MapShare URL) and a "Contact search and rescue if not heard from by" date/time. Each is included only when filled in.
 - No exit route, car location or emergency contact fields for now.
 - Plain text that reads well in a text message: no Markdown, short lines.
+- On an Open-ended Trip (01), the expected-finish line uses the pace estimate ("Expected finish: about 2 Sep at current pace"), and is left out when there is no estimate yet.

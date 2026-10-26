@@ -11,3 +11,5 @@
 - Does it need their weights at all, or just a checklist?
 
 ## Comments
+
+**Note (2026-10-26, from grilling 01):** Think about this together with changing gear partway through a long Trip, e.g. picking up a bear canister for the Sierra and sending the puffy home in Oregon. Both mean one Trip with more than one set of gear (mine + my brother's, or section 1 + section 2), so one design might cover both. Also revisit there whether an Open-ended Trip's weights should stop following the current Gear Items once it's under way.

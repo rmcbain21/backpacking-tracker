@@ -83,6 +83,14 @@ _Avoid_: Cal/oz ratio
 One specific outing, with its own Packing List, Trip Days and stats. Later changes to a Gear List never rewrite it.
 _Avoid_: Hike, outing, adventure
 
+**Open-ended Trip**:
+A Planned Trip with no set end date, whose Trip Days are added one at a time as it's hiked (e.g. a thru hike). Its end date is always its last Trip Day so far.
+_Avoid_: Thru-hike mode, ongoing, active
+
+**Expected Distance**:
+The total distance a Trip is expected to cover, used for its progress and, on an Open-ended Trip, the finish estimate.
+_Avoid_: Target distance, goal
+
 **Trip Status**:
 Where a Trip is in its life: Planned or Completed. A Planned Trip reflects the current weights and nutrition of its gear and food; a Completed Trip has those values frozen.
 _Avoid_: Active, in progress
