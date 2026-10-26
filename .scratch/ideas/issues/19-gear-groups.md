@@ -1,6 +1,6 @@
 # 19: Group several Gear Items as one entry
 
-**Status:** needs-triage
+**Status:** wontfix
 
 **Idea:** Group several Gear Items under one heading on a list, e.g. different tent stakes under "Tent stakes".
 
@@ -9,3 +9,5 @@
 - If it is wanted: is a group just a nested Category, or a Gear Item made up of other Gear Items (a "kit")?
 
 ## Comments
+
+**Triage (2026-10-26):** wontfix. Adding each kind of stake as its own List Entry (with a quantity) in the same Category already covers this, so groups or kits would add complexity for little gain.
