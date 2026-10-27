@@ -140,6 +140,13 @@ A personal, phone-first app that installs from the browser on my Android phone (
 97. As a backpacker, I want a shopping list per Food Carry, totalling the Food Items in its Meal Plan (rounded up to whole packages when known), that I can tick off as I buy, so that I know what to buy before the Trip and at each resupply.
 98. As a backpacker, I want each Food Carry's food weight, and the food left in the current one while On Trail, so that I know how heavy each carry is.
 
+### Hiking Partners
+
+99. As a backpacker, I want to add a Hiking Partner with their own Gear Closet and Gear Lists, with weights optional, so that I can keep track of gear for someone I hike with.
+100. As a backpacker, I want a Hiking Partner's Gear List to include my gear, so that I can record what they borrow from me.
+101. As a backpacker, I want to add a Hiking Partner to a Trip from one of their Gear Lists, with their own section on the Packing List and Checklist, so that we can pack together without changing my pack weight.
+102. As a backpacker, I want a "Bring for" group on my Checklist listing my gear a Hiking Partner borrows, so that I remember what to bring when we meet at the trailhead.
+
 ## Implementation Decisions
 
 Architecture follows ADR 0001 (offline-first Blazor WebAssembly PWA, no server, Google Drive sync) and ADR 0002 (store metric, display imperial). Terms follow `GLOSSARY.md`.
@@ -167,13 +174,14 @@ Architecture follows ADR 0001 (offline-first Blazor WebAssembly PWA, no server, 
 - Record types are top-level: Category (the Default Categories), Gear Item, Gear List, Food Item, Meal, Trip, Settings. Child data is nested inside its parent and syncs as part of it: a Gear List's own Categories and List Entries inside it; the Packing List's Categories and entries, and Trip Days (with their meal slots and journal notes) inside a Trip; Meal components inside a Meal.
 - All weights are stored in grams with 0.1 g precision; all distances and elevations in metres (ADR 0002).
 - **Category**: name, sort order. A top-level Category record is one of the Default Categories; each Gear List and Packing List holds its own Categories (id, name; ordered by position, and not tombstoned since they sync inside the list) inside it (ADR 0003). The first-run Default Categories have fixed ids and an `updatedAt` of the Unix epoch, meaning "never edited", so every device creates identical defaults and sync can tell an untouched default from an edited one. Removed Categories are kept as tombstones, and the last Category (of the defaults, or of a list) cannot be removed.
-- **Gear Item**: Name, Gear Type (free text, cleaned up like a Tag), weight, Tags, optional price, optional notes, Custom Fields, Retired flag. Records saved before ticket 27 (name, brand/model, Category) are read with the old name as the Gear Type and the old brand/model as the Name (the old name when there was no brand/model).
-- **Gear List**: name, its own Categories, List Entries.
+- **Hiking Partner**: name (ADR 0008).
+- **Gear Item**: owner (the backpacker, or a Hiking Partner id), Name, Gear Type (free text, cleaned up like a Tag), weight (optional on a Hiking Partner's gear), Tags, optional price, optional notes, Custom Fields, Retired flag. Records saved before ticket 27 (name, brand/model, Category) are read with the old name as the Gear Type and the old brand/model as the Name (the old name when there was no brand/model).
+- **Gear List**: owner (the backpacker, or a Hiking Partner id), name, its own Categories, List Entries. The backpacker's Gear Lists hold only their own gear; a Hiking Partner's can also hold the backpacker's (borrowed).
 - **List Entry**: Gear Item reference, the id of one of its list's Categories, quantity (whole number, at least 1), Carry Mode (base, worn or consumable; defaults to base). A list has one entry per Gear Item: adding a Gear Item already on the list adds one to that entry's quantity. On a Packing List it also has a packed flag, and when the Trip is Completed, a frozen weight.
 - **Food Item**: name, serving weight, calories per serving, optional protein per serving, optional cost per serving, Custom Fields, Tags, Retired flag.
 - **Custom Field** (inside a Gear Item or Food Item, in the order added): name (unique on the item, ignoring case), value, optional unit label. On a Food Item the value is a number per serving; on a Gear Item it is a number when it parses as one, otherwise text. Units are labels, never converted (ADR 0006). Totals and comparison columns combine values only when name (ignoring case) and unit match. Not part of CSV import.
 - **Meal**: name, components (Food Item reference and number of servings), Tags, Retired flag.
-- **Trip**: name, start date, end date, Trip Status (Planned or Completed), source Gear List (id and name, both optional; older Trips have only the name), Packing List, optional water carried, Trip Days, bought ticks (per Food Carry, per Food Item).
+- **Trip**: name, start date, end date, Trip Status (Planned or Completed), source Gear List (id and name, both optional; older Trips have only the name), Packing List, partner Packing Lists (one per Hiking Partner, each with its Hiking Partner and source Gear List), optional water carried, Trip Days, bought ticks (per Food Carry, per Food Item).
 - **Trip Day**: date, start, end, campsite, planned distance, actual distance, elevation gain, journal notes, Resupply flag with optional place name (never on day 1), and four meal slots (Breakfast, Lunch, Dinner, Snacks). Each slot holds zero or more slot entries: either a Meal or a Food Item reference with a quantity. When the Trip is Completed, each slot entry also holds frozen weight and nutrition.
 - **Settings**: display unit system (imperial by default). Device-local sync bookkeeping (see Sync) is stored separately and never synced. There is exactly one Settings record, with the fixed id `00000000-0000-0000-0000-000000000001` instead of a device-generated GUID, so every device edits the same record and sync merges it rather than creating one per device.
 
@@ -238,13 +246,13 @@ Architecture follows ADR 0001 (offline-first Blazor WebAssembly PWA, no server, 
 
 ## Out of Scope
 
-- Accounts, other users, sharing Trips or Gear Lists with other users, and splitting group gear. (Copying a Trip's itinerary as text to send someone is in scope.)
+- Accounts or sign-in for anyone else, sharing Trips or Gear Lists with other users, and splitting group gear. (Hiking Partners' gear kept by the backpacker is in scope; see ADR 0008.) (Copying a Trip's itinerary as text to send someone is in scope.)
 - Any server or database of our own.
 - OneDrive or other cloud providers (the cloud file store seam allows adding them later).
 - Live GPS tracking and maps. (Importing a GPX file onto a Trip Day for its distance and elevation gain is in scope; see ADR 0004.)
 - Barcode scanning and nutrition lookup (Open Food Facts).
 - Gear wishlist, gear photos.
-- Combining several Gear Lists into one Trip; bulk-adding gear by Tag.
+- Combining several Gear Lists into the backpacker's own Packing List; bulk-adding gear by Tag. (A Hiking Partner's Gear List is a separate Packing List, not a combination.)
 - Day-by-day pack weight as food is eaten (see idea 27). (Marking food eaten is in scope: idea 26.)
 - Reusable Meal Plan templates (copying from an earlier Trip covers this).
 - Importing past Trips from old spreadsheets, and Lighterpack or PackWizard formats.

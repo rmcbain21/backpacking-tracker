@@ -5,8 +5,16 @@ A personal app for one backpacker to keep track of their gear, food and trips, w
 ## Gear
 
 **Gear Item**:
-A single physical piece of equipment the backpacker owns, such as a tent or a stove, known by its Name (such as "SWD Long Haul 50 EPLX") and its Gear Type.
+A single physical piece of equipment owned by the backpacker or a Hiking Partner, such as a tent or a stove, known by its Name (such as "SWD Long Haul 50 EPLX") and its Gear Type.
 _Avoid_: Item, product, equipment
+
+**Gear Closet**:
+The Gear Items one person owns: the backpacker's, or one Hiking Partner's. The Gear page shows one Gear Closet at a time.
+_Avoid_: Catalogue, inventory
+
+**Hiking Partner**:
+Someone the backpacker packs with, such as a brother, who owns a Gear Closet and Gear Lists in the app but never uses it themselves. A Hiking Partner joins a Trip through a copy of one of their Gear Lists.
+_Avoid_: User, companion, buddy
 
 **Gear Type**:
 What kind of gear a Gear Item is, such as Backpack, Tent or Water Bottle, typed freely by the backpacker. It belongs to the Gear Item, so it is the same on every list.
@@ -37,7 +45,7 @@ A reusable, named set of List Entries that serves as the starting point for a Tr
 _Avoid_: Gearlist, template, kit, loadout
 
 **Packing List**:
-A Trip's own set of List Entries, copied from a Gear List when the Trip is created and then edited independently.
+A Trip's own set of List Entries for one person, copied from a Gear List and then edited independently. A Trip has the backpacker's Packing List and one per Hiking Partner on it; only the backpacker's counts in the Trip's weights.
 _Avoid_: Trip gear list, pack
 
 **List Entry**:
