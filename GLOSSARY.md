@@ -111,6 +111,10 @@ _Avoid_: Route, plan
 A Trip Day that was planned but not hiked, marked once the Trip has started instead of changing its dates, so the plan is kept. Stats leave it out of what was hiked, but its planned distance and its food still count.
 _Avoid_: Cancelled, missed, zero day
 
+**Trip Review**:
+The backpacker's look back at a Trip as a whole: which gear went unused, what they wished they'd brought, a closing note and a rating. Can be filled in once the Trip has started and still edited after it's Completed.
+_Avoid_: Post-mortem, debrief, retro
+
 ## Sync
 
 **Sync Conflict**:
