@@ -239,7 +239,7 @@ Architecture follows ADR 0001 (offline-first Blazor WebAssembly PWA, no server, 
 - Barcode scanning and nutrition lookup (Open Food Facts).
 - Gear wishlist, gear photos.
 - Combining several Gear Lists into one Trip; bulk-adding gear by Tag.
-- Day-by-day pack weight as food is eaten; marking Meals as eaten.
+- Day-by-day pack weight as food is eaten (see idea 27). (Marking food eaten is in scope: idea 26.)
 - Reusable Meal Plan templates (copying from an earlier Trip covers this).
 - Importing past Trips from old spreadsheets, and Lighterpack or PackWizard formats.
 - Built-in fat and carbohydrate fields (they can be added as Custom Fields).
