@@ -95,6 +95,10 @@ _Avoid_: Target distance, goal
 Where a Trip is in its life: Planned or Completed. A Planned Trip reflects the current weights and nutrition of its gear and food; a Completed Trip has those values frozen.
 _Avoid_: Active, in progress
 
+**On Trail**:
+A Planned Trip whose dates include today; an Open-ended Trip is On Trail from its start date until it's Completed. Worked out from the dates, not a Trip Status.
+_Avoid_: Active, current, in progress
+
 **Trip Day**:
 One calendar day of a Trip, holding its route (start, end, campsite, planned and actual distance), its meal slots and its journal notes.
 _Avoid_: Itinerary Day, leg, segment, stage
