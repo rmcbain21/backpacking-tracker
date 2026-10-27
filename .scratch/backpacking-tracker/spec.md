@@ -127,6 +127,13 @@ A personal, phone-first app that installs from the browser on my Android phone (
 90. As a backpacker, I want to disconnect Google Drive, so that I can stop syncing without losing local data.
 91. As a backpacker, I want sync failures (no signal, expired sign-in) to show a clear message and retry later, so that I know sync is pending.
 
+### Custom Fields
+
+92. As a backpacker, I want to add Custom Fields (a name, value and optional unit) to a Gear Item or Food Item, with names I've used before suggested as I type, so that I can record specs and nutrition the app has no field for.
+93. As a backpacker, I want a Food Item's Custom Fields totalled wherever protein is (Meals, Trip Days, Trip stats), so that I can track things like sodium per day.
+94. As a backpacker, I want to compare all my Gear Items of one Gear Type in a table with a column per Custom Field, sortable by any column, so that I can pick the best pad or quilt for a trip.
+95. As a backpacker, I want a Gear Item's Custom Fields shown in its preview and in the quick swap picker, so that I can compare while building a list.
+
 ## Implementation Decisions
 
 Architecture follows ADR 0001 (offline-first Blazor WebAssembly PWA, no server, Google Drive sync) and ADR 0002 (store metric, display imperial). Terms follow `GLOSSARY.md`.
@@ -154,10 +161,11 @@ Architecture follows ADR 0001 (offline-first Blazor WebAssembly PWA, no server, 
 - Record types are top-level: Category (the Default Categories), Gear Item, Gear List, Food Item, Meal, Trip, Settings. Child data is nested inside its parent and syncs as part of it: a Gear List's own Categories and List Entries inside it; the Packing List's Categories and entries, and Trip Days (with their meal slots and journal notes) inside a Trip; Meal components inside a Meal.
 - All weights are stored in grams with 0.1 g precision; all distances and elevations in metres (ADR 0002).
 - **Category**: name, sort order. A top-level Category record is one of the Default Categories; each Gear List and Packing List holds its own Categories (id, name; ordered by position, and not tombstoned since they sync inside the list) inside it (ADR 0003). The first-run Default Categories have fixed ids and an `updatedAt` of the Unix epoch, meaning "never edited", so every device creates identical defaults and sync can tell an untouched default from an edited one. Removed Categories are kept as tombstones, and the last Category (of the defaults, or of a list) cannot be removed.
-- **Gear Item**: Name, Gear Type (free text, cleaned up like a Tag), weight, Tags, optional price, optional notes, Retired flag. Records saved before ticket 27 (name, brand/model, Category) are read with the old name as the Gear Type and the old brand/model as the Name (the old name when there was no brand/model).
+- **Gear Item**: Name, Gear Type (free text, cleaned up like a Tag), weight, Tags, optional price, optional notes, Custom Fields, Retired flag. Records saved before ticket 27 (name, brand/model, Category) are read with the old name as the Gear Type and the old brand/model as the Name (the old name when there was no brand/model).
 - **Gear List**: name, its own Categories, List Entries.
 - **List Entry**: Gear Item reference, the id of one of its list's Categories, quantity (whole number, at least 1), Carry Mode (base, worn or consumable; defaults to base). A list has one entry per Gear Item: adding a Gear Item already on the list adds one to that entry's quantity. On a Packing List it also has a packed flag, and when the Trip is Completed, a frozen weight.
-- **Food Item**: name, serving weight, calories per serving, optional protein per serving, optional cost per serving, Tags, Retired flag.
+- **Food Item**: name, serving weight, calories per serving, optional protein per serving, optional cost per serving, Custom Fields, Tags, Retired flag.
+- **Custom Field** (inside a Gear Item or Food Item, in the order added): name (unique on the item, ignoring case), value, optional unit label. On a Food Item the value is a number per serving; on a Gear Item it is a number when it parses as one, otherwise text. Units are labels, never converted (ADR 0006). Totals and comparison columns combine values only when name (ignoring case) and unit match. Not part of CSV import.
 - **Meal**: name, components (Food Item reference and number of servings), Tags, Retired flag.
 - **Trip**: name, start date, end date, Trip Status (Planned or Completed), source Gear List (id and name, both optional; older Trips have only the name), Packing List, optional water carried, Trip Days.
 - **Trip Day**: date, start, end, campsite, planned distance, actual distance, elevation gain, journal notes, and four meal slots (Breakfast, Lunch, Dinner, Snacks). Each slot holds zero or more slot entries: either a Meal or a Food Item reference with a quantity. When the Trip is Completed, each slot entry also holds frozen weight and nutrition.
@@ -234,7 +242,8 @@ Architecture follows ADR 0001 (offline-first Blazor WebAssembly PWA, no server, 
 - Day-by-day pack weight as food is eaten; marking Meals as eaten.
 - Reusable Meal Plan templates (copying from an earlier Trip covers this).
 - Importing past Trips from old spreadsheets, and Lighterpack or PackWizard formats.
-- Fat and carbohydrate tracking.
+- Built-in fat and carbohydrate fields (they can be added as Custom Fields).
+- Renaming a Custom Field across every item, and searching or sorting the catalogue by Custom Fields.
 - Native app store builds and iOS-specific offline work.
 
 ## Further Notes

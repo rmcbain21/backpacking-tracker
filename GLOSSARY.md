@@ -16,6 +16,10 @@ _Avoid_: Item type, kind, category
 The state of a Gear Item, Food Item or Meal that is no longer in use. It is hidden from new lists and plans but stays attached to the past Trips that used it.
 _Avoid_: Deleted, archived
 
+**Custom Field**:
+A name, value and optional unit the backpacker adds to a Gear Item or Food Item for something the app has no field for, such as a sleeping pad's R-value or a food's sodium. On a Food Item it is a number per serving and is totalled like protein; on a Gear Item it can be a number or text and is used to compare gear of one Gear Type.
+_Avoid_: Attribute, property, spec
+
 **Category**:
 A group on one Gear List or Packing List that its List Entries are arranged under, such as "Big Three + Sleeping Pad" or "Food and Water", used to break down pack weight. Each list has its own Categories, so renaming one on a list changes no other list, and the same Gear Item can be in different Categories on different lists.
 _Avoid_: Section, group
