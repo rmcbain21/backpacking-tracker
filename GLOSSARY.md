@@ -131,6 +131,10 @@ _Avoid_: Town stop, mail drop
 The run of Trip Days whose food is bought at one place: from the start of the Trip, or from a Resupply, up to the day before the next Resupply. A Trip with no Resupply is one Food Carry. Only the first Food Carry's food counts in Consumable Weight.
 _Avoid_: Stretch, leg, section
 
+**Gear Change**:
+An add, removal or quantity change to the backpacker's gear at a Resupply, so later Food Carries carry different gear from the trailhead Packing List. The Packing List itself stays what leaves the trailhead.
+_Avoid_: Swap, mid-trip edit
+
 **Trip Review**:
 The backpacker's look back at a Trip as a whole: which gear went unused, what they wished they'd brought, a closing note and a rating. Can be filled in once the Trip has started and still edited after it's Completed.
 _Avoid_: Post-mortem, debrief, retro

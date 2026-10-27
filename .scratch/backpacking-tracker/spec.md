@@ -147,6 +147,10 @@ A personal, phone-first app that installs from the browser on my Android phone (
 101. As a backpacker, I want to add a Hiking Partner to a Trip from one of their Gear Lists, with their own section on the Packing List and Checklist, so that we can pack together without changing my pack weight.
 102. As a backpacker, I want a "Bring for" group on my Checklist listing my gear a Hiking Partner borrows, so that I remember what to bring when we meet at the trailhead.
 
+### Gear Changes
+
+103. As a backpacker, I want to record Gear Changes at a Resupply (pick up a bear canister, send the puffy home), with each Food Carry showing its own pack weight and a pick-up/send-home checklist, so that a long Trip reflects the gear I carry on each part of it.
+
 ## Implementation Decisions
 
 Architecture follows ADR 0001 (offline-first Blazor WebAssembly PWA, no server, Google Drive sync) and ADR 0002 (store metric, display imperial). Terms follow `GLOSSARY.md`.
@@ -182,7 +186,7 @@ Architecture follows ADR 0001 (offline-first Blazor WebAssembly PWA, no server, 
 - **Custom Field** (inside a Gear Item or Food Item, in the order added): name (unique on the item, ignoring case), value, optional unit label. On a Food Item the value is a number per serving; on a Gear Item it is a number when it parses as one, otherwise text. Units are labels, never converted (ADR 0006). Totals and comparison columns combine values only when name (ignoring case) and unit match. Not part of CSV import.
 - **Meal**: name, components (Food Item reference and number of servings), Tags, Retired flag.
 - **Trip**: name, start date, end date, Trip Status (Planned or Completed), source Gear List (id and name, both optional; older Trips have only the name), Packing List, partner Packing Lists (one per Hiking Partner, each with its Hiking Partner and source Gear List), optional water carried, Trip Days, bought ticks (per Food Carry, per Food Item).
-- **Trip Day**: date, start, end, campsite, planned distance, actual distance, elevation gain, journal notes, Resupply flag with optional place name (never on day 1), and four meal slots (Breakfast, Lunch, Dinner, Snacks). Each slot holds zero or more slot entries: either a Meal or a Food Item reference with a quantity. When the Trip is Completed, each slot entry also holds frozen weight and nutrition.
+- **Trip Day**: date, start, end, campsite, planned distance, actual distance, elevation gain, journal notes, Resupply flag with optional place name (never on day 1), Gear Changes on a Resupply day (add a Gear Item with quantity, Carry Mode and Category; remove; change quantity; each with a done tick), and four meal slots (Breakfast, Lunch, Dinner, Snacks). Each slot holds zero or more slot entries: either a Meal or a Food Item reference with a quantity. When the Trip is Completed, each slot entry also holds frozen weight and nutrition.
 - **Settings**: display unit system (imperial by default). Device-local sync bookkeeping (see Sync) is stored separately and never synced. There is exactly one Settings record, with the fixed id `00000000-0000-0000-0000-000000000001` instead of a device-generated GUID, so every device edits the same record and sync merges it rather than creating one per device.
 
 ### Behaviour rules
@@ -257,7 +261,7 @@ Architecture follows ADR 0001 (offline-first Blazor WebAssembly PWA, no server, 
 - Reusable Meal Plan templates (copying from an earlier Trip covers this).
 - Importing past Trips from old spreadsheets, and Lighterpack or PackWizard formats.
 - Built-in fat and carbohydrate fields (they can be added as Custom Fields).
-- Restocking fuel and other consumable gear at a Resupply: Food Carries cover Meal Plan food only.
+- A shopping list for fuel and other consumable gear: Food Carries and the shopping list cover Meal Plan food only. (A Gear Change at a Resupply can change how much is carried; idea 29.)
 - Renaming a Custom Field across every item, and searching or sorting the catalogue by Custom Fields.
 - Native app store builds and iOS-specific offline work.
 

@@ -42,3 +42,5 @@
 - Trip Status is unchanged: an Open-ended Trip stays Planned for its whole length, so its weights follow the current Gear Items (correcting a weight in July changes April's Starting Pack Weight). Accepted for now; to revisit with mid-Trip gear changes (see 24).
 - Changing gear partway through (e.g. picking up a bear canister for the Sierra) is out of scope here; noted on 24.
 - The flag and Expected Distance are included in JSON export/import and sync.
+
+**Note (2026-10-27), from grilling 29:** the open question above is settled: an Open-ended Trip keeps following current Gear Item weights (a correction applies everywhere). Replacing gear partway through is recorded as a Gear Change at a Resupply (idea 29), so earlier figures stay right.

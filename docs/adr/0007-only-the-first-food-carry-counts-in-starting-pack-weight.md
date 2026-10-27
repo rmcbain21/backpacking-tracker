@@ -12,4 +12,5 @@ Starting Pack Weight is what the backpacker carries at the trailhead, but Consum
 
 - Marking or unmarking a Resupply changes Starting Pack Weight, so the switch locks with the Meal Plan when the Trip is Completed.
 - Food eaten in town on the evening before a Resupply day is in the earlier Food Carry and still counts as carried; accepted.
-- Fuel and other consumable Packing List entries still count in full; restocking them at a Resupply is out of scope.
+- Fuel and other consumable Packing List entries still count in full in Starting Pack Weight.
+- Starting Pack Weight stays the trailhead figure. Gear Changes at a Resupply (idea 29) give each later Food Carry its own pack weight (its gear, its food and water) without changing this definition.
