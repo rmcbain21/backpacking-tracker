@@ -47,3 +47,5 @@
 - Itinerary text (02): a Resupply day's line adds "Resupply: Kennedy Meadows".
 - Stats tab: "3 resupplies · longest Food Carry 6 days (8.1 lb)".
 - A chart of food weight over the Trip could come later on the Stats tab; not now.
+
+**Note (2026-10-27), from grilling 29:** "fuel and other consumable Packing List entries are out of scope" above means the shopping list stays food only. Carrying more or less fuel after a Resupply is now covered by a **Gear Change** (idea 29), e.g. Fuel canister ×1 → ×2, which counts in that Food Carry's pack weight but not in Starting Pack Weight.
