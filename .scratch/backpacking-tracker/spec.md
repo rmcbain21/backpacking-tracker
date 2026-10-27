@@ -102,7 +102,7 @@ A personal, phone-first app that installs from the browser on my Android phone (
 71. As a backpacker, I want to put Meals or individual Food Items in a slot, each with a quantity, so that I don't have to wrap a single bar in a Meal.
 72. As a backpacker, I want any slot to be allowed to stay empty, so that the first and last days can be partial.
 73. As a backpacker, I want to view the Trip's Meal Plan as all its Trip Days' slots together, with calories and food weight per day, so that I can see whether each day is fuelled.
-74. As a backpacker, I want Meal Plan food weight counted in the Trip's Consumable Weight, so that pack weight includes food.
+74. As a backpacker, I want Meal Plan food weight counted in the Trip's Consumable Weight, so that pack weight includes food; with Resupply days, only the first Food Carry's food counts (ADR 0007).
 75. As a backpacker, I want to copy the Meal Plan from an earlier Trip into this one, day by day, so that I can reuse a plan that worked.
 
 ### Offline, install and devices
@@ -133,6 +133,12 @@ A personal, phone-first app that installs from the browser on my Android phone (
 93. As a backpacker, I want a Food Item's Custom Fields totalled wherever protein is (Meals, Trip Days, Trip stats), so that I can track things like sodium per day.
 94. As a backpacker, I want to compare all my Gear Items of one Gear Type in a table with a column per Custom Field, sortable by any column, so that I can pick the best pad or quilt for a trip.
 95. As a backpacker, I want a Gear Item's Custom Fields shown in its preview and in the quick swap picker, so that I can compare while building a list.
+
+### Resupply
+
+96. As a backpacker, I want to mark a Trip Day as a Resupply, with the place's name, so that my Trip splits into Food Carries.
+97. As a backpacker, I want a shopping list per Food Carry, totalling the Food Items in its Meal Plan (rounded up to whole packages when known), that I can tick off as I buy, so that I know what to buy before the Trip and at each resupply.
+98. As a backpacker, I want each Food Carry's food weight, and the food left in the current one while On Trail, so that I know how heavy each carry is.
 
 ## Implementation Decisions
 
@@ -167,13 +173,13 @@ Architecture follows ADR 0001 (offline-first Blazor WebAssembly PWA, no server, 
 - **Food Item**: name, serving weight, calories per serving, optional protein per serving, optional cost per serving, Custom Fields, Tags, Retired flag.
 - **Custom Field** (inside a Gear Item or Food Item, in the order added): name (unique on the item, ignoring case), value, optional unit label. On a Food Item the value is a number per serving; on a Gear Item it is a number when it parses as one, otherwise text. Units are labels, never converted (ADR 0006). Totals and comparison columns combine values only when name (ignoring case) and unit match. Not part of CSV import.
 - **Meal**: name, components (Food Item reference and number of servings), Tags, Retired flag.
-- **Trip**: name, start date, end date, Trip Status (Planned or Completed), source Gear List (id and name, both optional; older Trips have only the name), Packing List, optional water carried, Trip Days.
-- **Trip Day**: date, start, end, campsite, planned distance, actual distance, elevation gain, journal notes, and four meal slots (Breakfast, Lunch, Dinner, Snacks). Each slot holds zero or more slot entries: either a Meal or a Food Item reference with a quantity. When the Trip is Completed, each slot entry also holds frozen weight and nutrition.
+- **Trip**: name, start date, end date, Trip Status (Planned or Completed), source Gear List (id and name, both optional; older Trips have only the name), Packing List, optional water carried, Trip Days, bought ticks (per Food Carry, per Food Item).
+- **Trip Day**: date, start, end, campsite, planned distance, actual distance, elevation gain, journal notes, Resupply flag with optional place name (never on day 1), and four meal slots (Breakfast, Lunch, Dinner, Snacks). Each slot holds zero or more slot entries: either a Meal or a Food Item reference with a quantity. When the Trip is Completed, each slot entry also holds frozen weight and nutrition.
 - **Settings**: display unit system (imperial by default). Device-local sync bookkeeping (see Sync) is stored separately and never synced. There is exactly one Settings record, with the fixed id `00000000-0000-0000-0000-000000000001` instead of a device-generated GUID, so every device edits the same record and sync merges it rather than creating one per device.
 
 ### Behaviour rules
 
-- **Weight**: an entry's weight is item weight × quantity. Base Weight, Worn Weight and Consumable Weight sum entries by Carry Mode. Consumable Weight also includes Meal Plan food (each slot entry's weight × quantity) and water carried. Starting Pack Weight = Base Weight + Consumable Weight. The Category breakdown splits the Starting Pack Weight by the List Entries' Categories on that list (worn entries left out); Meal Plan food and water appear as their own breakdown lines.
+- **Weight**: an entry's weight is item weight × quantity. Base Weight, Worn Weight and Consumable Weight sum entries by Carry Mode. Consumable Weight also includes Meal Plan food (each slot entry's weight × quantity) of the first Food Carry only (the whole Meal Plan when no Trip Day is a Resupply; ADR 0007) and water carried. Starting Pack Weight = Base Weight + Consumable Weight. The Category breakdown splits the Starting Pack Weight by the List Entries' Categories on that list (worn entries left out); Meal Plan food and water appear as their own breakdown lines.
 - **Retired and delete**: Retiring hides an item from catalogue views and pickers but keeps it resolvable everywhere it is referenced. Hard delete is allowed only when nothing references the item (no List Entry, slot entry or Meal component); otherwise the core refuses and offers Retire.
 - **Creating a Trip from a Gear List** deep-copies its List Entries into the Packing List and records the Gear List's id and name as the Trip's source. Gear List edits never change the Packing List on their own.
 - **Refreshing a Packing List** (Planned Trips only, ADR 0005): the backpacker picks a Gear List (the source preselected) and sees one ticked line per difference: adds and changes (quantity, Carry Mode, Category) ticked, removals unticked, with "Tick all" for a full replace. Retired Gear Items are never added. Categories match by name; missing ones are created at the end; Packing List Categories left empty that aren't on the Gear List are removed. New entries start unpacked and a quantity increase unticks packed. Applying sets the Trip's source to that Gear List.
@@ -243,6 +249,7 @@ Architecture follows ADR 0001 (offline-first Blazor WebAssembly PWA, no server, 
 - Reusable Meal Plan templates (copying from an earlier Trip covers this).
 - Importing past Trips from old spreadsheets, and Lighterpack or PackWizard formats.
 - Built-in fat and carbohydrate fields (they can be added as Custom Fields).
+- Restocking fuel and other consumable gear at a Resupply: Food Carries cover Meal Plan food only.
 - Renaming a Custom Field across every item, and searching or sorting the catalogue by Custom Fields.
 - Native app store builds and iOS-specific offline work.
 

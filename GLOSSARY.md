@@ -57,7 +57,7 @@ The total weight of List Entries whose Carry Mode is base: everything in the pac
 The total weight of List Entries whose Carry Mode is worn: gear on the body rather than in the pack.
 
 **Consumable Weight**:
-The weight of things used up during the Trip: consumable List Entries such as fuel, the food in the Meal Plan, and any water carried.
+The weight of things used up during the Trip: consumable List Entries such as fuel, the food in the Meal Plan up to the first Resupply (the first Food Carry; the whole Meal Plan when there's no Resupply), and any water carried.
 
 **Starting Pack Weight**:
 Base Weight plus Consumable Weight at the trailhead, before anything is used up. The headline weight figure for a Trip.
@@ -114,6 +114,14 @@ _Avoid_: Route, plan
 **Skipped**:
 A Trip Day that was planned but not hiked, marked once the Trip has started instead of changing its dates, so the plan is kept. Stats leave it out of what was hiked, but its planned distance and its food still count.
 _Avoid_: Cancelled, missed, zero day
+
+**Resupply**:
+A Trip Day marked as where food is restocked before that day's hiking, such as a town or a mailed box, optionally with the place's name. Never the first Trip Day.
+_Avoid_: Town stop, mail drop
+
+**Food Carry**:
+The run of Trip Days whose food is bought at one place: from the start of the Trip, or from a Resupply, up to the day before the next Resupply. A Trip with no Resupply is one Food Carry. Only the first Food Carry's food counts in Consumable Weight.
+_Avoid_: Stretch, leg, section
 
 **Trip Review**:
 The backpacker's look back at a Trip as a whole: which gear went unused, what they wished they'd brought, a closing note and a rating. Can be filled in once the Trip has started and still edited after it's Completed.
