@@ -12,3 +12,5 @@
 - Part of the On Trail view (28); for thru hikes, waits on Open-ended Trips (01).
 
 ## Comments
+
+**Note (2026-10-27):** 28 was triaged as a **Today** tab on the Trip page (shown while On Trail). When this is grilled, it adds its own section to that tab rather than 28 waiting on it.
