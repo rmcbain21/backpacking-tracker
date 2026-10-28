@@ -452,3 +452,9 @@ h1:focus {
 .trip-day-skipped > :not(:first-child) {
     opacity: 0.6;
 }
+
+/* Duplicate gear: the Keep choices wrap the side-by-side lines, which take the card's full width like a Sync Conflict's */
+.duplicate-keep .conflict-lines {
+    flex: 1 1 auto;
+    width: 100%;
+}

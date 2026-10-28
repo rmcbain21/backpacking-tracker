@@ -100,6 +100,15 @@ public sealed class GearCatalogue
             .ToDictionary(item => item.Id);
     }
 
+    /// <summary>Every Gear Item that hasn't been deleted, Retired or not, by Gear Type then Name.</summary>
+    internal Task<IReadOnlyList<GearItem>> ListAllGearItemsAsync() => LoadGearItemsAsync();
+
+    /// <summary>The Gear Items merged away, each with the Gear Item it was merged into (ADR 0009).</summary>
+    internal async Task<IReadOnlyDictionary<string, string>> ListMergedIntoAsync() =>
+        (await _store.ListAsync<GearItem>(Table))
+            .Where(item => item.Deleted && item.MergedIntoId is not null)
+            .ToDictionary(item => item.Id, item => item.MergedIntoId!);
+
     /// <summary>A Gear Item by id, Retired or not; refuses if it doesn't exist or was deleted.</summary>
     private async Task<GearItem> GetExistingGearItemAsync(string gearItemId) =>
         await GetGearItemAsync(gearItemId) ?? throw new RuleViolationException("That Gear Item no longer exists.");

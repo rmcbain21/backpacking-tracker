@@ -21,15 +21,19 @@ public sealed class CloudSync
     private readonly ICloudFileStore? _cloud;
     private readonly UserSettings _settings;
     private readonly Action _settled;
+    private readonly Func<ChangeSummary, Task> _arrived;
 
     /// <param name="settled">Called after a Sync Conflict is settled, a local change the next sync must send.</param>
-    public CloudSync(IRecordStore store, IClock clock, ICloudFileStore? cloud, UserSettings settings, Action settled)
+    /// <param name="arrived">Called after a sync that saved records from the file here, with what changed.</param>
+    public CloudSync(
+        IRecordStore store, IClock clock, ICloudFileStore? cloud, UserSettings settings, Action settled, Func<ChangeSummary, Task> arrived)
     {
         _store = store;
         _clock = clock;
         _cloud = cloud;
         _settings = settings;
         _settled = settled;
+        _arrived = arrived;
     }
 
     public async Task<SyncStatus> GetStatusAsync()
@@ -120,7 +124,13 @@ public sealed class CloudSync
             }
 
             await SaveStateAsync(state with { LastSyncedAt = _clock.UtcNow, Bases = bases, Conflicts = conflicts });
-            return new ChangeSummary(changes, ConflictsChanged: !state.Conflicts.SequenceEqual(conflicts));
+            var summary = new ChangeSummary(changes, ConflictsChanged: !state.Conflicts.SequenceEqual(conflicts));
+            if (toSave.Count > 0)
+            {
+                await _arrived(summary);
+            }
+
+            return summary;
         }
 
         throw new RuleViolationException("Another device kept syncing at the same time. Try again in a moment.");
@@ -173,6 +183,10 @@ public sealed class CloudSync
             ?? throw new InvalidOperationException($"The record {conflict.Id} in a Sync Conflict is missing.");
         return (table, mine, table.Read(JsonNode.Parse(conflict.OtherDeviceJson)!));
     }
+
+    /// <summary>The ids of the records in this table with a Sync Conflict waiting.</summary>
+    internal async Task<IReadOnlySet<string>> ListConflictedIdsAsync(string table) =>
+        (await LoadStateAsync()).Conflicts.Where(conflict => conflict.Table == table).Select(conflict => conflict.RecordId).ToHashSet();
 
     private static DateTimeOffset? BaseOf(SyncState state, RecordTable table, string id) =>
         state.Bases.TryGetValue(SyncState.Key(table.Name, id), out var @base) ? @base : null;

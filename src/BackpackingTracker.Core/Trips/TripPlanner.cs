@@ -582,6 +582,17 @@ public sealed class TripPlanner : IGearItemReferences, IFoodItemReferences, IMea
 
     private Task SaveAsync(Trip trip) => _store.SaveAsync(Table, trip with { UpdatedAt = _clock.UtcNow });
 
+    /// <summary>
+    /// The Trips whose Packing Lists use Gear Items merged away, with their entries moved onto the Gear Items they
+    /// were merged into (see <see cref="ListContents.Repoint"/>), ready to save; Trips that use none are left out.
+    /// Completed Trips too, past their lock: it's the same gear, and their frozen weights stay as they were.
+    /// </summary>
+    internal async Task<IReadOnlyList<Trip>> RepointAsync(IReadOnlyDictionary<string, string> mergedInto) =>
+        (await LoadTripsAsync())
+            .Where(trip => trip.PackingList.Uses(mergedInto))
+            .Select(trip => trip with { PackingList = trip.PackingList.Repoint(mergedInto), UpdatedAt = _clock.UtcNow })
+            .ToList();
+
     /// <summary>The Trips whose Packing Lists use the Gear Item, by name, each once, so it can't be deleted from under them.</summary>
     public async Task<IReadOnlyList<string>> FindUsesAsync(string gearItemId) =>
         (await LoadTripsAsync())

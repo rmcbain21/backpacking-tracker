@@ -330,6 +330,16 @@ public sealed class GearLists : IGearItemReferences
 
     private Task SaveAsync(GearList list) => _store.SaveAsync(Table, list with { UpdatedAt = _clock.UtcNow });
 
+    /// <summary>
+    /// The Gear Lists using Gear Items merged away, with their entries moved onto the Gear Items they were merged
+    /// into (see <see cref="ListContents.Repoint"/>), ready to save; lists that use none are left out.
+    /// </summary>
+    internal async Task<IReadOnlyList<GearList>> RepointAsync(IReadOnlyDictionary<string, string> mergedInto) =>
+        (await LoadGearListsAsync())
+            .Where(list => list.Contents.Uses(mergedInto))
+            .Select(list => list.With(list.Contents.Repoint(mergedInto)) with { UpdatedAt = _clock.UtcNow })
+            .ToList();
+
     /// <summary>The Gear Lists that use the Gear Item, by name, each once, so it can't be deleted from under them.</summary>
     public async Task<IReadOnlyList<string>> FindUsesAsync(string gearItemId) =>
         (await LoadGearListsAsync())

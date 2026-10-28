@@ -113,6 +113,41 @@ public sealed record ListContents
         return this with { Entries = Entries.Where(e => e.Id != entryId).ToList() };
     }
 
+    /// <summary>Whether any entry uses one of these Gear Items.</summary>
+    internal bool Uses(IReadOnlyDictionary<string, string> mergedInto) =>
+        Entries.Any(entry => mergedInto.ContainsKey(entry.GearItemId));
+
+    /// <summary>
+    /// Moves each entry using a Gear Item that was merged away onto the Gear Item it was merged into (following
+    /// a chain of Merges). Entries that end up on the same Gear Item become one: the kept item's own entry (its
+    /// Category, quantity and Carry Mode), or else the first one; quantities aren't added, as they were the same
+    /// gear all along. It's packed if any of them was. Frozen weights stay as they were.
+    /// </summary>
+    /// <param name="mergedInto">The Gear Items merged away, each with the Gear Item it was merged into.</param>
+    internal ListContents Repoint(IReadOnlyDictionary<string, string> mergedInto) =>
+        this with
+        {
+            Entries = Entries
+                .GroupBy(entry => FinalGearItemId(entry.GearItemId, mergedInto))
+                .Select(group =>
+                {
+                    var kept = group.FirstOrDefault(entry => entry.GearItemId == group.Key) ?? group.First();
+                    return kept with { GearItemId = group.Key, Packed = group.Any(entry => entry.Packed) };
+                })
+                .ToList(),
+        };
+
+    private static string FinalGearItemId(string gearItemId, IReadOnlyDictionary<string, string> mergedInto)
+    {
+        // Each step is a Merge; the count stops a loop that hand-edited data could make.
+        for (var step = 0; step < mergedInto.Count && mergedInto.TryGetValue(gearItemId, out var next); step++)
+        {
+            gearItemId = next;
+        }
+
+        return gearItemId;
+    }
+
     internal Category FindCategory(string categoryId) =>
         Categories.SingleOrDefault(c => c.Id == categoryId)
             ?? throw new RuleViolationException("That Category is no longer on the list.");

@@ -87,6 +87,7 @@ internal sealed class ConflictDescriber
         GearList list => list.Name,
         Trip trip => trip.Name,
         DefaultCategory category => category.Name,
+        NotDuplicates => "Not duplicates",
         _ => "Settings",
     };
 

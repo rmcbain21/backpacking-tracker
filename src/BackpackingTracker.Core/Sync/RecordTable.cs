@@ -28,6 +28,7 @@ internal abstract class RecordTable
         new RecordTable<Meal>(MealCatalogue.Table, "Meal", "Meals"),
         new RecordTable<Trip>(TripPlanner.Table, "Trip", "Trips"),
         new RecordTable<Settings>(UserSettings.Table, "Settings", "Settings"),
+        new RecordTable<NotDuplicates>(DuplicateGear.NotDuplicatesTable, "Not Duplicates choice", "Not Duplicates choices"),
     ];
 
     protected RecordTable(string name, string recordName, string recordTypeName)

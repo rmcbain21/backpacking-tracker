@@ -26,8 +26,10 @@ public sealed class AppCore
         Food = new FoodCatalogue(watched, clock);
         Meals = new MealCatalogue(watched, clock, Food);
         Trips = new TripPlanner(watched, clock, Gear, Lists, Food, Meals);
-        Backup = new Backup(watched);
-        Sync = new CloudSync(store, clock, cloud, Settings, settled: () => AutoSync.LocalChanged());
+        Backup = new Backup(watched, arrived: summary => Duplicates.ChangesArrivedAsync(summary));
+        Sync = new CloudSync(
+            store, clock, cloud, Settings, settled: () => AutoSync.LocalChanged(), arrived: summary => Duplicates.ChangesArrivedAsync(summary));
+        Duplicates = new DuplicateGear(watched, clock, Gear, Lists, Trips, Sync);
         AutoSync = new AutoSync(Sync, clock);
 
         // Every area that refers to Gear Items takes part in the Gear Item delete check.
@@ -53,6 +55,9 @@ public sealed class AppCore
     public FoodCatalogue Food { get; }
 
     public MealCatalogue Meals { get; }
+
+    /// <summary>Finding duplicate Gear Items and Merging them.</summary>
+    public DuplicateGear Duplicates { get; }
 
     public Backup Backup { get; }
 

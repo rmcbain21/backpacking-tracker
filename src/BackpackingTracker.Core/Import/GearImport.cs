@@ -230,9 +230,7 @@ public sealed class GearImport
     /// <summary>Same Gear Type and Name, ignoring case and surrounding spaces.</summary>
     private static bool Matches(GearItem item, GearRow row) => Matches(item, row.GearType, row.Name);
 
-    private static bool Matches(GearItem item, string gearType, string name) =>
-        string.Equals(item.GearType, gearType.Trim(), StringComparison.OrdinalIgnoreCase)
-        && string.Equals(item.Name, name.Trim(), StringComparison.OrdinalIgnoreCase);
+    private static bool Matches(GearItem item, string gearType, string name) => GearMatch.Matches(item, gearType, name);
 
     /// <summary>A row that describes a Gear Item, whichever layout it came from. Every value is trimmed.</summary>
     private sealed record GearRow(

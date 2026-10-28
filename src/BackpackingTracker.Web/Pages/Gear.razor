@@ -7,6 +7,14 @@
 
 <MudText Typo="Typo.h5" HtmlTag="h1" GutterBottom="true">Gear</MudText>
 
+@if (_duplicatesToReview > 0)
+{
+    <MudAlert Severity="Severity.Info" Class="mb-3" ShowCloseIcon="true" CloseIconClicked="CloseDuplicateNotice">
+        @(_duplicatesToReview == 1 ? "1 possible duplicate" : $"{_duplicatesToReview} possible duplicates") in your gear
+        after syncing · <MudLink Href="gear/duplicates">Review</MudLink>
+    </MudAlert>
+}
+
 <div class="d-flex align-end gap-3">
     <MudTextField T="string" Value="_searchText" ValueChanged="SearchAsync" Label="Search gear" Immediate="true"
                   DebounceInterval="200" Clearable="true" Adornment="Adornment.Start"
@@ -23,6 +31,8 @@
 <div class="d-flex justify-end mt-1">
     <MudButton Href="gear/import" Variant="Variant.Text" Size="Size.Small"
                StartIcon="@Icons.Material.Filled.UploadFile">Import</MudButton>
+    <MudButton Href="gear/duplicates" Variant="Variant.Text" Size="Size.Small"
+               StartIcon="@Icons.Material.Filled.CallMerge">Duplicates</MudButton>
     <MudButton Href="gear/retired" Variant="Variant.Text" Size="Size.Small"
                StartIcon="@Icons.Material.Filled.Inventory2">Retired</MudButton>
 </div>
@@ -82,13 +92,21 @@ else
     private IReadOnlyList<GearItem>? _items;
     private string? _searchText;
     private string? _filterGearType;
+    private int _duplicatesToReview;
 
     private GearFilter Filter => new(_searchText, _filterGearType);
 
     protected override async Task OnInitializedAsync()
     {
         _unitSystem = (await App.Settings.GetAsync()).UnitSystem;
+        _duplicatesToReview = await App.Duplicates.CountToReviewAsync();
         await LoadGearAsync();
+    }
+
+    private void CloseDuplicateNotice()
+    {
+        App.Duplicates.CloseReviewNotice();
+        _duplicatesToReview = 0;
     }
 
     private async Task LoadGearAsync()

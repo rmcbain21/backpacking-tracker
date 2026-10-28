@@ -26,6 +26,13 @@ public sealed record GearItem : StoredRecord
     public bool Retired { get; init; }
 
     /// <summary>
+    /// On the tombstone of a Gear Item merged away: the Gear Item it was merged into. Entries still pointing
+    /// at this one, such as from a device that hadn't synced the Merge yet, are moved onto it after a sync (ADR 0009).
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? MergedIntoId { get; init; }
+
+    /// <summary>
     /// Brand/model from records saved before Gear Types (ticket 27). Only read, to convert old records:
     /// such a record's name becomes its Gear Type and this becomes its Name.
     /// </summary>

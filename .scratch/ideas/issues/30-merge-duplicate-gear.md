@@ -46,3 +46,11 @@ Running example: after a sync there's **Tent "Duplex" (A)** on the test Trip and
 - Not duplicates syncs to the other device; a new matching item reopens the group.
 - Blocked while a Sync Conflict is pending on one of the items.
 - Race: device 1 merges A into B, device 2 adds A to a list, both sync: the list ends up on B.
+
+*Implemented (2026-10-28)*
+- Core: `AppCore.Duplicates` (`Gear/DuplicateGear.cs`): `ListAsync` (groups as `DuplicateGroup`, suggested keep first, `BlockedReason` while a Gear Item has a Sync Conflict), `PlanMergeAsync` (`GearMergePlan.Message` for the confirm), `MergeAsync`, `MarkNotDuplicatesAsync`, and `CountToReviewAsync` / `CloseReviewNotice` for the Gear page notice (in memory, this session only).
+- Matching rule shared with CSV import in `Gear/GearMatch.cs`. `GearItem.MergedIntoId` on a merged tombstone. "Not duplicates" is a synced `NotDuplicates` record (table `notDuplicates`) whose id is the sorted Gear Item ids joined by `+`, so two devices dismissing the same set make the same record.
+- Repointing: `ListContents.Repoint` (one entry per Gear Item, the kept item's own entry, Qty not added, packed if any was, frozen weights kept), used by `GearLists.RepointAsync` and `TripPlanner.RepointAsync` (Completed Trips too). `CloudSync` and `Backup` take an `arrived` callback, run after a sync or import saved records here; `DuplicateGear.ChangesArrivedAsync` repoints entries still on merged-away Gear Items (saved through the watched store, so the next sync sends them) and turns on the notice if Gear Items were added.
+- Sync code renamed from merge to Combine first (`RecordCombine`, `SyncCombineResult`, `CombinedRecord`, `CombineChange`).
+- Web: `Pages/DuplicateGearPage.razor` at `/gear/duplicates` (side-by-side lines like a Sync Conflict, a Keep radio per column, Merge with confirm, Not duplicates); a Duplicates button beside Import and Retired on the Gear page, and an info notice there after a sync or import brings in duplicates.
+- Tests: `DuplicateGearTests` (17). Checked in headless Edge at phone width: two "Duplex" tents, review, confirm, merge, one left, no console errors.

@@ -1,0 +1,154 @@
+@page "/gear/duplicates"
+@inject AppCore App
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>Duplicate gear</PageTitle>
+<RefreshAfterSync OnChangesArrived="LoadAsync" />
+
+<MudText Typo="Typo.h5" HtmlTag="h1" GutterBottom="true">Duplicate gear</MudText>
+<MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">
+    These Gear Items have the same Gear Type and Name, often from importing the same sheet on two devices.
+    Merge keeps the one you choose as it is: everything that used the others uses it instead, and the others are deleted.
+</MudText>
+
+@if (_groups is null)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else if (_groups.Count == 0)
+{
+    <MudText>No duplicate gear.</MudText>
+    <MudButton Href="" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.ArrowBack" Class="mt-2">Gear</MudButton>
+}
+else
+{
+    @foreach (var group in _groups)
+    {
+        var first = group.Items[0].GearItem;
+        var columns = $"grid-template-columns: minmax(5rem, 0.8fr) repeat({group.Items.Count}, 1fr)";
+        <MudPaper Class="pa-4 mb-4">
+            <MudText Typo="Typo.h6" HtmlTag="h2">@first.Name</MudText>
+            @if (first.GearType.Length > 0)
+            {
+                <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">@first.GearType</MudText>
+            }
+
+            <MudRadioGroup T="string" Value="KeepIdFor(group)" ValueChanged="id => _keep[Key(group)] = id"
+                           Disabled="!group.CanMerge" Class="duplicate-keep">
+                <div class="conflict-lines" role="table" aria-label="@($"{first.Name}: the duplicates")">
+                    <div class="conflict-line conflict-heading" role="row" style="@columns">
+                        <span role="columnheader"></span>
+                        @foreach (var candidate in group.Items)
+                        {
+                            <span role="columnheader">
+                                <MudRadio T="string" Value="candidate.GearItem.Id" Dense="true" Color="Color.Primary">Keep</MudRadio>
+                            </span>
+                        }
+                    </div>
+                    @foreach (var (label, values) in Lines(group))
+                    {
+                        <div class="@($"conflict-line{(values.Distinct().Count() > 1 ? " differs" : "")}")" role="row" style="@columns">
+                            <span role="rowheader">@label</span>
+                            @foreach (var value in values)
+                            {
+                                <span role="cell">@value</span>
+                            }
+                        </div>
+                    }
+                </div>
+            </MudRadioGroup>
+
+            @if (group.BlockedReason is { } blocked)
+            {
+                <MudAlert Severity="Severity.Warning" Class="mt-3">
+                    @blocked <MudLink Href="sync/conflicts">Sync Conflicts</MudLink>
+                </MudAlert>
+            }
+
+            <div class="d-flex flex-wrap gap-2 mt-3">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_busy || !group.CanMerge"
+                           OnClick="() => MergeAsync(group)">Merge</MudButton>
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" Disabled="_busy"
+                           OnClick="() => NotDuplicatesAsync(group)">Not duplicates</MudButton>
+            </div>
+        </MudPaper>
+    }
+}
+
+@code {
+    private const string Empty = "—";
+
+    private IReadOnlyList<DuplicateGroup>? _groups;
+    private UnitSystem _unitSystem;
+    private readonly Dictionary<string, string> _keep = [];
+    private bool _busy;
+
+    protected override async Task OnInitializedAsync()
+    {
+        App.Duplicates.CloseReviewNotice();
+        _unitSystem = (await App.Settings.GetAsync()).UnitSystem;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync() => _groups = await App.Duplicates.ListAsync();
+
+    private static string Key(DuplicateGroup group) => string.Join("+", group.GearItemIds);
+
+    private string KeepIdFor(DuplicateGroup group) =>
+        _keep.TryGetValue(Key(group), out var id) && group.GearItemIds.Contains(id) ? id : group.SuggestedKeepId;
+
+    /// <summary>Each detail of the Gear Items, one value per item in column order.</summary>
+    private IEnumerable<(string Label, IReadOnlyList<string> Values)> Lines(DuplicateGroup group)
+    {
+        IReadOnlyList<string> Each(Func<DuplicateCandidate, string?> value) =>
+            group.Items.Select(candidate => value(candidate) is { Length: > 0 } text ? text : Empty).ToList();
+
+        yield return ("Weight", Each(c => UnitFormat.Weight(c.GearItem.WeightGrams, _unitSystem)));
+        yield return ("Tags", Each(c => string.Join(", ", c.GearItem.Tags)));
+        yield return ("Price", Each(c => c.GearItem.Price is { } price ? PriceInput.Format(price) : null));
+        yield return ("Notes", Each(c => c.GearItem.Notes));
+        yield return ("Retired", Each(c => c.GearItem.Retired ? "Yes" : "No"));
+        yield return ("Used by", Each(c => c.UsedBy.Count == 0 ? "Nothing" : string.Join(", ", c.UsedBy)));
+    }
+
+    private async Task MergeAsync(DuplicateGroup group)
+    {
+        _busy = true;
+        try
+        {
+            var keepId = KeepIdFor(group);
+            var plan = await App.Duplicates.PlanMergeAsync(group.GearItemIds, keepId);
+            var confirmed = await DialogService.ShowMessageBoxAsync("Merge duplicates", plan.Message, yesText: "Merge", cancelText: "Cancel");
+            if (confirmed == true)
+            {
+                await App.Duplicates.MergeAsync(group.GearItemIds, keepId);
+                Snackbar.Add($"Merged into the kept {plan.Kept.Name}.", Severity.Success);
+            }
+        }
+        catch (RuleViolationException ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Warning);
+        }
+        finally
+        {
+            await LoadAsync();
+            _busy = false;
+        }
+    }
+
+    private async Task NotDuplicatesAsync(DuplicateGroup group)
+    {
+        _busy = true;
+        try
+        {
+            await App.Duplicates.MarkNotDuplicatesAsync(group.GearItemIds);
+            Snackbar.Add($"{group.Items[0].GearItem.Name} won't be offered as a duplicate again.", Severity.Info);
+        }
+        finally
+        {
+            await LoadAsync();
+            _busy = false;
+        }
+    }
+}

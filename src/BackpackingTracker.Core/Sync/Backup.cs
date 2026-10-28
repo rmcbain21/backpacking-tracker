@@ -9,10 +9,13 @@ namespace BackpackingTracker.Core.Sync;
 public sealed class Backup
 {
     private readonly IRecordStore _store;
+    private readonly Func<ChangeSummary, Task> _arrived;
 
-    public Backup(IRecordStore store)
+    /// <param name="arrived">Called after an import that saved records here, with what changed.</param>
+    public Backup(IRecordStore store, Func<ChangeSummary, Task> arrived)
     {
         _store = store;
+        _arrived = arrived;
     }
 
     /// <summary>Every record on the device, tombstones included, as a <see cref="SyncFile"/>.</summary>
@@ -45,12 +48,14 @@ public sealed class Backup
             changes.AddRange(RecordTypeChanges.Count(table, winners));
         }
 
+        var summary = new ChangeSummary(changes);
         if (toSave.Count > 0)
         {
             await _store.SaveAllAsync(toSave);
+            await _arrived(summary);
         }
 
-        return new ChangeSummary(changes);
+        return summary;
     }
 
     private static IReadOnlyDictionary<RecordTable, IReadOnlyList<StoredRecord>> Read(string fileText)
