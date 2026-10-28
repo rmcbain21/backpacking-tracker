@@ -37,6 +37,9 @@ Running example: after a sync there's **Tent "Duplex" (A)** on the test Trip and
 *Sync safety*
 - If another device adds A to a list before it syncs the Merge, that list ends up pointing at A's tombstone. After each sync (and JSON import), any List Entry pointing at a tombstoned Gear Item with a "merged into" id is repointed to that item (following a chain, A → B → C), applying the "one entry per list" rule above. That's a normal local edit, sent on the next sync.
 
+*Naming in the code*
+- The spec now calls sync's record-by-record step **Combine**, so **Merge** only means this. The sync code still says merge: `RecordMerge` (`WithBase`, `IncomingWinners`), `SyncMergeResult`, `MergedRecord`, `MergeChange`, and comments in `CloudSync.cs`. Rename them to Combine (`RecordCombine`, `SyncCombineResult`, etc.) as part of this work, before adding the Merge code beside them.
+
 *Tests (core API, two devices where sync is involved)*
 - Duplicates found by Gear Type and Name ignoring case and spaces; Retired included; different Gear Type not matched.
 - Merge repoints Gear Lists, Planned and Completed Trips; frozen weights unchanged; both-on-one-list leaves one entry, Qty not added, packed kept.
