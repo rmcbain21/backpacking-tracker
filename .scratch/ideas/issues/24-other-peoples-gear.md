@@ -44,3 +44,6 @@
 *Out of scope*
 - Splitting group gear: carrying a partner's (or lending one's own) gear never moves weight automatically. Remove it from your own Packing List by hand.
 - Sign-in or sync for Hiking Partners.
+
+*From 30 (Merge duplicate Gear Items)*
+- Duplicates must also have the same owner: the backpacker's Duplex and Sam's Duplex are two tents. Add this to 30's matching rule when owners arrive.

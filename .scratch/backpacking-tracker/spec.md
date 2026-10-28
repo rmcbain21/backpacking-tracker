@@ -151,6 +151,10 @@ A personal, phone-first app that installs from the browser on my Android phone (
 
 103. As a backpacker, I want to record Gear Changes at a Resupply (pick up a bear canister, send the puffy home), with each Food Carry showing its own pack weight and a pick-up/send-home checklist, so that a long Trip reflects the gear I carry on each part of it.
 
+### Duplicate gear
+
+104. As a backpacker, I want to be told about duplicate Gear Items (same Gear Type and Name) after a sync, and Merge each set into the one I keep, so that importing the same sheet on two devices doesn't leave me with two of everything.
+
 ## Implementation Decisions
 
 Architecture follows ADR 0001 (offline-first Blazor WebAssembly PWA, no server, Google Drive sync) and ADR 0002 (store metric, display imperial). Terms follow `GLOSSARY.md`.
@@ -179,7 +183,7 @@ Architecture follows ADR 0001 (offline-first Blazor WebAssembly PWA, no server, 
 - All weights are stored in grams with 0.1 g precision; all distances and elevations in metres (ADR 0002).
 - **Category**: name, sort order. A top-level Category record is one of the Default Categories; each Gear List and Packing List holds its own Categories (id, name; ordered by position, and not tombstoned since they sync inside the list) inside it (ADR 0003). The first-run Default Categories have fixed ids and an `updatedAt` of the Unix epoch, meaning "never edited", so every device creates identical defaults and sync can tell an untouched default from an edited one. Removed Categories are kept as tombstones, and the last Category (of the defaults, or of a list) cannot be removed.
 - **Hiking Partner**: name (ADR 0008).
-- **Gear Item**: owner (the backpacker, or a Hiking Partner id), Name, Gear Type (free text, cleaned up like a Tag), weight (optional on a Hiking Partner's gear), Tags, optional price, optional notes, Custom Fields, Retired flag. Records saved before ticket 27 (name, brand/model, Category) are read with the old name as the Gear Type and the old brand/model as the Name (the old name when there was no brand/model).
+- **Gear Item**: owner (the backpacker, or a Hiking Partner id), Name, Gear Type (free text, cleaned up like a Tag), weight (optional on a Hiking Partner's gear), Tags, optional price, optional notes, Custom Fields, Retired flag, and on a tombstone an optional "merged into" Gear Item id (ADR 0009). Records saved before ticket 27 (name, brand/model, Category) are read with the old name as the Gear Type and the old brand/model as the Name (the old name when there was no brand/model).
 - **Gear List**: owner (the backpacker, or a Hiking Partner id), name, its own Categories, List Entries. The backpacker's Gear Lists hold only their own gear; a Hiking Partner's can also hold the backpacker's (borrowed).
 - **List Entry**: Gear Item reference, the id of one of its list's Categories, quantity (whole number, at least 1), Carry Mode (base, worn or consumable; defaults to base). A list has one entry per Gear Item: adding a Gear Item already on the list adds one to that entry's quantity. On a Packing List it also has a packed flag, and when the Trip is Completed, a frozen weight.
 - **Food Item**: name, serving weight, calories per serving, optional protein per serving, optional cost per serving, Custom Fields, Tags, Retired flag.
@@ -224,6 +228,7 @@ Architecture follows ADR 0001 (offline-first Blazor WebAssembly PWA, no server, 
 - **Triggers**: on app open and a few seconds after local changes (debounced) when online, plus "Sync now". The UI shows last-synced time, the pending Sync Conflict count, and sync errors.
 - **Google sign-in**: access tokens are held in memory only; when one expires, the next sync asks to sign in again. Disconnecting forgets the token and leaves local data untouched.
 - **JSON import** runs the same merge with the imported file as "remote".
+- **After a sync or JSON import**: List Entries pointing at a Gear Item merged away (its tombstone has a "merged into" id) are repointed to the kept item, and new duplicate Gear Items are offered for Merge (idea 30, ADR 0009).
 
 ### Hosting and delivery
 
