@@ -59,7 +59,7 @@ A personal, phone-first app that installs from the browser on my Android phone (
 34. As a backpacker, I want the option to also create a Gear List from the imported rows, so that my first trip sheet becomes my first Gear List in one step.
 35. As a backpacker, I want a preview listing what will be created, reused, flagged and rejected (with the reason), and the Gear List it will make, before anything is saved, so that I know exactly what will happen.
 36. As a backpacker, I want to export my whole database as a JSON file I can download, so that I have a backup that doesn't depend on Google.
-37. As a backpacker, I want to import a JSON export, merged with my existing data using the same rules as sync, so that I can restore a backup or move providers.
+37. As a backpacker, I want to import a JSON export, combined with my existing data using the same rules as sync, so that I can restore a backup or move providers.
 
 ### Trips
 
@@ -119,7 +119,7 @@ A personal, phone-first app that installs from the browser on my Android phone (
 82. As a backpacker, I want my data stored in a hidden app folder in my Drive, so that it doesn't clutter my files.
 83. As a backpacker, I want sync to run automatically when the app opens and shortly after I make changes, when online, so that I don't have to think about it.
 84. As a backpacker, I want a "Sync now" button and a "last synced" indicator, so that I can force a sync and know how current my data is.
-85. As a backpacker, I want records changed on only one device to merge silently, so that normal use needs no attention.
+85. As a backpacker, I want records changed on only one device to combine silently, so that normal use needs no attention.
 86. As a backpacker, I want a deletion on one device to stay deleted on the others, so that deleted things don't come back.
 87. As a backpacker, I want to be shown a Sync Conflict, with both versions side by side, when the same record changed on two devices since they last synced, so that nothing is overwritten without my say.
 88. As a backpacker, I want to settle each Sync Conflict by choosing one version, so that I stay in control.
@@ -169,7 +169,7 @@ Architecture follows ADR 0001 (offline-first Blazor WebAssembly PWA, no server, 
   - **Trips**: Trips, Packing List, Trip Days, Meal Plan slots, Trip Status transitions, freezing, date changes, stats, "Save as Gear List", copying a Meal Plan.
   - **Units**: conversion and formatting between stored metric values and the chosen display units, and parsing typed input in oz, lb or g.
   - **Import/export**: CSV gear import and JSON export/import.
-  - **Sync engine**: merges local records with the sync file and produces Sync Conflicts.
+  - **Sync engine**: combines local records with the sync file and produces Sync Conflicts.
 - **Ports used by the core** (interfaces the core depends on, with real adapters in the app):
   - **Record store**: save, load and list records per record type on this device. Real adapter: IndexedDB via Dexie through a thin JavaScript interop module.
   - **Cloud file store**: read the sync file, write the sync file, get its last-modified time. Real adapter: Google Drive `appDataFolder`, signing in with Google Identity Services and the `drive.appdata` scope only. This is the seam for adding OneDrive later.
@@ -191,7 +191,7 @@ Architecture follows ADR 0001 (offline-first Blazor WebAssembly PWA, no server, 
 - **Meal**: name, components (Food Item reference and number of servings), Tags, Retired flag.
 - **Trip**: name, start date, end date, Trip Status (Planned or Completed), source Gear List (id and name, both optional; older Trips have only the name), Packing List, partner Packing Lists (one per Hiking Partner, each with its Hiking Partner and source Gear List), optional water carried, Trip Days, bought ticks (per Food Carry, per Food Item).
 - **Trip Day**: date, start, end, campsite, planned distance, actual distance, elevation gain, journal notes, Resupply flag with optional place name (never on day 1), Gear Changes on a Resupply day (add a Gear Item with quantity, Carry Mode and Category; remove; change quantity; each with a done tick), and four meal slots (Breakfast, Lunch, Dinner, Snacks). Each slot holds zero or more slot entries: either a Meal or a Food Item reference with a quantity. When the Trip is Completed, each slot entry also holds frozen weight and nutrition.
-- **Settings**: display unit system (imperial by default). Device-local sync bookkeeping (see Sync) is stored separately and never synced. There is exactly one Settings record, with the fixed id `00000000-0000-0000-0000-000000000001` instead of a device-generated GUID, so every device edits the same record and sync merges it rather than creating one per device.
+- **Settings**: display unit system (imperial by default). Device-local sync bookkeeping (see Sync) is stored separately and never synced. There is exactly one Settings record, with the fixed id `00000000-0000-0000-0000-000000000001` instead of a device-generated GUID, so every device edits the same record and sync combines it rather than creating one per device.
 
 ### Behaviour rules
 
@@ -219,15 +219,15 @@ Architecture follows ADR 0001 (offline-first Blazor WebAssembly PWA, no server, 
 
 - **Sync file**: one JSON document in the Drive app-data folder containing a format version and every record of every type, including tombstones. The JSON export uses the same format.
 - **Bookkeeping** (per device, local only): for each record, the `updatedAt` it had at the last successful sync (its base), plus the time of the last successful sync.
-- **Merge**, per record, comparing local, remote and base:
+- **Combine**, per record, comparing local, remote and base:
   - Only one side changed since base → take that side.
   - Both changed and the contents are identical → take either, no conflict.
   - Both changed and the contents differ → a Sync Conflict. The local version stays on the device, the remote version stays in the sync file, and the conflict is stored locally until settled. Settling chooses one version, which is written with a new `updatedAt` and wins on the next sync.
   - A record that exists on only one side is taken from that side.
-- **Run**: read the sync file (or treat it as empty if none exists yet), merge, save merged records locally, write the merged file back, update bookkeeping. A failed write leaves bookkeeping unchanged so the next sync retries.
+- **Run**: read the sync file (or treat it as empty if none exists yet), combine, save the combined records locally, write the combined file back, update bookkeeping. A failed write leaves bookkeeping unchanged so the next sync retries.
 - **Triggers**: on app open and a few seconds after local changes (debounced) when online, plus "Sync now". The UI shows last-synced time, the pending Sync Conflict count, and sync errors.
 - **Google sign-in**: access tokens are held in memory only; when one expires, the next sync asks to sign in again. Disconnecting forgets the token and leaves local data untouched.
-- **JSON import** runs the same merge with the imported file as "remote".
+- **JSON import** runs the same Combine with the imported file as "remote".
 - **After a sync or JSON import**: List Entries pointing at a Gear Item merged away (its tombstone has a "merged into" id) are repointed to the kept item, and new duplicate Gear Items are offered for Merge (idea 30, ADR 0009).
 
 ### Hosting and delivery
@@ -247,7 +247,7 @@ Architecture follows ADR 0001 (offline-first Blazor WebAssembly PWA, no server, 
 
 - **One test surface: the app core's public API.** Tests are xUnit tests that call the core the way the UI does and assert on what comes back, such as totals, lists, statuses, import summaries and Sync Conflicts. They never assert on private methods, internal data structures or how records are laid out in storage. The one exception: a test of data that the API can no longer create (records saved by an older version, or brought in by sync from another device) may write that record to the in-memory store directly, with a comment saying why. Likewise, until the sync engine exists (ticket 24), a test may read the store to check that a deletion left a tombstone.
 - **Ports are replaced by in-memory implementations**: an in-memory record store, an in-memory cloud file store and a controllable clock. These fakes live with the tests and are kept simple and trustworthy.
-- **Sync is tested as two devices**: two core instances with separate in-memory record stores share one in-memory cloud file store. Tests edit on both, sync both, and check the outcome: silent merges, tombstones that propagate, identical edits that don't conflict, real Sync Conflicts and settling them, and retrying after a failed write.
+- **Sync is tested as two devices**: two core instances with separate in-memory record stores share one in-memory cloud file store. Tests edit on both, sync both, and check the outcome: silent combines, tombstones that propagate, identical edits that don't conflict, real Sync Conflicts and settling them, and retrying after a failed write.
 - **What gets tested in the core**: weight calculations (including Carry Mode, quantities, food, water and the Category breakdown); Retire and hard-delete rules; Trip creation copying a Gear List; Trip Status freezing and Reopen; date-change preview and application; stats; Save as Gear List; Meal Plan copying; unit conversion, formatting and input parsing; CSV import (matching, flags, rejected rows, defaults, optional Gear List); and JSON export → import round-trips.
 - **Not unit-tested**: the Dexie/IndexedDB interop, the Google Drive adapter and the MudBlazor pages. They are kept thin and checked by hand, with at most one smoke test each. If a page grows logic, move the logic into the core instead of adding component tests.
 - **A good test** describes one behaviour in domain language (for example "completing a Trip freezes Gear Item weights"), builds its data through the core API, and survives refactoring of the core's internals.

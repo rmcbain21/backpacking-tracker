@@ -146,5 +146,5 @@ A record changed on two devices since they last synced, which the backpacker mus
 _Avoid_: Merge conflict, collision
 
 **Merge**:
-Combining duplicate Gear Items (same Gear Type and Name) into one kept Gear Item, chosen by the backpacker: everything that used the others now uses the kept one, and the others are deleted. Sync combining two devices' records is just syncing, not a Merge.
-_Avoid_: Dedupe, combine, consolidate
+Combining duplicate Gear Items (same Gear Type and Name) into one kept Gear Item, chosen by the backpacker: everything that used the others now uses the kept one, and the others are deleted. Sync bringing two devices' records together is a Combine (see the spec), not a Merge.
+_Avoid_: Dedupe, consolidate
