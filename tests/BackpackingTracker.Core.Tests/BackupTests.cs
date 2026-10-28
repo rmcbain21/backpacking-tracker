@@ -8,7 +8,7 @@ using BackpackingTracker.Core.Units;
 
 namespace BackpackingTracker.Core.Tests;
 
-/// <summary>Exporting everything to a JSON file and importing such a file back, merged record by record.</summary>
+/// <summary>Exporting everything to a JSON file and importing such a file back, combined record by record.</summary>
 public class BackupTests
 {
     private readonly FakeClock _clock = new(new DateTimeOffset(2026, 5, 1, 9, 30, 0, TimeSpan.Zero));

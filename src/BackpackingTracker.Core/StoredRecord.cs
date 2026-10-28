@@ -1,7 +1,7 @@
 namespace BackpackingTracker.Core;
 
 /// <summary>
-/// The fields every stored record carries, so records can be merged and synced between devices.
+/// The fields every stored record carries, so records can be combined and synced between devices.
 /// </summary>
 public abstract record StoredRecord
 {

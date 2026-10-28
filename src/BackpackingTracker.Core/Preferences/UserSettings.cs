@@ -8,7 +8,7 @@ public sealed class UserSettings
     internal const string Table = "settings";
 
     // There is only ever one Settings record. A fixed id (rather than a new GUID per device)
-    // means every device edits the same record, so sync merges it instead of duplicating it.
+    // means every device edits the same record, so sync combines it instead of duplicating it.
     private const string SettingsId = "00000000-0000-0000-0000-000000000001";
 
     private readonly IRecordStore _store;

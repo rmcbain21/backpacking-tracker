@@ -2,7 +2,7 @@ namespace BackpackingTracker.Core.Gear;
 
 /// <summary>
 /// The Categories created on first run. They have fixed ids (rather than a new GUID per device)
-/// so that every device creates the same records and sync merges them instead of duplicating them.
+/// so that every device creates the same records and sync combines them instead of duplicating them.
 /// </summary>
 public static class DefaultCategories
 {

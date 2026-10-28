@@ -1,7 +1,7 @@
 namespace BackpackingTracker.Core.Sync;
 
 /// <summary>What taking an incoming record does to the device, as the backpacker sees it.</summary>
-internal enum MergeChange
+internal enum CombineChange
 {
     /// <summary>A record the backpacker couldn't see before (new, or brought back after a deletion).</summary>
     Added,
@@ -15,41 +15,41 @@ internal enum MergeChange
 }
 
 /// <summary>An incoming record that wins over the device's copy, and what taking it does.</summary>
-internal sealed record MergedRecord(StoredRecord Record, MergeChange Change);
+internal sealed record CombinedRecord(StoredRecord Record, CombineChange Change);
 
 /// <summary>A record both devices changed differently since they last synced: a Sync Conflict.</summary>
 internal sealed record ConflictedRecord(StoredRecord Local, StoredRecord Remote);
 
-/// <summary>The outcome of merging one table with the sync file.</summary>
+/// <summary>The outcome of combining one table with the sync file.</summary>
 /// <param name="ToSaveLocally">The file's records that win over (or are missing from) the device.</param>
-/// <param name="Merged">Every record as the file should hold it: for a Sync Conflict, the file's own version.</param>
-/// <param name="FileChanged">Whether <paramref name="Merged"/> differs from what the file holds.</param>
+/// <param name="Combined">Every record as the file should hold it: for a Sync Conflict, the file's own version.</param>
+/// <param name="FileChanged">Whether <paramref name="Combined"/> differs from what the file holds.</param>
 /// <param name="Conflicts">Records left as they are on both sides until the backpacker chooses a version.</param>
-internal sealed record SyncMergeResult(
-    IReadOnlyList<MergedRecord> ToSaveLocally,
-    IReadOnlyList<StoredRecord> Merged,
+internal sealed record SyncCombineResult(
+    IReadOnlyList<CombinedRecord> ToSaveLocally,
+    IReadOnlyList<StoredRecord> Combined,
     bool FileChanged,
     IReadOnlyList<ConflictedRecord> Conflicts);
 
 /// <summary>
-/// Merges records from elsewhere (an imported file, or the sync file) into the device's records, record by
+/// Combines records from elsewhere (an imported file, or the sync file) into the device's records, record by
 /// record. A record only on one side is taken from that side. Tombstones are records like any other, so a
-/// deletion is merged the same way as an edit.
+/// deletion is combined the same way as an edit.
 /// </summary>
-internal static class RecordMerge
+internal static class RecordCombine
 {
     /// <summary>
     /// For an import, which has no record of earlier syncs: when both sides have a record, the one with the
     /// later <see cref="StoredRecord.UpdatedAt"/> wins. On a tie the device's copy stays, so importing twice
     /// changes nothing. Returns the incoming records to save; records where the device's copy wins are left out.
     /// </summary>
-    public static IReadOnlyList<MergedRecord> IncomingWinners(IEnumerable<StoredRecord> local, IEnumerable<StoredRecord> incoming)
+    public static IReadOnlyList<CombinedRecord> IncomingWinners(IEnumerable<StoredRecord> local, IEnumerable<StoredRecord> incoming)
     {
         var localById = local.ToDictionary(record => record.Id);
         return incoming
             .Select(record => (Record: record, Existing: localById.GetValueOrDefault(record.Id)))
             .Where(pair => pair.Existing is null || pair.Record.UpdatedAt > pair.Existing.UpdatedAt)
-            .Select(pair => new MergedRecord(pair.Record, Classify(pair.Existing, pair.Record)))
+            .Select(pair => new CombinedRecord(pair.Record, Classify(pair.Existing, pair.Record)))
             .ToList();
     }
 
@@ -60,13 +60,13 @@ internal static class RecordMerge
     /// With no base (this device's first sync of the record) a side counts as changed unless it was never
     /// edited (UpdatedAt is the Unix epoch, as for the first-run Default Categories).
     /// </summary>
-    public static SyncMergeResult WithBase(
+    public static SyncCombineResult WithBase(
         RecordTable table, IEnumerable<StoredRecord> local, IEnumerable<StoredRecord> remote, Func<string, DateTimeOffset?> baseOf)
     {
         var localById = local.ToDictionary(record => record.Id);
         var remoteById = remote.ToDictionary(record => record.Id);
-        var toSave = new List<MergedRecord>();
-        var merged = new List<StoredRecord>();
+        var toSave = new List<CombinedRecord>();
+        var combined = new List<StoredRecord>();
         var conflicts = new List<ConflictedRecord>();
         var fileChanged = false;
 
@@ -81,21 +81,21 @@ internal static class RecordMerge
             switch (outcome)
             {
                 case Outcome.Theirs:
-                    toSave.Add(new MergedRecord(theirs!, Classify(mine, theirs!)));
-                    merged.Add(theirs!);
+                    toSave.Add(new CombinedRecord(theirs!, Classify(mine, theirs!)));
+                    combined.Add(theirs!);
                     break;
                 case Outcome.Mine:
                     fileChanged |= theirs is null || theirs.UpdatedAt != mine!.UpdatedAt;
-                    merged.Add(mine!);
+                    combined.Add(mine!);
                     break;
                 case Outcome.Conflict:
                     conflicts.Add(new ConflictedRecord(mine!, theirs!));
-                    merged.Add(theirs!);
+                    combined.Add(theirs!);
                     break;
             }
         }
 
-        return new SyncMergeResult(toSave, merged, fileChanged, conflicts);
+        return new SyncCombineResult(toSave, combined, fileChanged, conflicts);
     }
 
     private enum Outcome
@@ -129,12 +129,12 @@ internal static class RecordMerge
     private static bool ChangedSince(StoredRecord record, DateTimeOffset? @base) =>
         @base is { } known ? record.UpdatedAt != known : record.UpdatedAt != DateTimeOffset.UnixEpoch;
 
-    private static MergeChange Classify(StoredRecord? existing, StoredRecord incoming) =>
+    private static CombineChange Classify(StoredRecord? existing, StoredRecord incoming) =>
         (existing is { Deleted: false }, incoming.Deleted) switch
         {
-            (false, false) => MergeChange.Added,
-            (true, false) => MergeChange.Updated,
-            (true, true) => MergeChange.Deleted,
-            (false, true) => MergeChange.Unseen,
+            (false, false) => CombineChange.Added,
+            (true, false) => CombineChange.Updated,
+            (true, true) => CombineChange.Deleted,
+            (false, true) => CombineChange.Unseen,
         };
 }

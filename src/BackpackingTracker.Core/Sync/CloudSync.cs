@@ -48,8 +48,8 @@ public sealed class CloudSync
     public async Task DisconnectAsync() => await SaveStateAsync(await LoadStateAsync() with { Connected = false });
 
     /// <summary>
-    /// Reads the sync file (none yet counts as empty), merges it with the device's records record by record
-    /// (see <see cref="RecordMerge.WithBase"/>), saves the merged records here, writes them to the file, then
+    /// Reads the sync file (none yet counts as empty), combines it with the device's records record by record
+    /// (see <see cref="RecordCombine.WithBase"/>), saves the combined records here, writes them to the file, then
     /// records the sync. If writing fails the bookkeeping is left as it was, so the next sync tries again.
     /// A record both devices changed differently is left as it is on both sides and becomes a Sync Conflict.
     /// Returns what changed on this device.
@@ -68,22 +68,22 @@ public sealed class CloudSync
             var remote = ReadSyncFile(await _cloud.ReadAsync());
 
             var toSave = new List<RecordToSave>();
-            var merged = new Dictionary<RecordTable, IReadOnlyList<StoredRecord>>();
+            var combined = new Dictionary<RecordTable, IReadOnlyList<StoredRecord>>();
             var changes = new List<RecordTypeChanges>();
             var bases = new Dictionary<string, DateTimeOffset>();
             var conflicts = new List<PendingConflict>();
             var fileChanged = fileModified is null;
             foreach (var table in RecordTable.All)
             {
-                var result = RecordMerge.WithBase(
+                var result = RecordCombine.WithBase(
                     table, await table.ListAsync(_store), remote[table], id => BaseOf(state, table, id));
                 toSave.AddRange(result.ToSaveLocally.Select(record => new RecordToSave(table.Name, record.Record)));
-                merged[table] = result.Merged;
+                combined[table] = result.Combined;
                 fileChanged |= result.FileChanged;
                 changes.AddRange(RecordTypeChanges.Count(table, result.ToSaveLocally));
 
                 var conflicted = result.Conflicts.Select(conflict => conflict.Remote.Id).ToHashSet();
-                foreach (var record in result.Merged.Where(record => !conflicted.Contains(record.Id)))
+                foreach (var record in result.Combined.Where(record => !conflicted.Contains(record.Id)))
                 {
                     bases[SyncState.Key(table.Name, record.Id)] = record.UpdatedAt;
                 }
@@ -108,7 +108,7 @@ public sealed class CloudSync
             if (fileChanged)
             {
                 // Another device wrote the file since it was read: writing now would lose its changes. The
-                // merge so far is saved here, so starting again only has to merge what that device added.
+                // records combined so far are saved here, so starting again only has to combine what that device added.
                 // (A write landing between this check and ours can still be lost from the file, but the
                 // device that made it re-sends its changes on its next sync.)
                 if (await _cloud.GetLastModifiedAsync() != fileModified)
@@ -116,7 +116,7 @@ public sealed class CloudSync
                     continue;
                 }
 
-                await _cloud.WriteAsync(SyncFile.Write(merged));
+                await _cloud.WriteAsync(SyncFile.Write(combined));
             }
 
             await SaveStateAsync(state with { LastSyncedAt = _clock.UtcNow, Bases = bases, Conflicts = conflicts });
