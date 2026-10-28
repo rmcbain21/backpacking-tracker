@@ -1,4 +1,5 @@
 @using BackpackingTracker.Core.Lists
+@inject IDialogService DialogService
 @* One List Entry on a Gear List or Packing List: its gear and weight, with quantity, Carry Mode, move and remove (or just the quantity and Carry Mode, read-only). *@
 <div class="pa-3 list-entry">
     <div class="d-flex align-center gap-2">
@@ -30,21 +31,13 @@
             <MudText Class="entry-quantity">@Entry.Quantity</MudText>
             <MudIconButton Icon="@Icons.Material.Filled.Add" Size="Size.Small"
                            aria-label="More" OnClick="() => OnChange.InvokeAsync((Entry.Quantity + 1, Entry.CarryMode))" />
-            <MudSelect T="CarryMode" Value="Entry.CarryMode" Dense="true" Class="carry-mode ml-2"
-                       ValueChanged="mode => OnChange.InvokeAsync((Entry.Quantity, mode))">
-                @foreach (var mode in Enum.GetValues<CarryMode>())
-                {
-                    <MudSelectItem Value="mode">@mode</MudSelectItem>
-                }
-            </MudSelect>
+            @* Plain buttons that open a picker when tapped: a dropdown or menu on every row made long lists slow to open (idea 22). *@
+            <MudButton Variant="Variant.Text" Size="Size.Small" Class="carry-mode ml-2"
+                       EndIcon="@Icons.Material.Filled.ArrowDropDown" aria-label="@($"Carry Mode: {Entry.CarryMode}")"
+                       OnClick="PickCarryModeAsync">@Entry.CarryMode</MudButton>
             <MudSpacer />
-            <MudMenu Icon="@Icons.Material.Filled.DriveFileMove" Size="Size.Small" Dense="true"
-                     AriaLabel="@($"Move {EntryName} to another Category")">
-                @foreach (var target in Categories.Where(c => c.Id != Entry.CategoryId))
-                {
-                    <MudMenuItem OnClick="() => OnMove.InvokeAsync(target)">@target.Name</MudMenuItem>
-                }
-            </MudMenu>
+            <MudIconButton Icon="@Icons.Material.Filled.DriveFileMove" Size="Size.Small" Disabled="Categories.Count < 2"
+                           aria-label="@($"Move {EntryName} to another Category")" OnClick="PickCategoryAsync" />
             <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small"
                            aria-label="Remove from list" OnClick="OnRemove" />
         </div>
@@ -79,4 +72,36 @@
     private ListEntry Entry => EntryView.Entry;
 
     private string EntryName => EntryView.GearItem?.Name ?? "Deleted Gear Item";
+
+    private async Task PickCarryModeAsync()
+    {
+        var choices = Enum.GetValues<CarryMode>().Select(mode => (mode.ToString(), mode)).ToList();
+        if (await PickAsync("Carry Mode", choices, Entry.CarryMode, markCurrent: true) is (true, var mode) && mode != Entry.CarryMode)
+        {
+            await OnChange.InvokeAsync((Entry.Quantity, mode));
+        }
+    }
+
+    private async Task PickCategoryAsync()
+    {
+        var choices = Categories.Where(c => c.Id != Entry.CategoryId).Select(c => (c.Name, c)).ToList();
+        if (await PickAsync($"Move {EntryName} to", choices, current: null, markCurrent: false) is (true, { } target))
+        {
+            await OnMove.InvokeAsync(target);
+        }
+    }
+
+    /// <summary>Shows the picker; Picked is false when the backpacker cancels.</summary>
+    private async Task<(bool Picked, T? Value)> PickAsync<T>(string title, IReadOnlyList<(string, T)> choices, T? current, bool markCurrent)
+    {
+        var parameters = new DialogParameters<PickDialog<T>>
+        {
+            { d => d.Choices, choices },
+            { d => d.Current, current },
+            { d => d.MarkCurrent, markCurrent },
+        };
+        var options = new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.ExtraSmall };
+        var result = await (await DialogService.ShowAsync<PickDialog<T>>(title, parameters, options)).Result;
+        return result is { Canceled: false, Data: T picked } ? (true, picked) : (false, default);
+    }
 }

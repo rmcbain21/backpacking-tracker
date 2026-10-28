@@ -12,7 +12,22 @@
 <MudButton Href="trips" Variant="Variant.Text" Size="Size.Small" StartIcon="@Icons.Material.Filled.ArrowBack"
            Class="mb-1 ml-n2">Trips</MudButton>
 
-@if (_loaded && _view is null)
+@if (!_loaded)
+{
+    @* An outline of the page while the Trip loads, so the tap shows something at once (idea 22). *@
+    <div class="trip-skeleton" aria-busy="true" aria-label="Loading the Trip">
+        <MudSkeleton Width="60%" Height="40px" />
+        <MudSkeleton Width="40%" />
+        <MudSkeleton Width="50%" Class="mb-3" />
+        <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="48px" Class="mb-3" />
+        <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="96px" Class="mb-4" />
+        @for (var row = 0; row < 4; row++)
+        {
+            <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="64px" Class="mb-2" />
+        }
+    </div>
+}
+else if (_view is null)
 {
     <MudText Typo="Typo.h5" HtmlTag="h1">Trip not found</MudText>
     <MudText Class="mud-text-secondary">It may have been deleted.</MudText>

@@ -1,0 +1,39 @@
+@typeparam T
+@* Picks one of a few choices (a Carry Mode, a Category to move to...) with one tap. Returns the choice, or cancels. *@
+<MudDialog ContentClass="px-0 pb-0">
+    <DialogContent>
+        <MudList T="T" Dense="true">
+            @foreach (var (label, value) in Choices)
+            {
+                var chosen = MarkCurrent && EqualityComparer<T>.Default.Equals(value, Current);
+                <MudListItem T="T" OnClick="() => Pick(value)"
+                             Icon="@(!MarkCurrent ? null : chosen ? Icons.Material.Filled.RadioButtonChecked : Icons.Material.Filled.RadioButtonUnchecked)"
+                             IconColor="Color.Primary">@label</MudListItem>
+            }
+        </MudList>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    /// <summary>Each choice's label and value, in order.</summary>
+    [Parameter, EditorRequired]
+    public IReadOnlyList<(string Label, T Value)> Choices { get; set; } = [];
+
+    /// <summary>The choice it is now, marked when <see cref="MarkCurrent"/> is on.</summary>
+    [Parameter]
+    public T? Current { get; set; }
+
+    /// <summary>Marks each choice as chosen or not, as for a setting; off for an action such as Move.</summary>
+    [Parameter]
+    public bool MarkCurrent { get; set; }
+
+    private void Pick(T value) => MudDialog.Close(DialogResult.Ok(value));
+
+    private void Cancel() => MudDialog.Cancel();
+}

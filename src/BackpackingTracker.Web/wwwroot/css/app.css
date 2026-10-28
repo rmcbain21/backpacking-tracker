@@ -197,8 +197,11 @@ h1:focus {
     text-align: center;
 }
 
+/* A row's Carry Mode button: as wide as the longest mode, so the rows' controls line up */
 .carry-mode {
     flex: 0 0 130px;
+    justify-content: space-between;
+    text-transform: none;
 }
 
 .add-gear-content {
