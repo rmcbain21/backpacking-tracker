@@ -29,6 +29,14 @@ public static class UnitFormat
             : $"{(metres / UnitConversion.MetresPerMile).ToString("0.0", Culture)} mi";
     }
 
+    /// <summary>A long distance to the whole mile or kilometre, such as "2,650 mi", for a Trip's progress.</summary>
+    public static string WholeDistance(decimal metres, UnitSystem system)
+    {
+        return system == UnitSystem.Metric
+            ? $"{Math.Round(metres / 1000m, 0, MidpointRounding.AwayFromZero).ToString("#,0", Culture)} km"
+            : $"{Math.Round(metres / UnitConversion.MetresPerMile, 0, MidpointRounding.AwayFromZero).ToString("#,0", Culture)} mi";
+    }
+
     public static string Elevation(decimal metres, UnitSystem system)
     {
         return system == UnitSystem.Metric

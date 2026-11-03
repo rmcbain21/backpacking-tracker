@@ -1,6 +1,7 @@
 @using BackpackingTracker.Core.Lists
-@* Creates a Trip: a name, start and end dates, and optionally a Gear List to copy as its Packing List.
-   Returns the new Trip's id. A refusal (no name, end before start) is shown here so nothing typed is lost. *@
+@* Creates a Trip: a name, start and end dates (or just a start, for an Open-ended Trip), and optionally a Gear List
+   to copy as its Packing List. Returns the new Trip's id. A refusal (no name, end before start) is shown here so
+   nothing typed is lost. *@
 @inject AppCore App
 
 <MudDialog>
@@ -8,8 +9,19 @@
         <MudTextField @bind-Value="_name" Label="Name" AutoFocus="true" Immediate="true" Class="trip-name" />
         <div class="d-flex gap-3">
             <MudDatePicker Date="_start" DateChanged="StartChanged" Label="Start" Class="trip-start" />
-            <MudDatePicker @bind-Date="_end" Label="End" Class="trip-end" />
+            @if (!_openEnded)
+            {
+                <MudDatePicker @bind-Date="_end" Label="End" Class="trip-end" />
+            }
         </div>
+        <MudSwitch T="bool" @bind-Value="_openEnded" Color="Color.Primary" Class="mt-2 trip-open-ended"
+                   Label="Open-ended: add days as I go" />
+        @if (_openEnded)
+        {
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                For a thru hike with no set finish. The Trip starts with day 1, and you add each day as you hike it.
+            </MudText>
+        }
         <MudSelect T="string" @bind-Value="_gearListId" Label="Packing List from" Class="trip-gear-list"
                    ToStringFunc="@(id => id is null ? NoGearList : _gearLists.FirstOrDefault(l => l.GearList.Id == id)?.GearList.Name)">
             <MudSelectItem T="string" Value="null">@NoGearList</MudSelectItem>
@@ -42,6 +54,7 @@
     private string? _name;
     private DateTime? _start;
     private DateTime? _end;
+    private bool _openEnded;
     private string? _gearListId;
     private string? _refusal;
     private IReadOnlyList<GearListView> _gearLists = [];
@@ -64,16 +77,17 @@
 
     private async Task CreateAsync()
     {
-        if (_start is null || _end is null)
+        if (_start is null || (_end is null && !_openEnded))
         {
-            _refusal = "Choose the start and end dates.";
+            _refusal = _openEnded ? "Choose the start date." : "Choose the start and end dates.";
             return;
         }
 
         try
         {
-            var trip = await App.Trips.CreateTripAsync(
-                _name ?? "", DateOnly.FromDateTime(_start.Value), DateOnly.FromDateTime(_end.Value), _gearListId);
+            var start = DateOnly.FromDateTime(_start.Value);
+            var end = _openEnded ? start : DateOnly.FromDateTime(_end!.Value);
+            var trip = await App.Trips.CreateTripAsync(_name ?? "", start, end, _gearListId, _openEnded);
             MudDialog.Close(DialogResult.Ok(trip.Id));
         }
         catch (RuleViolationException ex)

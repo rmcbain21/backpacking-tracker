@@ -142,6 +142,8 @@ internal sealed class ConflictDescriber
                 lines.Put("Name", trip.Name);
                 lines.Put("Dates", $"{Date(trip.StartDate)} to {Date(trip.EndDate)}");
                 lines.Put("Status", trip.Status.ToString());
+                lines.Put("Open-ended", trip.OpenEnded ? "Yes" : null);
+                lines.Put("Expected distance", trip.ExpectedDistanceMetres is { } expected ? UnitFormat.Distance(expected, _units) : null);
                 lines.Put("Created from", trip.CreatedFrom);
                 lines.Put("Water carried", trip.WaterCarriedGrams is { } water ? UnitFormat.WaterVolume(water) : null);
                 AddListContents(lines, trip.PackingList, prefix: "Packing List: ");

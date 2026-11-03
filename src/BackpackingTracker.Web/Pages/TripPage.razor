@@ -45,6 +45,9 @@ else if (_view is not null)
             else
             {
                 <MudMenuItem OnClick="CompleteAsync">Mark Completed</MudMenuItem>
+                <MudMenuItem OnClick="ToggleOpenEndedAsync" Class="toggle-open-ended">
+                    @(trip.OpenEnded ? "Turn off Open-ended" : "Make Open-ended")
+                </MudMenuItem>
             }
             <MudMenuItem OnClick="SaveAsGearListAsync">Save as Gear List</MudMenuItem>
             <MudMenuItem OnClick="DeleteAsync">Delete</MudMenuItem>
@@ -59,8 +62,9 @@ else if (_view is not null)
         }
     </div>
     <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2 trip-created-from">
-        @trip.Status@(trip.CreatedFrom is null ? "" : $" · from Gear List \"{trip.CreatedFrom}\"")
+        @trip.Status@(trip.OpenEnded ? " · Open-ended" : "")@(trip.CreatedFrom is null ? "" : $" · from Gear List \"{trip.CreatedFrom}\"")
     </MudText>
+    @Progress(_view.Stats, "mb-2")
     @if (Completed)
     {
         <MudAlert Severity="Severity.Info" Dense="true" Class="mb-2 completed-note">
@@ -242,6 +246,41 @@ else if (_view is not null)
                 <MudDivider />
             }
         </MudPaper>
+        @if (trip.OpenEnded && !Completed)
+        {
+            <div class="d-flex justify-end gap-2 mt-3 open-ended-days">
+                <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Remove" Disabled="trip.Days.Count == 1"
+                           OnClick="RemoveLastDayAsync" Class="remove-last-day">Remove last day</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+                           OnClick="AddDayAsync" Class="add-day">Add day</MudButton>
+            </div>
+        }
+    };
+
+    /// <summary>
+    /// Progress against the Expected Distance, such as "1,032 mi of 2,650 mi (39%) · 1,618 mi to go", and on an
+    /// Open-ended Trip the finish estimate once there is one; nothing without an Expected Distance.
+    /// </summary>
+    private RenderFragment Progress(TripStats stats, string spacing) => __builder =>
+    {
+        if (stats.Progress is not { } progress)
+        {
+            return;
+        }
+
+        <div class="@($"{spacing} trip-progress")">
+            <MudText Typo="Typo.body2" Class="progress-distance">
+                @UnitFormat.WholeDistance(progress.ActualMetres, _unitSystem) of @UnitFormat.WholeDistance(progress.ExpectedMetres, _unitSystem)
+                (@progress.Percent%) · @UnitFormat.WholeDistance(progress.RemainingMetres, _unitSystem) to go
+            </MudText>
+            <MudProgressLinear Value="@Math.Min(progress.Percent, 100)" Color="Color.Primary" Rounded="true" Class="my-1" />
+            @if (stats.FinishEstimate is { } estimate)
+            {
+                <MudText Typo="Typo.body2" Class="mud-text-secondary finish-estimate">
+                    At your pace: about @TripDates.Date(estimate.Date) (≈ @Plural(estimate.DaysToGo, "day") to go)
+                </MudText>
+            }
+        </div>
     };
 
     /// <summary>
@@ -332,6 +371,14 @@ else if (_view is not null)
             @StatLine(("Planned distance", "stat-planned", Recorded(stats.PlannedDistanceMetres, m => UnitFormat.Distance(m, _unitSystem))))
             @StatLine(("Actual distance", "stat-actual", Recorded(stats.ActualDistanceMetres, m => UnitFormat.Distance(m, _unitSystem))))
             @StatLine(("Elevation gain", "stat-gain", Recorded(stats.ElevationGainMetres, m => UnitFormat.Elevation(m, _unitSystem))))
+            <div class="d-flex justify-space-between py-1 pick-row expected-distance-row" role="button" tabindex="0"
+                 aria-label="Set expected distance" @onclick="SetExpectedDistanceAsync">
+                <MudText Typo="Typo.body2">Expected distance</MudText>
+                <MudText Typo="Typo.body2" Class="text-nowrap stat-expected">
+                    @(_view.Trip.ExpectedDistanceMetres is { } expected ? UnitFormat.WholeDistance(expected, _unitSystem) : "None · tap to add")
+                </MudText>
+            </div>
+            @Progress(stats, "mt-2")
         </MudPaper>
 
         <MudPaper Class="pa-3 mb-4 weight-stats">
@@ -469,6 +516,63 @@ else if (_view is not null)
         await dialog.Result;
         await LoadAsync();
     }
+
+    private async Task SetExpectedDistanceAsync()
+    {
+        var parameters = new DialogParameters<ExpectedDistanceDialog>
+        {
+            { d => d.TripId, TripId },
+            { d => d.Metres, _view!.Trip.ExpectedDistanceMetres },
+            { d => d.UnitSystem, _unitSystem },
+        };
+        var options = new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.ExtraSmall };
+        var dialog = await DialogService.ShowAsync<ExpectedDistanceDialog>("Expected distance", parameters, options);
+        await dialog.Result;
+        await LoadAsync();
+    }
+
+    /// <summary>Adds the next day; when the last day has meals, asks whether to copy them onto it.</summary>
+    private async Task AddDayAsync()
+    {
+        var days = _view!.Trip.Days;
+        var copyMeals = false;
+        if (days[^1].SlotEntries.Count > 0)
+        {
+            var answer = await DialogService.ShowMessageBoxAsync(
+                "Add day", $"Copy Day {days.Count}'s meals onto the new day?", yesText: "Copy meals", noText: "Start empty", cancelText: "Cancel");
+            if (answer is null)
+            {
+                return;
+            }
+
+            copyMeals = answer.Value;
+        }
+
+        await TryAsync(() => App.Trips.AddDayAsync(TripId, copyMeals));
+    }
+
+    /// <summary>Removes the last day, asking first when it has anything filled in.</summary>
+    private async Task RemoveLastDayAsync()
+    {
+        var days = _view!.Trip.Days;
+        var last = days[^1];
+        if (last.HasContent())
+        {
+            var confirmed = await DialogService.ShowMessageBoxAsync(
+                "Remove last day",
+                $"Day {days.Count} ({TripDates.Day(last.Date)}) has things filled in, which will be lost. Remove it?",
+                yesText: "Remove day", cancelText: "Cancel");
+            if (confirmed != true)
+            {
+                return;
+            }
+        }
+
+        await TryAsync(() => App.Trips.RemoveLastDayAsync(TripId, removeDayWithContent: true));
+    }
+
+    /// <summary>Turning it off keeps the last day so far as the end date, and shows the end date again.</summary>
+    private Task ToggleOpenEndedAsync() => TryAsync(() => App.Trips.SetOpenEndedAsync(TripId, !_view!.Trip.OpenEnded));
 
     private async Task ResetPackedAsync()
     {

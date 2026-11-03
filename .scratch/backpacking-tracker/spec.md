@@ -155,6 +155,12 @@ A personal, phone-first app that installs from the browser on my Android phone (
 
 104. As a backpacker, I want to be told about duplicate Gear Items (same Gear Type and Name) after a sync, and Merge each set into the one I keep, so that importing the same sheet on two devices doesn't leave me with two of everything.
 
+### Open-ended Trips
+
+105. As a backpacker, I want to start an Open-ended Trip with only a start date and add Trip Days one at a time as I hike, optionally copying the previous day's meals, so that a thru hike with no known finishing day fits.
+106. As a backpacker, I want to set an Expected Distance on any Trip and see how far along I am from the actual distance hiked, so that I know how much is left.
+107. As a backpacker, I want an Open-ended Trip with an Expected Distance to estimate when I'll finish at my pace so far, so that I can plan the rest of the hike.
+
 ## Implementation Decisions
 
 Architecture follows ADR 0001 (offline-first Blazor WebAssembly PWA, no server, Google Drive sync) and ADR 0002 (store metric, display imperial). Terms follow `GLOSSARY.md`.
@@ -189,7 +195,7 @@ Architecture follows ADR 0001 (offline-first Blazor WebAssembly PWA, no server, 
 - **Food Item**: name, serving weight, calories per serving, optional protein per serving, optional cost per serving, Custom Fields, Tags, Retired flag.
 - **Custom Field** (inside a Gear Item or Food Item, in the order added): name (unique on the item, ignoring case), value, optional unit label. On a Food Item the value is a number per serving; on a Gear Item it is a number when it parses as one, otherwise text. Units are labels, never converted (ADR 0006). Totals and comparison columns combine values only when name (ignoring case) and unit match. Not part of CSV import.
 - **Meal**: name, components (Food Item reference and number of servings), Tags, Retired flag.
-- **Trip**: name, start date, end date, Trip Status (Planned or Completed), source Gear List (id and name, both optional; older Trips have only the name), Packing List, partner Packing Lists (one per Hiking Partner, each with its Hiking Partner and source Gear List), optional water carried, Trip Days, bought ticks (per Food Carry, per Food Item).
+- **Trip**: name, start date, end date (on an Open-ended Trip, its last Trip Day so far), Trip Status (Planned or Completed), Open-ended flag, optional Expected Distance (metres), source Gear List (id and name, both optional; older Trips have only the name), Packing List, partner Packing Lists (one per Hiking Partner, each with its Hiking Partner and source Gear List), optional water carried, Trip Days, bought ticks (per Food Carry, per Food Item).
 - **Trip Day**: date, start, end, campsite, planned distance, actual distance, elevation gain, journal notes, Resupply flag with optional place name (never on day 1), Gear Changes on a Resupply day (add a Gear Item with quantity, Carry Mode and Category; remove; change quantity; each with a done tick), and four meal slots (Breakfast, Lunch, Dinner, Snacks). Each slot holds zero or more slot entries: either a Meal or a Food Item reference with a quantity. When the Trip is Completed, each slot entry also holds frozen weight and nutrition.
 - **Settings**: display unit system (imperial by default). Device-local sync bookkeeping (see Sync) is stored separately and never synced. There is exactly one Settings record, with the fixed id `00000000-0000-0000-0000-000000000001` instead of a device-generated GUID, so every device edits the same record and sync combines it rather than creating one per device.
 

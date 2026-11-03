@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using BackpackingTracker.Core.Lists;
 
 namespace BackpackingTracker.Core.Trips;
@@ -9,10 +10,20 @@ public sealed record Trip : StoredRecord
 
     public required DateOnly StartDate { get; init; }
 
-    /// <summary>On or after the start date; the same day for a one-day trip.</summary>
+    /// <summary>On or after the start date; the same day for a one-day trip. On an Open-ended Trip, its last Trip Day so far.</summary>
     public required DateOnly EndDate { get; init; }
 
     public TripStatus Status { get; init; } = TripStatus.Planned;
+
+    /// <summary>
+    /// An Open-ended Trip (such as a thru hike) has no set end: its Trip Days are added one at a time as it's hiked,
+    /// and its end date is never shown. Only while Planned; completing the Trip turns it off.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool OpenEnded { get; init; }
+
+    /// <summary>The total distance the Trip is expected to cover, in metres, for its progress; null when not set.</summary>
+    public decimal? ExpectedDistanceMetres { get; init; }
 
     /// <summary>
     /// The name of the Gear List the Trip was created from, for display only; null for a Trip created empty.

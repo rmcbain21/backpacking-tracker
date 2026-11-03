@@ -1,6 +1,6 @@
 # 01: Open-ended Trips for thru hikes
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Idea:** A thru hike often has no known finishing day, so a fixed start and end date doesn't fit. A "thru hike" mode would let me start a Trip with only a start date and add Trip Days one at a time as I go. Optionally I set an expected total distance (e.g. 2,650 mi for the PCT) so stats can show how far along I am.
 
@@ -44,3 +44,11 @@
 - The flag and Expected Distance are included in JSON export/import and sync.
 
 **Note (2026-10-27), from grilling 29:** the open question above is settled: an Open-ended Trip keeps following current Gear Item weights (a correction applies everywhere). Replacing gear partway through is recorded as a Gear Change at a Resupply (idea 29), so earlier figures stay right.
+
+*Implemented (2026-11-03)*
+- Core: `Trip.OpenEnded` (written only when on) and `Trip.ExpectedDistanceMetres`. `TripPlanner`: `CreateTripAsync(..., openEnded)` (end date ignored, starts with day 1), `SetOpenEndedAsync` (Planned only, days unchanged), `AddDayAsync(copyMealsFromPreviousDay)` (Open-ended only; copied slot entries get new ids), `RemoveLastDayAsync(removeDayWithContent)` (refused for day 1; goes through `ChangeDatesAsync`, so the same confirmation rule), `SetExpectedDistanceAsync` (any Trip, 0 clears it). `CompleteTripAsync` turns the flag off.
+- Stats: `TripStats.Progress` (`TripProgress`: actual, expected, remaining never below zero, whole percent, over 100 if exceeded) and `TripStats.FinishEstimate` (`FinishEstimate`: date and days to go, counted from the last Trip Day so far, days rounded up). Pace counts every non-Skipped day so far, including one just added with no distance yet; no estimate once nothing is left to go.
+- Sync conflict view shows "Open-ended" and "Expected distance". Export/import and sync carry both fields like any other.
+- Web: an "Open-ended" switch on New Trip hides the end date. The Trip page reads "Started Nov 1, 2026 · day 4 so far" and "Planned · Open-ended". Trip options has "Make Open-ended" / "Turn off Open-ended". Itinerary has Add day (asks "Copy meals / Start empty" only when the last day has meals) and Remove last day (asks only when the day has content). Change Dates shows only the start. Stats has a tappable Expected distance line (`Dialogs/ExpectedDistanceDialog.razor`). Progress ("60 mi of 2,650 mi (2%) · 2,590 mi to go", a bar, and "At your pace: about Apr 26, 2027 (≈ 173 days to go)") shows under the Trip's header and in Stats. New `UnitFormat.WholeDistance` for whole miles/km.
+- Not done: the Itinerary text's expected-finish line belongs to idea 02, which isn't built yet.
+- Tests: `OpenEndedTripTests` (20) and `UnitsTests` (4 cases). Checked in headless Edge at phone width: create, add 3 days, distances, Expected Distance, remove last day, Change Dates, turn off; no console errors.

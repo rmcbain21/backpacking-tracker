@@ -1,0 +1,68 @@
+@* Sets a Trip's Expected Distance, typed in the chosen units and stored in metres, or clears it. *@
+@inject AppCore App
+
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">
+            The whole distance you expect the Trip to cover, such as 2,650 mi for the PCT, to show how far along you are.
+        </MudText>
+        <MudTextField @bind-Value="_text" Label="Expected distance" InputMode="@(InputMode.@decimal)" Immediate="true"
+                      AutoFocus="true" Adornment="Adornment.End" AdornmentText="@RouteInput.DistanceLabel(UnitSystem)"
+                      Class="expected-distance"
+                      Validation="@(new Func<string?, string?>(text => Parse(text).Error))" />
+        @if (_refusal is not null)
+        {
+            <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-3">@_refusal</MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        @if (Metres is not null)
+        {
+            <MudButton OnClick="() => SaveAsync(null)">Clear</MudButton>
+            <MudSpacer />
+        }
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SaveTypedAsync">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter, EditorRequired]
+    public string TripId { get; set; } = "";
+
+    /// <summary>The Expected Distance now, in metres, if any.</summary>
+    [Parameter]
+    public decimal? Metres { get; set; }
+
+    [Parameter]
+    public UnitSystem UnitSystem { get; set; }
+
+    private string? _text;
+    private string? _refusal;
+
+    protected override void OnInitialized() => _text = RouteInput.DistanceText(Metres, UnitSystem);
+
+    private LengthParseResult Parse(string? text) => RouteInput.ParseDistance(text, UnitSystem, Metres);
+
+    private Task SaveTypedAsync()
+    {
+        var parsed = Parse(_text);
+        return parsed.Error is null ? SaveAsync(parsed.Metres) : Task.CompletedTask;
+    }
+
+    private async Task SaveAsync(decimal? metres)
+    {
+        try
+        {
+            await App.Trips.SetExpectedDistanceAsync(TripId, metres);
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (RuleViolationException ex)
+        {
+            _refusal = ex.Message;
+        }
+    }
+}

@@ -38,11 +38,14 @@ public sealed class TripPlanner : IGearItemReferences, IFoodItemReferences, IMea
     /// <summary>
     /// Makes a Planned Trip. From a Gear List, its Packing List is a copy of the list's Categories and
     /// entries (each entry with a new id), and nothing links back to the list but its name. Without one,
-    /// the Packing List starts with a copy of the Default Categories and no entries.
+    /// the Packing List starts with a copy of the Default Categories and no entries. An Open-ended Trip starts with
+    /// just day 1, on the start date; its end date is ignored.
     /// </summary>
-    public async Task<Trip> CreateTripAsync(string name, DateOnly startDate, DateOnly endDate, string? fromGearListId = null)
+    public async Task<Trip> CreateTripAsync(
+        string name, DateOnly startDate, DateOnly endDate, string? fromGearListId = null, bool openEnded = false)
     {
         var trimmed = string.IsNullOrWhiteSpace(name) ? throw new RuleViolationException("Give the Trip a name.") : name.Trim();
+        endDate = openEnded ? startDate : endDate;
         CheckDates(startDate, endDate);
 
         var gearList = fromGearListId is null ? null : await _lists.GetExistingGearListAsync(fromGearListId);
@@ -53,6 +56,7 @@ public sealed class TripPlanner : IGearItemReferences, IFoodItemReferences, IMea
             Name = trimmed,
             StartDate = startDate,
             EndDate = endDate,
+            OpenEnded = openEnded,
             CreatedFrom = gearList?.Name,
             PackingList = gearList?.Contents.Copy() ?? new ListContents { Categories = await _lists.CopyDefaultCategoriesAsync() },
         };
@@ -89,7 +93,7 @@ public sealed class TripPlanner : IGearItemReferences, IFoodItemReferences, IMea
     /// Marks the Trip Completed, copying each Packing List entry's current Gear Item weight onto the entry, and each
     /// slot entry's current weight, calories, protein and cost (a Meal's through its Food Items) onto the slot entry,
     /// so later edits to gear or food never change this Trip's numbers. Its Packing List, checklist, Meal Plan and
-    /// dates are then locked until it's Reopened.
+    /// dates are then locked until it's Reopened. An Open-ended Trip stops being one: it ends on its last day.
     /// </summary>
     public async Task CompleteTripAsync(string tripId)
     {
@@ -104,6 +108,7 @@ public sealed class TripPlanner : IGearItemReferences, IFoodItemReferences, IMea
         await SaveAsync(trip with
         {
             Status = TripStatus.Completed,
+            OpenEnded = false,
             PackingList = trip.PackingList.Freeze(items),
             // A slot entry whose Meal or Food Item is gone is left unfrozen, so it still counts for nothing.
             Days = WithSlotEntries(trip, entry => entry with { Frozen = MealPlanView.CurrentFigures(entry, meals, foodItems) }),
@@ -221,6 +226,14 @@ public sealed class TripPlanner : IGearItemReferences, IFoodItemReferences, IMea
 
         var trip = await GetExistingTripAsync(tripId);
         await SaveAsync(trip with { WaterCarriedGrams = grams == 0 ? null : grams });
+    }
+
+    /// <summary>Sets the Trip's Expected Distance, in metres, for its progress, or clears it with null. Any Trip, Planned or Completed.</summary>
+    public async Task SetExpectedDistanceAsync(string tripId, decimal? metres)
+    {
+        NotNegative(metres, "An expected distance");
+        var trip = await GetExistingTripAsync(tripId);
+        await SaveAsync(trip with { ExpectedDistanceMetres = metres == 0 ? null : metres });
     }
 
     // ----- Trip Days and dates -----
@@ -502,6 +515,54 @@ public sealed class TripPlanner : IGearItemReferences, IFoodItemReferences, IMea
         var moved = trip with { StartDate = startDate, EndDate = endDate, Days = trip.DaysMovedTo(startDate) };
         await SaveAsync(moved);
         return moved;
+    }
+
+    /// <summary>
+    /// Makes the Planned Trip Open-ended, or not. Its days are unchanged either way: its end date stays its last
+    /// Trip Day, which becomes a normal end date when it's turned off.
+    /// </summary>
+    public async Task SetOpenEndedAsync(string tripId, bool openEnded)
+    {
+        var trip = await GetPlannedTripAsync(tripId, "whether it's Open-ended");
+        await SaveAsync(trip with { OpenEnded = openEnded });
+    }
+
+    /// <summary>
+    /// Adds the next day after the last one to an Open-ended Trip. It starts empty, or with a copy of the previous
+    /// day's Meal Plan (each entry with a new id).
+    /// </summary>
+    public async Task<TripDay> AddDayAsync(string tripId, bool copyMealsFromPreviousDay = false)
+    {
+        var trip = await GetPlannedTripAsync(tripId, "its dates");
+        if (!trip.OpenEnded)
+        {
+            throw new RuleViolationException("Only an Open-ended Trip adds days one at a time. Change its dates instead.");
+        }
+
+        var day = new TripDay
+        {
+            Date = trip.EndDate.AddDays(1),
+            SlotEntries = copyMealsFromPreviousDay
+                ? trip.Days[^1].SlotEntries.Select(entry => entry with { Id = Guid.NewGuid().ToString(), Frozen = null }).ToList()
+                : [],
+        };
+        await SaveAsync(trip with { EndDate = day.Date, Days = [.. trip.Days, day] });
+        return day;
+    }
+
+    /// <summary>
+    /// Removes the Trip's last day, the same as ending it a day sooner: refused for day 1, and refused if the day has
+    /// content unless removeDayWithContent confirms it.
+    /// </summary>
+    public async Task RemoveLastDayAsync(string tripId, bool removeDayWithContent = false)
+    {
+        var trip = await GetPlannedTripAsync(tripId, "its dates");
+        if (trip.Days.Count == 1)
+        {
+            throw new RuleViolationException("Day 1 can't be removed.");
+        }
+
+        await ChangeDatesAsync(tripId, trip.StartDate, trip.EndDate.AddDays(-1), removeDayWithContent);
     }
 
     private static DateChangePlan PlanDateChange(Trip trip, DateOnly startDate, DateOnly endDate) =>

@@ -49,6 +49,16 @@ public class UnitsTests
     }
 
     [Theory]
+    [InlineData(4264728, UnitSystem.Imperial, "2,650 mi")]
+    [InlineData(804.672, UnitSystem.Imperial, "1 mi")]
+    [InlineData(4264728, UnitSystem.Metric, "4,265 km")]
+    [InlineData(400, UnitSystem.Metric, "0 km")]
+    public void Long_distances_show_in_whole_miles_or_kilometres(decimal metres, UnitSystem system, string expected)
+    {
+        Assert.Equal(expected, UnitFormat.WholeDistance(metres, system));
+    }
+
+    [Theory]
     [InlineData(0, UnitSystem.Imperial, "0 ft")]
     [InlineData(716, UnitSystem.Imperial, "2,349 ft")]
     [InlineData(716, UnitSystem.Metric, "716 m")]
