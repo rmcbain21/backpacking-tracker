@@ -87,7 +87,7 @@ public class OnTrailTests
     }
 
     [Fact]
-    public async Task The_trips_list_groups_on_trail_then_upcoming_with_overdue_then_past()
+    public async Task The_trips_list_groups_on_trail_then_upcoming_then_past_with_overdue()
     {
         await TripAsync("Overdue", 1, 3);
         await TripAsync("Later", 20, 22);
@@ -99,8 +99,8 @@ public class OnTrailTests
         var trips = await _app.Trips.ListTripsAsync();
 
         Assert.Equal(["Long one", "Short one"], Names(trips.OnTrail));
-        Assert.Equal(["Overdue", "Later"], Names(trips.Upcoming));
-        Assert.Equal(["Done"], Names(trips.Past));
+        Assert.Equal(["Later"], Names(trips.Upcoming));
+        Assert.Equal(["Done", "Overdue"], Names(trips.Past));
     }
 
     [Fact]

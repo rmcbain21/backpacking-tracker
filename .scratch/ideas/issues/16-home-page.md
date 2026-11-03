@@ -38,7 +38,7 @@
 - On an upcoming Trip's card, moves its start date to today and keeps its length (7–9 Nov becomes 6–8 Nov), going through the existing date-change preview and warnings (`DateChangePlan`). On an Open-ended Trip it moves only the start date. Not a new Trip Status.
 
 *Trips list groups*
-- **On Trail → Upcoming → Past** (was Upcoming / Past). Stale Trips stay under Upcoming. Each group is left out when empty, as now. The featured Trip is still listed in its group.
+- **On Trail → Upcoming → Past** (was Upcoming / Past). Stale Trips stay under Upcoming. *(Changed when built: they go under Past, flagged Not Completed.)* Each group is left out when empty, as now. The featured Trip is still listed in its group.
 
 *Out of scope*
 - Recent Gear Lists or overall stats on the start page.
@@ -46,8 +46,9 @@
 - The On Trail view itself (28), food eaten (26), resupply list (27).
 
 *Implemented (2026-11-03)*
-- Core: `TripView` takes today's date instead of `HasStarted` (now worked out), and adds `OnTrail`, `Overdue` (the "stale" Trip above: Planned, not Open-ended, end date passed), `TodayNumber`, `TodayDay` and `DaysToStart`. `TripListing` is now On Trail / Upcoming / Past (overdue Trips stay in Upcoming), with `IsEmpty` and `Featured` (overdue that ended earliest → On Trail that started earliest → next to start → none).
+- Core: `TripView` takes today's date instead of `HasStarted` (now worked out), and adds `OnTrail`, `Overdue` (the "stale" Trip above: Planned, not Open-ended, end date passed), `TodayNumber`, `TodayDay` and `DaysToStart`. `TripListing` is now On Trail / Upcoming / Past (overdue Trips go under Past; see the owner change below), with `IsEmpty` and `Featured` (overdue that ended earliest → On Trail that started earliest → next to start → none).
 - Routes: Gear moved to `/gear` (nav item, and Duplicates' back button). `/` is a small `Pages/Home.razor` that sends the app on to `/trips`, rather than Trips being served at `/` itself: that way the Trips nav item stays lit on every `trips/{id}` page, which a nav link on `/` can't match, and old `trips` links keep working.
 - Trip page reads `?tab=` (`packing`, `checklist`, `itinerary`, `meals`, `stats`) and `?day=yyyy-MM-dd`: on Itinerary that day's dialog opens; on Meals the Meal Plan scrolls to it (`wwwroot/js/scrollTo.js`, `scroll-margin-top` on `.meal-plan-day`). A reload after a sync keeps whatever tab the backpacker has moved to.
 - Trips page: the card at the top (name, dates, Starting Pack Weight, link to the Trip) with "On Trail · Day 3 of 5" / "On Trail · Day 40" / "Starts in 12 days" / "Finished? Mark it Completed." and the quick actions as specified. Meals links to today's day when there is one. Start now opens Change dates already moved to today (`ChangeDatesDialog.StartOn`), previewed for confirming. Groups are On Trail → Upcoming → Past. Copy a Meal Plan lists On Trail Trips too.
 - Tests: `OnTrailTests` (15). Checked in headless Edge at phone width: `/` goes to `/trips`, Gear at `/gear` with its nav lit; overdue card → Mark Completed → On Trail card → Today opens Day 3's dialog, Meals scrolls to today, Checklist; Complete it → upcoming card → Start now → On Trail Day 1 of 3; no console errors.
+- Changed with the owner after trying it (2026-11-03): an overdue Trip is listed under **Past**, not Upcoming as planned above, with a "Not Completed" chip until it's Completed. It's still featured on the card first with Mark Completed.

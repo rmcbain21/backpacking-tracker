@@ -49,8 +49,8 @@ public sealed record TripView(
 }
 
 /// <summary>
-/// Every Trip: On Trail ones earliest started first, then the other Planned ones (upcoming, and overdue ones that
-/// ended without being Completed) soonest first, then Completed ones (past) most recent first.
+/// Every Trip: On Trail ones earliest started first, then upcoming ones (Planned, not yet started) soonest first, then
+/// past ones (Completed, and overdue ones that ended without being Completed) most recent first.
 /// </summary>
 public sealed record TripListing(IReadOnlyList<TripView> OnTrail, IReadOnlyList<TripView> Upcoming, IReadOnlyList<TripView> Past)
 {
@@ -61,7 +61,7 @@ public sealed record TripListing(IReadOnlyList<TripView> OnTrail, IReadOnlyList<
     /// gets Completed; otherwise the On Trail Trip that started earliest; otherwise the next one to start; otherwise none.
     /// </summary>
     public TripView? Featured =>
-        Upcoming.Where(view => view.Overdue).OrderBy(view => view.Trip.EndDate).FirstOrDefault()
+        Past.Where(view => view.Overdue).OrderBy(view => view.Trip.EndDate).FirstOrDefault()
         ?? OnTrail.FirstOrDefault()
         ?? Upcoming.FirstOrDefault(view => view.DaysToStart > 0);
 }

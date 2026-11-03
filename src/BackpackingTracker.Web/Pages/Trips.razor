@@ -119,6 +119,12 @@ else
                     <div class="flex-grow-1">
                         <MudText>@view.Trip.Name</MudText>
                         <MudText Typo="Typo.body2" Class="mud-text-secondary">@TripDates.Format(view.Trip)</MudText>
+                        @if (view.Overdue)
+                        {
+                            @* Ended but still Planned: listed with the past Trips, flagged until it's Completed. *@
+                            <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Outlined"
+                                     Icon="@Icons.Material.Filled.ErrorOutline" Class="not-completed-chip ma-0 mt-1">Not Completed</MudChip>
+                        }
                     </div>
                     <MudText Class="text-nowrap">@UnitFormat.Weight(view.Weight.StartingPackGrams, _unitSystem)</MudText>
                 </a>

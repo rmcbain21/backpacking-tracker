@@ -74,11 +74,11 @@ public sealed class TripPlanner : IGearItemReferences, IFoodItemReferences, IMea
                 .OrderBy(view => view.Trip.StartDate)
                 .ThenBy(view => view.Trip.Name, StringComparer.OrdinalIgnoreCase)
                 .ToList(),
-            views.Where(view => view.Trip.Status == TripStatus.Planned && !view.OnTrail)
+            views.Where(view => view.Trip.Status == TripStatus.Planned && !view.OnTrail && !view.Overdue)
                 .OrderBy(view => view.Trip.StartDate)
                 .ThenBy(view => view.Trip.Name, StringComparer.OrdinalIgnoreCase)
                 .ToList(),
-            views.Where(view => view.Trip.Status == TripStatus.Completed)
+            views.Where(view => view.Trip.Status == TripStatus.Completed || view.Overdue)
                 .OrderByDescending(view => view.Trip.StartDate)
                 .ThenBy(view => view.Trip.Name, StringComparer.OrdinalIgnoreCase)
                 .ToList());
