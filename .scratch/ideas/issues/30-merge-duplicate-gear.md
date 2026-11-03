@@ -1,6 +1,6 @@
 # 30: Merge duplicate Gear Items
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Idea:** Found as a bug (2026-10-28): a test CSV import on one device had synced to Drive. Importing the same sheet later on another device created the same Gear Items with new ids, because CSV import only matches against the device's own gear. Syncing then brought in the test Trip and a second copy of every Gear Item. Sync matches records by id, so "Tent (A)" and "Tent (B)" are two records to it. Already flagged in ticket 24's notes ("sync before importing on a second device", or a duplicate check after merge). This gives the backpacker a way to find duplicate Gear Items and Merge them into one.
 

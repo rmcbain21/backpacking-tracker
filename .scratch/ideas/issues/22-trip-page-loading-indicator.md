@@ -1,6 +1,6 @@
 # 22: Loading indicator on the Trip page
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Idea:** The Trip page takes a second to load. Show a loading indicator (spinner or skeleton) so it doesn't look stuck.
 
