@@ -73,7 +73,12 @@ else if (_view is not null)
         </MudAlert>
     }
 
-    <MudTabs @bind-ActivePanelIndex="_tab" Elevation="0" TabPanelsClass="pt-3" MinimumTabWidth="64px" Class="trip-tabs">
+    <MudTabs ActivePanelIndex="Array.IndexOf(Tabs, CurrentTab)" ActivePanelIndexChanged="index => _tabName = Tabs[index]"
+             Elevation="0" TabPanelsClass="pt-3" MinimumTabWidth="64px" Class="trip-tabs">
+        @if (_view.OnTrail)
+        {
+            <MudTabPanel Text="Today">@TodayTab()</MudTabPanel>
+        }
         <MudTabPanel Text="Packing List">@PackingList(trip)</MudTabPanel>
         <MudTabPanel Text="Checklist">@Checklist()</MudTabPanel>
         <MudTabPanel Text="Itinerary">@Itinerary(trip)</MudTabPanel>
@@ -81,7 +86,7 @@ else if (_view is not null)
         <MudTabPanel Text="Stats">@Stats()</MudTabPanel>
     </MudTabs>
 
-    @if (_tab == PackingListTab && !Completed)
+    @if (CurrentTab == PackingListTab && !Completed)
     {
         <MudFab Color="Color.Secondary" StartIcon="@Icons.Material.Filled.Add" Class="add-fab" aria-label="Add gear to Packing List"
                 OnClick="() => AddGearAsync(null)" />
@@ -89,17 +94,22 @@ else if (_view is not null)
 }
 
 @code {
-    private const int PackingListTab = 0;
-    private const int ItineraryTab = 2;
-    private const int MealsTab = 3;
+    private const string TodayTabName = "today";
+    private const string PackingListTab = "packing";
+    private const string ItineraryTab = "itinerary";
+    private const string MealsTab = "meals";
 
-    /// <summary>The tabs by their name in the address, in order.</summary>
-    private static readonly string[] TabNames = ["packing", "checklist", "itinerary", "meals", "stats"];
+    /// <summary>The tabs by their name in the address, in order; Today comes first, and only while the Trip is On Trail.</summary>
+    private static readonly string[] PlanningTabs = [PackingListTab, "checklist", ItineraryTab, MealsTab, "stats"];
+    private static readonly string[] OnTrailTabs = [TodayTabName, .. PlanningTabs];
 
     [Parameter]
     public string TripId { get; set; } = "";
 
-    /// <summary>The tab to open on, such as trips/{id}?tab=checklist from the Trips card; Packing List when not given.</summary>
+    /// <summary>
+    /// The tab to open on, such as trips/{id}?tab=checklist from the Trips card. When not given (or not shown), Today
+    /// while the Trip is On Trail, otherwise Packing List.
+    /// </summary>
     [SupplyParameterFromQuery(Name = "tab")]
     public string? Tab { get; set; }
 
@@ -118,10 +128,159 @@ else if (_view is not null)
     private UnitSystem _unitSystem;
     private TripView? _view;
     private bool _loaded;
-    private int _tab = PackingListTab;
+
+    /// <summary>The tab chosen, by name: from the address, then whichever the backpacker taps; null for the default.</summary>
+    private string? _tabName;
+
+    /// <summary>Today's actual distance and journal notes as typed on the Today tab, saved when the field is left.</summary>
+    private string? _actualText;
+    private string? _notesText;
 
     /// <summary>A Completed Trip's Packing List, checklist and dates are locked until it's Reopened.</summary>
     private bool Completed => _view?.Trip.Status == TripStatus.Completed;
+
+    private string[] Tabs => _view?.OnTrail == true ? OnTrailTabs : PlanningTabs;
+
+    /// <summary>The tab showing: the one chosen if it's shown, otherwise Today while On Trail, otherwise Packing List.</summary>
+    private string CurrentTab => _tabName is { } name && Tabs.Contains(name) ? name : Tabs[0];
+
+    /// <summary>
+    /// The Today tab while On Trail (idea 28): today's Trip Day with its actual distance and journal notes editable in
+    /// place, the distance so far, today's meals and tomorrow, then finishing. An Open-ended Trip without a day for today
+    /// shows a button to add it (and any missed days before it) instead of the day.
+    /// </summary>
+    private RenderFragment TodayTab() => __builder =>
+    {
+        var view = _view!;
+        var trip = view.Trip;
+        var heading = $"Day {view.TodayNumber}{(trip.OpenEnded ? "" : $" of {trip.Days.Count}")} · {TripDates.Day(view.Today)}";
+        if (view.TodayDay is not { } today)
+        {
+            var missing = view.DaysToAddUpToToday;
+            <MudPaper Class="pa-3 mb-3 add-today">
+                <MudText Typo="Typo.h6" HtmlTag="h2">@heading</MudText>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">Today isn't on the Trip yet.</MudText>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+                           OnClick="AddDaysUpToTodayAsync" Class="add-today-button">
+                    @(missing == 1 ? $"Add today (Day {view.TodayNumber})" : $"Add {missing} days up to today")
+                </MudButton>
+            </MudPaper>
+            @SoFar(view)
+            @Finishing(view)
+            return;
+        }
+
+        <MudPaper Class="pa-3 mb-3 today-day">
+            <div class="d-flex align-center gap-2">
+                <MudText Typo="Typo.h6" HtmlTag="h2" Class="flex-grow-1 today-heading">@heading</MudText>
+                @if (today.Skipped)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Outlined"
+                             Icon="@Icons.Material.Filled.DoNotDisturbOn" Class="day-skipped-chip ma-0">Skipped</MudChip>
+                }
+            </div>
+            @if (today.Skipped)
+            {
+                <MudButton Variant="Variant.Text" Size="Size.Small" Class="ml-n2 unskip-today"
+                           OnClick="() => TryAsync(() => App.Trips.SetDaySkippedAsync(TripId, today.Date, false))">Not Skipped after all</MudButton>
+            }
+            @if (RouteLine(today) is { } route)
+            {
+                <MudText Typo="Typo.body2" Class="day-route">@route</MudText>
+            }
+            @if (today.Campsite is not null)
+            {
+                <MudText Typo="Typo.body2" Class="day-campsite">Camp: @today.Campsite</MudText>
+            }
+            @if (today.PlannedDistanceMetres is { } planned)
+            {
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">Planned @UnitFormat.Distance(planned, _unitSystem)</MudText>
+            }
+            <MudTextField @bind-Value="_actualText" Label="Actual distance" InputMode="@(InputMode.@decimal)" Immediate="true"
+                          Adornment="Adornment.End" AdornmentText="@RouteInput.DistanceLabel(_unitSystem)" Class="today-actual"
+                          Validation="@(new Func<string?, string?>(text => RouteInput.ParseDistance(text, _unitSystem, today.ActualDistanceMetres).Error))"
+                          OnBlur="SaveTodayAsync" />
+            <MudTextField @bind-Value="_notesText" Label="Journal notes" Lines="3" Sizing="InputSizing.Auto" Immediate="true"
+                          Class="today-notes" OnBlur="SaveTodayAsync" />
+            <div class="d-flex justify-end mt-2">
+                <MudButton Variant="Variant.Text" Size="Size.Small" StartIcon="@Icons.Material.Filled.Edit" Class="edit-today"
+                           OnClick="() => EditDayAsync(today, view.TodayNumber)">Edit day</MudButton>
+            </div>
+        </MudPaper>
+
+        @SoFar(view)
+
+        var todayPlan = view.MealPlan.Days.First(dayPlan => dayPlan.Day.Date == today.Date);
+        <MudPaper Class="pa-3 mb-3 pick-row today-meals" role="button" tabindex="0" aria-label="Open today's meals"
+                  @onclick="() => OpenMeals(today.Date)">
+            <div class="d-flex justify-space-between">
+                <MudText Typo="Typo.subtitle2" HtmlTag="h2">Today's meals</MudText>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary text-nowrap">
+                    @(today.SlotEntries.Count == 0 ? "Nothing planned" : NutritionInput.Calories(todayPlan.Calories))
+                </MudText>
+            </div>
+            @foreach (var slotView in todayPlan.Slots.Where(slotView => slotView.Entries.Count > 0))
+            {
+                <MudText Typo="Typo.body2" Class="today-slot">
+                    <span class="mud-text-secondary">@slotView.Slot:</span>
+                    @string.Join(", ", slotView.Entries.Select(entryView =>
+                        (entryView.Name ?? (entryView.IsMeal ? "Deleted Meal" : "Deleted Food Item")) +
+                        (entryView.Entry.Quantity == 1m ? "" : $" ×{ServingsInput.Format(entryView.Entry.Quantity)}")))
+                </MudText>
+            }
+        </MudPaper>
+
+        @if (view.TomorrowDay is { } tomorrow)
+        {
+            <MudPaper Class="pa-3 mb-3 pick-row today-tomorrow" role="button" tabindex="0" aria-label="Open tomorrow"
+                      @onclick="() => EditDayAsync(tomorrow, view.TodayNumber + 1)">
+                <MudText Typo="Typo.body2">@TomorrowLine(tomorrow)</MudText>
+            </MudPaper>
+        }
+
+        @Finishing(view)
+    };
+
+    /// <summary>"52.3 mi hiked in 4 days · 13.1 mi/day", then progress against the Expected Distance if there is one.</summary>
+    private RenderFragment SoFar(TripView view) => __builder =>
+    {
+        var soFar = view.SoFar;
+        <MudPaper Class="pa-3 mb-3 today-so-far">
+            <MudText Typo="Typo.subtitle2" HtmlTag="h2">Distance so far</MudText>
+            <MudText Typo="Typo.body2" Class="so-far-distance">
+                @UnitFormat.Distance(soFar.Metres, _unitSystem) hiked in @Plural(soFar.Days, "day")@(soFar.MetresPerDay is { } perDay ? $" · {UnitFormat.Distance(perDay, _unitSystem)}/day" : "")
+            </MudText>
+            @Progress(view.Stats, "mt-2")
+        </MudPaper>
+    };
+
+    /// <summary>On a fixed-date Trip's last day, a reminder to Complete it; on an Open-ended Trip, a small link to finish it.</summary>
+    private RenderFragment Finishing(TripView view) => __builder =>
+    {
+        if (view.IsLastDay)
+        {
+            <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3 last-day">
+                <div class="d-flex align-center flex-wrap gap-2">
+                    <span class="flex-grow-1">Last day: Mark Completed when you're off trail.</span>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" OnClick="CompleteAsync">Mark Completed</MudButton>
+                </div>
+            </MudAlert>
+        }
+        else if (view.Trip.OpenEnded)
+        {
+            <div class="d-flex justify-center">
+                <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="CompleteAsync" Class="finish-trip">Finish the Trip</MudButton>
+            </div>
+        }
+    };
+
+    /// <summary>"Tomorrow: Tuolumne → Glen Aulin, 12.4 mi", leaving out what's empty.</summary>
+    private string TomorrowLine(TripDay tomorrow)
+    {
+        var parts = new[] { RouteLine(tomorrow), tomorrow.PlannedDistanceMetres is { } planned ? UnitFormat.Distance(planned, _unitSystem) : null }
+            .OfType<string>().ToList();
+        return parts.Count == 0 ? "Tomorrow: nothing planned yet" : $"Tomorrow: {string.Join(", ", parts)}";
+    }
 
     private RenderFragment PackingList(Trip trip) => __builder =>
     {
@@ -470,7 +629,7 @@ else if (_view is not null)
         if (_opened != (TripId, Tab, Day))
         {
             _opened = (TripId, Tab, Day);
-            _tab = Math.Max(Array.IndexOf(TabNames, Tab?.ToLowerInvariant()), PackingListTab);
+            _tabName = Tab?.ToLowerInvariant();
             _pendingDay = DateOnly.TryParseExact(Day, "yyyy-MM-dd", out var date) ? date : null;
         }
 
@@ -488,11 +647,11 @@ else if (_view is not null)
         }
 
         var index = _view.Trip.Days.ToList().FindIndex(day => day.Date == date);
-        if (index < 0 || (_tab != ItineraryTab && _tab != MealsTab))
+        if (index < 0 || (CurrentTab != ItineraryTab && CurrentTab != MealsTab))
         {
             _pendingDay = null;
         }
-        else if (_tab == ItineraryTab)
+        else if (CurrentTab == ItineraryTab)
         {
             _pendingDay = null;
             await EditDayAsync(_view.Trip.Days[index], index + 1);
@@ -514,7 +673,13 @@ else if (_view is not null)
         }
     }
 
-    private async Task LoadAsync() => _view = await App.Trips.GetTripAsync(TripId);
+    /// <summary>Loads the Trip, and puts today's stored actual distance and notes back in the Today tab's fields.</summary>
+    private async Task LoadAsync()
+    {
+        _view = await App.Trips.GetTripAsync(TripId);
+        _actualText = RouteInput.DistanceText(_view?.TodayDay?.ActualDistanceMetres, _unitSystem);
+        _notesText = _view?.TodayDay?.JournalNotes;
+    }
 
     private async Task EditDayAsync(TripDay day, int dayNumber)
     {
@@ -598,21 +763,72 @@ else if (_view is not null)
     /// <summary>Adds the next day; when the last day has meals, asks whether to copy them onto it.</summary>
     private async Task AddDayAsync()
     {
-        var days = _view!.Trip.Days;
-        var copyMeals = false;
-        if (days[^1].SlotEntries.Count > 0)
+        if (await AskCopyMealsAsync("Add day", "the new day") is { } copyMeals)
         {
-            var answer = await DialogService.ShowMessageBoxAsync(
-                "Add day", $"Copy Day {days.Count}'s meals onto the new day?", yesText: "Copy meals", noText: "Start empty", cancelText: "Cancel");
-            if (answer is null)
-            {
-                return;
-            }
+            await TryAsync(() => App.Trips.AddDayAsync(TripId, copyMeals));
+        }
+    }
 
-            copyMeals = answer.Value;
+    /// <summary>Adds today, and any days missed before it, to an Open-ended Trip, then shows today.</summary>
+    private async Task AddDaysUpToTodayAsync()
+    {
+        var missing = _view!.DaysToAddUpToToday;
+        if (await AskCopyMealsAsync(missing == 1 ? "Add today" : $"Add {missing} days", missing == 1 ? "today" : "each new day") is { } copyMeals)
+        {
+            await TryAsync(() => App.Trips.AddDaysUpToTodayAsync(TripId, copyMeals));
+        }
+    }
+
+    /// <summary>
+    /// Whether new days copy the last day's meals: asked only when the last day has meals, otherwise false; null when
+    /// the backpacker cancels.
+    /// </summary>
+    private async Task<bool?> AskCopyMealsAsync(string title, string onto)
+    {
+        var days = _view!.Trip.Days;
+        if (days[^1].SlotEntries.Count == 0)
+        {
+            return false;
         }
 
-        await TryAsync(() => App.Trips.AddDayAsync(TripId, copyMeals));
+        return await DialogService.ShowMessageBoxAsync(
+            title, $"Copy Day {days.Count}'s meals onto {onto}?", yesText: "Copy meals", noText: "Start empty", cancelText: "Cancel");
+    }
+
+    /// <summary>Saves today's actual distance and journal notes typed on the Today tab, if they changed and the distance reads.</summary>
+    private async Task SaveTodayAsync()
+    {
+        if (_view?.TodayDay is not { } day)
+        {
+            return;
+        }
+
+        var actual = RouteInput.ParseDistance(_actualText, _unitSystem, day.ActualDistanceMetres);
+        var notes = string.IsNullOrWhiteSpace(_notesText) ? null : _notesText.Trim();
+        if (actual.Error is not null || (actual.Metres == day.ActualDistanceMetres && notes == day.JournalNotes))
+        {
+            return;
+        }
+
+        try
+        {
+            await App.Trips.UpdateDayAsync(TripId, day.Date, new TripDayDetails(
+                day.Start, day.End, day.Campsite, day.PlannedDistanceMetres, actual.Metres, day.ElevationGainMetres, notes));
+            Snackbar.Add("Saved", Severity.Success, options => options.VisibleStateDuration = 1500);
+        }
+        catch (RuleViolationException ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Warning);
+        }
+
+        await LoadAsync();
+    }
+
+    /// <summary>Opens the Meals tab scrolled to the day.</summary>
+    private void OpenMeals(DateOnly date)
+    {
+        _tabName = MealsTab;
+        _pendingDay = date;
     }
 
     /// <summary>Removes the last day, asking first when it has anything filled in.</summary>

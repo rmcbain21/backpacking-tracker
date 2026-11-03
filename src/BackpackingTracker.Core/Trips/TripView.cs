@@ -35,6 +35,28 @@ public sealed record TripView(
     /// <summary>Today's Trip Day, or null when today isn't one (such as an Open-ended Trip's day not yet added).</summary>
     public TripDay? TodayDay => Trip.Days.FirstOrDefault(day => day.Date == Today);
 
+    /// <summary>Tomorrow's Trip Day, or null when the Trip has none.</summary>
+    public TripDay? TomorrowDay => Trip.Days.FirstOrDefault(day => day.Date == Today.AddDays(1));
+
+    /// <summary>Today is the last day of a Trip with an end date, so it's time to Complete it once off trail.</summary>
+    public bool IsLastDay => !Trip.OpenEnded && Today == Trip.EndDate;
+
+    /// <summary>The days an On Trail Open-ended Trip is missing up to today (1 when its last day is yesterday); otherwise 0.</summary>
+    public int DaysToAddUpToToday => OnTrail && Trip.OpenEnded ? Math.Max(Today.DayNumber - Trip.EndDate.DayNumber, 0) : 0;
+
+    /// <summary>
+    /// The actual distance over the days hiked up to today, with Skipped days left out and zero days in (as in the
+    /// finish estimate), and the average per day.
+    /// </summary>
+    public DistanceSoFar SoFar
+    {
+        get
+        {
+            var hiked = Trip.Days.Where(day => day.Date <= Today && !day.Skipped).ToList();
+            return new DistanceSoFar(hiked.Sum(day => day.ActualDistanceMetres ?? 0m), hiked.Count);
+        }
+    }
+
     /// <summary>Days from today until the start date: 1 when it starts tomorrow.</summary>
     public int DaysToStart => Trip.StartDate.DayNumber - Today.DayNumber;
 
@@ -64,4 +86,11 @@ public sealed record TripListing(IReadOnlyList<TripView> OnTrail, IReadOnlyList<
         Past.Where(view => view.Overdue).OrderBy(view => view.Trip.EndDate).FirstOrDefault()
         ?? OnTrail.FirstOrDefault()
         ?? Upcoming.FirstOrDefault(view => view.DaysToStart > 0);
+}
+
+/// <summary>The actual distance hiked so far, in metres, over how many days.</summary>
+public sealed record DistanceSoFar(decimal Metres, int Days)
+{
+    /// <summary>The average per day hiked; null before any.</summary>
+    public decimal? MetresPerDay => Days == 0 ? null : Metres / Days;
 }

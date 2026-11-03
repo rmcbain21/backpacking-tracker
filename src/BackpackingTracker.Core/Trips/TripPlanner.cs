@@ -537,21 +537,50 @@ public sealed class TripPlanner : IGearItemReferences, IFoodItemReferences, IMea
     /// </summary>
     public async Task<TripDay> AddDayAsync(string tripId, bool copyMealsFromPreviousDay = false)
     {
-        var trip = await GetPlannedTripAsync(tripId, "its dates");
-        if (!trip.OpenEnded)
-        {
-            throw new RuleViolationException("Only an Open-ended Trip adds days one at a time. Change its dates instead.");
-        }
-
-        var day = new TripDay
-        {
-            Date = trip.EndDate.AddDays(1),
-            SlotEntries = copyMealsFromPreviousDay
-                ? trip.Days[^1].SlotEntries.Select(entry => entry with { Id = Guid.NewGuid().ToString(), Frozen = null }).ToList()
-                : [],
-        };
+        var trip = await GetOpenEndedTripAsync(tripId);
+        var day = NextDay(trip.Days[^1], copyMealsFromPreviousDay);
         await SaveAsync(trip with { EndDate = day.Date, Days = [.. trip.Days, day] });
         return day;
+    }
+
+    /// <summary>
+    /// Adds every missing day after the last one up to today to an Open-ended Trip, in order, each as AddDayAsync would
+    /// (empty, or with a copy of the day before's meals). Refused when the Trip already reaches today. Returns how many.
+    /// </summary>
+    public async Task<int> AddDaysUpToTodayAsync(string tripId, bool copyMealsFromPreviousDay = false)
+    {
+        var trip = await GetOpenEndedTripAsync(tripId);
+        var missing = _clock.Today.DayNumber - trip.EndDate.DayNumber;
+        if (missing <= 0)
+        {
+            throw new RuleViolationException("The Trip already has a day for today.");
+        }
+
+        var days = trip.Days.ToList();
+        for (var i = 0; i < missing; i++)
+        {
+            days.Add(NextDay(days[^1], copyMealsFromPreviousDay));
+        }
+
+        await SaveAsync(trip with { EndDate = days[^1].Date, Days = days });
+        return missing;
+    }
+
+    /// <summary>The day after this one: empty, or with a copy of its Meal Plan (each entry with a new id).</summary>
+    private static TripDay NextDay(TripDay previous, bool copyMeals) => new()
+    {
+        Date = previous.Date.AddDays(1),
+        SlotEntries = copyMeals
+            ? previous.SlotEntries.Select(entry => entry with { Id = Guid.NewGuid().ToString(), Frozen = null }).ToList()
+            : [],
+    };
+
+    private async Task<Trip> GetOpenEndedTripAsync(string tripId)
+    {
+        var trip = await GetPlannedTripAsync(tripId, "its dates");
+        return trip.OpenEnded
+            ? trip
+            : throw new RuleViolationException("Only an Open-ended Trip adds days one at a time. Change its dates instead.");
     }
 
     /// <summary>

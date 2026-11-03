@@ -1,6 +1,6 @@
 # 28: On Trail view
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Idea:** The app today is good for preparing for a Trip. This is a mode for actually being on it, especially a thru hike: check or update today's Trip Day, mark food eaten, view some stats, see what to buy at the next resupply. Came out of grilling 16, which built the featured Trip card as its doorway.
 
@@ -39,3 +39,11 @@
 
 *Change to the featured card (16)*
 - Once this lands, the On Trail card's **Today** link opens the Today tab (`?tab=today`) instead of the Trip Day dialog, and shows even when today has no Trip Day yet (the tab is where it's added). Meals, Checklist and Stats links stay. 16 is left as written so it can be built first.
+
+*Implemented (2026-11-03)*
+- Core: `TripPlanner.AddDaysUpToTodayAsync(copyMealsFromPreviousDay)` adds every missing date up to today in one save (Open-ended only, refused once today is there); `AddDayAsync` shares its `NextDay`. `TripView` adds `TomorrowDay`, `IsLastDay`, `DaysToAddUpToToday` and `SoFar` (`DistanceSoFar`: actual metres over the non-Skipped days up to today, zero days in, and per day).
+- Trip page: tabs are chosen by name now (`_tabName`, `CurrentTab`); Today is first and only while On Trail, and the page opens on it then unless `?tab=` names another. A tab tapped stays chosen across reloads after a sync; if it stops being shown (Today, once Completed) the page falls back to the first tab.
+- Today tab, top to bottom as specified: heading ("Day 3 of 5 · Tue, Nov 3" / "Day 40 · …") with the Skipped chip and a "Not Skipped after all" button; route, camp and planned distance; actual distance and journal notes inline, saved on leaving the field with a brief "Saved"; Edit day; Distance so far with 01's progress and finish estimate; Today's meals (tap → Meals tab scrolled to today); Tomorrow (tap → its dialog); then the last-day reminder with Mark Completed, or "Finish the Trip" on an Open-ended Trip. Without a day for today: "Add today (Day N)" / "Add N days up to today", asking Copy meals / Start empty when the last day has meals.
+- Featured card (16): Today now links to `?tab=today` and shows even without today's day.
+- With six tabs the tab bar scrolls at phone width (MudTabs' arrows); left as is.
+- Tests: `TodayTests` (10). Checked in headless Edge at phone width: card → Today tab; default tab Today; inline save and reload; meals and tomorrow links; last-day reminder; Open-ended add 4 days with meals copied; Finish the Trip → no Today tab; no console errors.

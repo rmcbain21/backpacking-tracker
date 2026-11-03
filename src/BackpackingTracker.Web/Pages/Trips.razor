@@ -63,10 +63,8 @@ else
                 }
                 else if (view.OnTrail)
                 {
-                    @if (view.TodayDay is { } today)
-                    {
-                        @Action($"Today: Day {view.TodayNumber}", TripLink(trip, "itinerary", today.Date), filled: true)
-                    }
+                    @* The Today tab, even before an Open-ended Trip has today's day: that's where it's added (idea 28). *@
+                    @Action($"Today: Day {view.TodayNumber}", TripLink(trip, "today"), filled: true)
                     @Action("Meals", TripLink(trip, "meals", view.TodayDay?.Date))
                     @Action("Checklist", TripLink(trip, "checklist"))
                     @Action("Stats", TripLink(trip, "stats"))
