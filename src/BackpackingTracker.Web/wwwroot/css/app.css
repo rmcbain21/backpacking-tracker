@@ -178,7 +178,8 @@ h1:focus {
 }
 
 /* Gear Lists: a list row links to the list; entry controls sit under the name */
-.list-row {
+.list-row,
+.featured-trip-link {
     color: inherit;
     text-decoration: none;
 }
@@ -460,4 +461,9 @@ h1:focus {
 .duplicate-keep .conflict-lines {
     flex: 1 1 auto;
     width: 100%;
+}
+
+/* A Meal Plan day scrolled to from the Trips card (?tab=meals&day=…) stops just under the top bar */
+.meal-plan-day {
+    scroll-margin-top: calc(var(--mud-appbar-height) + 8px);
 }

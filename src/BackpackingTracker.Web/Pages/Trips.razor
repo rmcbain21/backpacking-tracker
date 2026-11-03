@@ -2,6 +2,7 @@
 @using BackpackingTracker.Core.Trips
 @inject AppCore App
 @inject IDialogService DialogService
+@inject ISnackbar Snackbar
 @inject NavigationManager Navigation
 
 <PageTitle>Trips</PageTitle>
@@ -13,12 +14,17 @@
 {
     <MudProgressLinear Indeterminate="true" />
 }
-else if (_trips.Upcoming.Count == 0 && _trips.Past.Count == 0)
+else if (_trips.IsEmpty)
 {
     <MudText Class="mud-text-secondary">No Trips yet. Tap + to plan one, from a Gear List or from nothing.</MudText>
 }
 else
 {
+    @if (_trips.Featured is { } featured)
+    {
+        @FeaturedCard(featured)
+    }
+    @TripGroup(("On Trail", "on-trail-trips", _trips.OnTrail))
     @TripGroup(("Upcoming", "upcoming-trips", _trips.Upcoming))
     @TripGroup(("Past", "past-trips", _trips.Past))
 }
@@ -29,6 +35,73 @@ else
 @code {
     private UnitSystem _unitSystem;
     private TripListing? _trips;
+
+    /// <summary>
+    /// The Trip to act on now (idea 16): an overdue one to Complete, the one On Trail, or the next to start, with
+    /// quick actions that open its page on the right tab.
+    /// </summary>
+    private RenderFragment FeaturedCard(TripView view) => __builder =>
+    {
+        var trip = view.Trip;
+        <MudPaper Class="pa-3 mb-2 featured-trip" Elevation="2">
+            <a class="d-flex align-center gap-3 featured-trip-link" href="@TripLink(trip)">
+                <div class="flex-grow-1">
+                    <MudText Typo="Typo.h6" HtmlTag="h2">@trip.Name</MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">@TripDates.Format(trip)</MudText>
+                </div>
+                <MudText Class="text-nowrap">@UnitFormat.Weight(view.Weight.StartingPackGrams, _unitSystem)</MudText>
+            </a>
+            <MudText Typo="Typo.subtitle2" Color="@(view.Overdue ? Color.Warning : Color.Primary)" Class="mt-1 featured-trip-when">
+                @When(view)
+            </MudText>
+            <div class="d-flex flex-wrap gap-2 mt-2 featured-trip-actions">
+                @if (view.Overdue)
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" OnClick="() => CompleteAsync(view)"
+                               Class="mark-completed">Mark Completed</MudButton>
+                    @Action("Stats", TripLink(trip, "stats"))
+                }
+                else if (view.OnTrail)
+                {
+                    @if (view.TodayDay is { } today)
+                    {
+                        @Action($"Today: Day {view.TodayNumber}", TripLink(trip, "itinerary", today.Date), filled: true)
+                    }
+                    @Action("Meals", TripLink(trip, "meals", view.TodayDay?.Date))
+                    @Action("Checklist", TripLink(trip, "checklist"))
+                    @Action("Stats", TripLink(trip, "stats"))
+                }
+                else
+                {
+                    @Action("Packing List", TripLink(trip, "packing"))
+                    @Action("Checklist", TripLink(trip, "checklist"))
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small" OnClick="() => StartNowAsync(view)"
+                               Class="start-now">Start now</MudButton>
+                }
+            </div>
+        </MudPaper>
+    };
+
+    private static RenderFragment Action(string text, string href, bool filled = false) => __builder =>
+    {
+        <MudButton Href="@href" Variant="@(filled ? Variant.Filled : Variant.Outlined)" Color="Color.Primary" Size="Size.Small"
+                   Class="featured-trip-action">@text</MudButton>
+    };
+
+    /// <summary>"On Trail · Day 3 of 5" (Open-ended: "On Trail · Day 40"), "Starts in 12 days", or "Finished?".</summary>
+    private static string When(TripView view) =>
+        view.Overdue ? "Finished? Mark it Completed."
+        : view.OnTrail ? $"On Trail · Day {view.TodayNumber}{(view.Trip.OpenEnded ? "" : $" of {view.Trip.Days.Count}")}"
+        : view.DaysToStart switch
+        {
+            0 => "Starts today",
+            1 => "Starts tomorrow",
+            var days => $"Starts in {days} days",
+        };
+
+    /// <summary>The Trip's page, on a tab and at a day if given, such as trips/{id}?tab=meals&amp;day=2026-07-10.</summary>
+    private static string TripLink(Trip trip, string? tab = null, DateOnly? day = null) =>
+        $"trips/{trip.Id}{(tab is null ? "" : $"?tab={tab}")}{(day is { } date ? $"&day={date:yyyy-MM-dd}" : "")}";
 
     /// <summary>A heading and its Trips; left out when it has none.</summary>
     private RenderFragment TripGroup((string Heading, string Class, IReadOnlyList<TripView> Trips) group) => __builder =>
@@ -42,7 +115,7 @@ else
         <MudPaper Class="@group.Class">
             @foreach (var view in group.Trips)
             {
-                <a class="d-flex align-center pa-3 gap-3 list-row" href="@($"trips/{view.Trip.Id}")">
+                <a class="d-flex align-center pa-3 gap-3 list-row" href="@TripLink(view.Trip)">
                     <div class="flex-grow-1">
                         <MudText>@view.Trip.Name</MudText>
                         <MudText Typo="Typo.body2" Class="mud-text-secondary">@TripDates.Format(view.Trip)</MudText>
@@ -69,5 +142,38 @@ else
         {
             Navigation.NavigateTo($"trips/{tripId}");
         }
+    }
+
+    /// <summary>Moves the Trip to start today, keeping its length, through the Change dates preview to confirm.</summary>
+    private async Task StartNowAsync(TripView view)
+    {
+        var parameters = new DialogParameters<ChangeDatesDialog> { { d => d.Trip, view.Trip }, { d => d.StartOn, view.Today } };
+        var options = new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Small };
+        var dialog = await DialogService.ShowAsync<ChangeDatesDialog>("Start now", parameters, options);
+        await dialog.Result;
+        await OnInitializedAsync();
+    }
+
+    private async Task CompleteAsync(TripView view)
+    {
+        var confirmed = await DialogService.ShowMessageBoxAsync(
+            "Mark Completed",
+            $"Mark {view.Trip.Name} Completed? Its weights and food are frozen as they are now, and its Packing List, checklist, Meal Plan and dates are locked until you Reopen it.",
+            yesText: "Mark Completed", cancelText: "Cancel");
+        if (confirmed != true)
+        {
+            return;
+        }
+
+        try
+        {
+            await App.Trips.CompleteTripAsync(view.Trip.Id);
+        }
+        catch (RuleViolationException ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Warning);
+        }
+
+        await OnInitializedAsync();
     }
 }

@@ -80,6 +80,10 @@
     [Parameter, EditorRequired]
     public Trip Trip { get; set; } = default!;
 
+    /// <summary>A start to move the Trip to straight away, previewed for confirming: today, for Start now on the Trips card.</summary>
+    [Parameter]
+    public DateOnly? StartOn { get; set; }
+
     private bool _moving = true;
     private DateTime? _start;
     private DateTime? _end;
@@ -92,7 +96,14 @@
 
     private bool IsChanged => _start is not null && _end is not null && (StartDate, EndDate) != (Trip.StartDate, Trip.EndDate);
 
-    protected override void OnInitialized() => ResetDates();
+    protected override void OnInitialized()
+    {
+        ResetDates();
+        if (StartOn is { } start)
+        {
+            StartChanged(start.ToDateTime(TimeOnly.MinValue));
+        }
+    }
 
     private void ResetDates()
     {

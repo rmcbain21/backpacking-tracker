@@ -1,0 +1,8 @@
+@page "/"
+@* The app opens on Trips (idea 16): the start address sends the backpacker there, so the Trips tab stays lit on
+   every Trip's own page under trips/. *@
+@inject NavigationManager Navigation
+
+@code {
+    protected override void OnInitialized() => Navigation.NavigateTo("trips", replace: true);
+}

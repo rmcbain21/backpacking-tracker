@@ -66,11 +66,11 @@
     private string? _problem;
     private bool _busy;
 
-    /// <summary>Every other Trip with something in its Meal Plan: upcoming ones first, then past ones, most recent first.</summary>
+    /// <summary>Every other Trip with something in its Meal Plan: On Trail and upcoming ones first, then past ones, most recent first.</summary>
     protected override async Task OnInitializedAsync()
     {
         var listing = await App.Trips.ListTripsAsync();
-        _sources = listing.Upcoming.Concat(listing.Past)
+        _sources = listing.OnTrail.Concat(listing.Upcoming).Concat(listing.Past)
             .Where(view => view.Trip.Id != TripId && !view.MealPlan.IsEmpty)
             .ToList();
     }

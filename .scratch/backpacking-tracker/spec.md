@@ -85,7 +85,7 @@ A personal, phone-first app that installs from the browser on my Android phone (
 57. As a backpacker, I want to Reopen a Completed Trip back to Planned, with a fresh freeze when I complete it again, so that I can correct a Trip properly.
 58. As a backpacker, I want to see a Trip's stats: days and nights, planned vs actual distance, elevation gain, Starting Pack Weight, Base Weight, calories per day, and total food cost, so that I can review and compare trips.
 59. As a backpacker, I want to save a Trip's Packing List as a new Gear List, so that what I actually carried becomes my next starting point.
-60. As a backpacker, I want to see my Trips grouped as upcoming (Planned) and past (Completed), so that I can find a trip quickly.
+60. As a backpacker, I want to see my Trips grouped as On Trail, upcoming (Planned) and past (Completed), so that I can find a trip quickly.
 61. As a backpacker, I want to delete a Trip, so that I can remove one I created by mistake.
 
 ### Food
@@ -160,6 +160,10 @@ A personal, phone-first app that installs from the browser on my Android phone (
 105. As a backpacker, I want to start an Open-ended Trip with only a start date and add Trip Days one at a time as I hike, optionally copying the previous day's meals, so that a thru hike with no known finishing day fits.
 106. As a backpacker, I want to set an Expected Distance on any Trip and see how far along I am from the actual distance hiked, so that I know how much is left.
 107. As a backpacker, I want an Open-ended Trip with an Expected Distance to estimate when I'll finish at my pace so far, so that I can plan the rest of the hike.
+
+### Trips card
+
+108. As a backpacker, I want the app to open on my Trips with a card for the Trip to act on now (one overdue to mark Completed, the one I'm On Trail, or the next to start) and quick actions to its tabs, so that the Trip I'm on is one tap away.
 
 ## Implementation Decisions
 

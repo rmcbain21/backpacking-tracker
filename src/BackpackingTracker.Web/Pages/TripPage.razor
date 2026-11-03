@@ -5,6 +5,7 @@
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
 @inject NavigationManager Navigation
+@inject IJSRuntime JS
 
 <PageTitle>@(_view?.Trip.Name ?? "Trip")</PageTitle>
 <RefreshAfterSync OnChangesArrived="OnParametersSetAsync" />
@@ -89,9 +90,30 @@ else if (_view is not null)
 
 @code {
     private const int PackingListTab = 0;
+    private const int ItineraryTab = 2;
+    private const int MealsTab = 3;
+
+    /// <summary>The tabs by their name in the address, in order.</summary>
+    private static readonly string[] TabNames = ["packing", "checklist", "itinerary", "meals", "stats"];
 
     [Parameter]
     public string TripId { get; set; } = "";
+
+    /// <summary>The tab to open on, such as trips/{id}?tab=checklist from the Trips card; Packing List when not given.</summary>
+    [SupplyParameterFromQuery(Name = "tab")]
+    public string? Tab { get; set; }
+
+    /// <summary>A Trip Day's date (yyyy-MM-dd): on the Itinerary tab its dialog opens, on the Meals tab the Meal Plan scrolls to it.</summary>
+    [SupplyParameterFromQuery(Name = "day")]
+    public string? Day { get; set; }
+
+    /// <summary>The address last opened, so a reload after a sync keeps the tab the backpacker has moved to.</summary>
+    private (string TripId, string? Tab, string? Day)? _opened;
+
+    /// <summary>The day from the address still to open or scroll to, once the page has drawn it.</summary>
+    private DateOnly? _pendingDay;
+
+    private int _scrollTries;
 
     private UnitSystem _unitSystem;
     private TripView? _view;
@@ -445,9 +467,51 @@ else if (_view is not null)
 
     protected override async Task OnParametersSetAsync()
     {
+        if (_opened != (TripId, Tab, Day))
+        {
+            _opened = (TripId, Tab, Day);
+            _tab = Math.Max(Array.IndexOf(TabNames, Tab?.ToLowerInvariant()), PackingListTab);
+            _pendingDay = DateOnly.TryParseExact(Day, "yyyy-MM-dd", out var date) ? date : null;
+        }
+
         _unitSystem = (await App.Settings.GetAsync()).UnitSystem;
         await LoadAsync();
         _loaded = true;
+    }
+
+    /// <summary>Once the Trip is drawn, opens or scrolls to the day the address named.</summary>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_pendingDay is not { } date || _view is null)
+        {
+            return;
+        }
+
+        var index = _view.Trip.Days.ToList().FindIndex(day => day.Date == date);
+        if (index < 0 || (_tab != ItineraryTab && _tab != MealsTab))
+        {
+            _pendingDay = null;
+        }
+        else if (_tab == ItineraryTab)
+        {
+            _pendingDay = null;
+            await EditDayAsync(_view.Trip.Days[index], index + 1);
+            StateHasChanged();
+        }
+        else
+        {
+            // The Meals tab may take another render to draw its days; try a few times, then give up.
+            await using var module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/scrollTo.js");
+            if (await module.InvokeAsync<bool>("scrollTo", $".meal-plan-day[data-date=\"{date:yyyy-MM-dd}\"]") || ++_scrollTries > 5)
+            {
+                _pendingDay = null;
+                _scrollTries = 0;
+            }
+            else
+            {
+                StateHasChanged();
+            }
+        }
     }
 
     private async Task LoadAsync() => _view = await App.Trips.GetTripAsync(TripId);

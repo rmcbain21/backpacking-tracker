@@ -8,7 +8,7 @@ public sealed record NavItem(string Title, string Href, string Icon, NavLinkMatc
 {
     public static readonly IReadOnlyList<NavItem> All =
     [
-        new("Gear", "", Icons.Material.Filled.Backpack, NavLinkMatch.All),
+        new("Gear", "gear", Icons.Material.Filled.Backpack, NavLinkMatch.Prefix),
         new("Lists", "lists", Icons.Material.Filled.Checklist, NavLinkMatch.Prefix),
         new("Trips", "trips", Icons.Material.Filled.Terrain, NavLinkMatch.Prefix),
         new("Food", "food", Icons.Material.Filled.Restaurant, NavLinkMatch.Prefix),

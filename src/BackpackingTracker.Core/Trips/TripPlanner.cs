@@ -70,7 +70,11 @@ public sealed class TripPlanner : IGearItemReferences, IFoodItemReferences, IMea
         var views = await ViewAsync(await LoadTripsAsync());
 
         return new TripListing(
-            views.Where(view => view.Trip.Status == TripStatus.Planned)
+            views.Where(view => view.OnTrail)
+                .OrderBy(view => view.Trip.StartDate)
+                .ThenBy(view => view.Trip.Name, StringComparer.OrdinalIgnoreCase)
+                .ToList(),
+            views.Where(view => view.Trip.Status == TripStatus.Planned && !view.OnTrail)
                 .OrderBy(view => view.Trip.StartDate)
                 .ThenBy(view => view.Trip.Name, StringComparer.OrdinalIgnoreCase)
                 .ToList(),
@@ -599,7 +603,7 @@ public sealed class TripPlanner : IGearItemReferences, IFoodItemReferences, IMea
         {
             var mealPlan = MealPlanView.For(trip, meals, foodItems);
             var view = trip.PackingList.View(items, trip.WaterCarriedGrams ?? 0m, mealPlan.FoodGrams);
-            return new TripView(trip, view.Entries, view.Sections, view.Weight, mealPlan, HasStarted(trip));
+            return new TripView(trip, view.Entries, view.Sections, view.Weight, mealPlan, _clock.Today);
         }).ToList();
     }
 
