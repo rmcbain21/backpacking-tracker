@@ -1,6 +1,6 @@
 # 27: Resupply and Food Carries
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Idea:** Total up the Food Items in a Meal Plan into a shopping list, so I know what to buy before the Trip or at a resupply stop.
 
@@ -49,3 +49,13 @@
 - A chart of food weight over the Trip could come later on the Stats tab; not now.
 
 **Note (2026-10-27), from grilling 29:** "fuel and other consumable Packing List entries are out of scope" above means the shopping list stays food only. Carrying more or less fuel after a Resupply is now covered by a **Gear Change** (idea 29), e.g. Fuel canister ×1 → ×2, which counts in that Food Carry's pack weight but not in Starting Pack Weight.
+
+*Implemented (2026-11-04)*
+- Core: `TripDay.Resupply` and `ResupplyPlace`; `TripPlanner.SetResupplyAsync` (refused on day 1, locked when Completed, unmarking clears the place and that Food Carry's bought ticks). A Resupply that a date change moves onto day 1 is ignored. It counts as content in the date-change preview, isn't copied by Add day, and shows in the sync conflict view.
+- `FoodCarry` (on `MealPlanView.FoodCarries`): number, place (the place name, else the day's start), days, food weight and calories (frozen on a Completed Trip), and its shopping lines. Consumable Weight uses `MealPlanView.StartingFoodGrams` (the first Food Carry only), so Starting Pack Weight and the breakdown's Food line follow ADR 0007.
+- **Bought ticks are stored on the Food Carry's first Trip Day** (`TripDay.Bought`: Food Item id + servings when ticked), not on the Trip as the spec's data model had it, so they move with their day on date changes. Spec updated. A tick holds while the line's servings are no more than when it was ticked; ticking or unticking drops ticks for lines that are gone. `SetBoughtAsync`, `ResetBoughtAsync`.
+- Shopping lines break Meals into their Food Items. A Meal component's weight uses the Food Item's **current** serving weight even on a Completed Trip, because only whole-Meal figures are frozen; the Food Carry's heading totals do use frozen figures. A Meal deleted on another device can't be broken down, so it's left off the list (it still counts in the heading's weight if frozen).
+- `TripView.CurrentFoodCarry`, `FoodLeftGrams` (today and the rest of the current Food Carry, less eaten entries from 26), `NextResupply`. `TripStats.LongestFoodCarry` (resupplies, days, food weight; most days, heavier on a tie; null without a Resupply).
+- Trip page: the Trip Day dialog has the Resupply switch and place (hidden on day 1, disabled when Completed). Itinerary and By day cards show "Resupply: Kennedy Meadows". Meals tab has a **By day | Shopping** toggle. Shopping shows one card per Food Carry ("Lone Pine · days 3–5", food weight, calories, "1 of 3 bought"), with tap-to-tick lines, Reset (confirmed), and finished Food Carries collapsed. The "Food for the Trip" caption says only the food from home counts once there's a Resupply. The Today tab gets a Food card ("Food left: 1 lb 3.3 oz · 2 days to Kennedy Meadows" / "Next resupply: …, day 6 (in 2 days)" / "Resupply today: … · 3 of 12 bought") that opens Shopping at that Food Carry. The Stats tab adds "3 resupplies · longest Food Carry 3 days (2 lb 4.1 oz)".
+- Not done here: whole-package rounding waits on 18 (servings per package), and the itinerary text line waits on 02. Each is added by whichever lands second.
+- Tests: `ResupplyTests` (18). Checked in headless Chromium at phone width with a seeded 8-day Trip and two Resupplies: Today's Food card, opening Shopping at the next Food Carry, collapsed past Food Carry, bought tick, caption, setting a Resupply through the Trip Day dialog, Stats line, Starting Pack Weight; no console errors.

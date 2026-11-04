@@ -189,6 +189,7 @@ internal sealed class ConflictDescriber
         lines.Put($"{day} elevation gain", tripDay.ElevationGainMetres is { } gain ? UnitFormat.Elevation(gain, _units) : null);
         lines.Put($"{day} notes", tripDay.JournalNotes);
         lines.Put($"{day} skipped", YesNo(tripDay.Skipped));
+        lines.Put($"{day} resupply", tripDay.Resupply ? tripDay.ResupplyPlace ?? "Yes" : "No");
         foreach (var slot in Enum.GetValues<MealSlot>())
         {
             var food = tripDay.SlotEntries

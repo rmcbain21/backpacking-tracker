@@ -132,6 +132,12 @@ else if (_view is not null)
     /// <summary>The tab chosen, by name: from the address, then whichever the backpacker taps; null for the default.</summary>
     private string? _tabName;
 
+    /// <summary>The Meals tab shows the shopping list (per Food Carry) instead of the days.</summary>
+    private bool _shopping;
+
+    /// <summary>Food Carries, by first date, whose cards have been tapped open or closed from how they start.</summary>
+    private readonly HashSet<DateOnly> _toggledCarries = [];
+
     /// <summary>Today's actual distance and journal notes as typed on the Today tab, saved when the field is left.</summary>
     private string? _actualText;
     private string? _notesText;
@@ -235,6 +241,8 @@ else if (_view is not null)
             }
         </MudPaper>
 
+        @FoodLeft(view)
+
         @if (view.TomorrowDay is { } tomorrow)
         {
             <MudPaper Class="pa-3 mb-3 pick-row today-tomorrow" role="button" tabindex="0" aria-label="Open tomorrow"
@@ -256,6 +264,43 @@ else if (_view is not null)
                 @UnitFormat.Distance(soFar.Metres, _unitSystem) hiked in @Plural(soFar.Days, "day")@(soFar.MetresPerDay is { } perDay ? $" · {UnitFormat.Distance(perDay, _unitSystem)}/day" : "")
             </MudText>
             @Progress(view.Stats, "mt-2")
+        </MudPaper>
+    };
+
+    /// <summary>
+    /// "Food left: 3.2 lb · 2 days to Kennedy Meadows", then "Next resupply: Kennedy Meadows, day 5 (in 2 days)" or, on
+    /// the day, "Resupply today: Kennedy Meadows · 3 of 12 bought". Tapping opens that Food Carry's shopping list (the
+    /// current one when there's no later Resupply). Nothing without food planned or a Resupply to come.
+    /// </summary>
+    private RenderFragment FoodLeft(TripView view) => __builder =>
+    {
+        if (view.CurrentFoodCarry is not { } current || view.FoodLeftGrams is not { } left)
+        {
+            return;
+        }
+
+        var next = view.NextResupply;
+        if (left == 0 && next is null)
+        {
+            return;
+        }
+
+        var later = view.MealPlan.FoodCarries.FirstOrDefault(carry => !carry.FromHome && carry.FirstDate > view.Today);
+        var daysTo = later is null ? 0 : later.FirstDate.DayNumber - view.Today.DayNumber;
+        <MudPaper Class="pa-3 mb-3 pick-row today-food" role="button" tabindex="0" aria-label="Open the shopping list"
+                  @onclick="() => OpenShopping(next ?? current)">
+            <MudText Typo="Typo.subtitle2" HtmlTag="h2">Food</MudText>
+            <MudText Typo="Typo.body2" Class="food-left">
+                Food left: @UnitFormat.Weight(left, _unitSystem)@(later is null ? "" : $" · {Plural(daysTo, "day")} to {FoodCarryName(later)}")
+            </MudText>
+            @if (next is not null)
+            {
+                <MudText Typo="Typo.body2" Class="mud-text-secondary next-resupply">
+                    @(next.FirstDate == view.Today
+                        ? $"Resupply today: {FoodCarryName(next)} · {next.BoughtCount} of {next.Lines.Count} bought"
+                        : $"Next resupply: {FoodCarryName(next)}, day {next.FirstDayNumber} (in {Plural(daysTo, "day")})")
+                </MudText>
+            }
         </MudPaper>
     };
 
@@ -412,6 +457,13 @@ else if (_view is not null)
                     {
                         <MudText Typo="Typo.body2" Class="mud-text-secondary">Nothing yet. Tap to add the route and notes.</MudText>
                     }
+                    @if (day.Resupply && dayNumber > 1)
+                    {
+                        <MudText Typo="Typo.body2" Class="d-flex align-center gap-1 day-resupply-line">
+                            <MudIcon Icon="@Icons.Material.Filled.ShoppingBasket" Size="Size.Small" Color="Color.Primary" />
+                            Resupply@(ResupplyName(day) is { } place ? $": {place}" : "")
+                        </MudText>
+                    }
                     @if (RouteLine(day) is { } route)
                     {
                         <MudText Typo="Typo.body2" Class="day-route">@route</MudText>
@@ -477,6 +529,11 @@ else if (_view is not null)
     private RenderFragment MealPlan() => __builder =>
     {
         var plan = _view!.MealPlan;
+        <MudToggleGroup T="bool" Value="_shopping" ValueChanged="shopping => _shopping = shopping" Color="Color.Primary"
+                        Size="Size.Small" Class="mb-3 meals-view">
+            <MudToggleItem Value="false" Text="By day" />
+            <MudToggleItem Value="true" Text="Shopping" />
+        </MudToggleGroup>
         <MudPaper Class="pa-3 mb-3 meal-plan-total">
             <div class="d-flex justify-space-between">
                 <MudText Typo="Typo.body2">Food for the Trip</MudText>
@@ -484,8 +541,17 @@ else if (_view is not null)
                     @NutritionInput.Calories(plan.Calories) · @UnitFormat.Weight(plan.FoodGrams, _unitSystem)
                 </MudText>
             </div>
-            <MudText Typo="Typo.caption" Class="mud-text-secondary">Counted in the Consumable Weight.</MudText>
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                @(plan.Resupplies == 0
+                    ? "Counted in the Consumable Weight."
+                    : $"Only the food from home ({UnitFormat.Weight(plan.StartingFoodGrams, _unitSystem)}) counts in the Consumable Weight.")
+            </MudText>
         </MudPaper>
+        @if (_shopping)
+        {
+            @Shopping(plan)
+            return;
+        }
         @if (!Completed)
         {
             <div class="d-flex justify-end mt-n2 mb-1">
@@ -503,6 +569,13 @@ else if (_view is not null)
                         @(dayPlan.Day.SlotEntries.Count == 0 ? "Nothing planned" : $"{NutritionInput.Calories(dayPlan.Calories)} · {UnitFormat.Weight(dayPlan.FoodGrams, _unitSystem)}")
                     </MudText>
                 </div>
+                @if (dayPlan.Day.Resupply && dayPlan.DayNumber > 1)
+                {
+                    <MudText Typo="Typo.body2" Class="d-flex align-center gap-1 px-3 day-resupply-line">
+                        <MudIcon Icon="@Icons.Material.Filled.ShoppingBasket" Size="Size.Small" Color="Color.Primary" />
+                        Resupply@(ResupplyName(dayPlan.Day) is { } place ? $": {place}" : "")
+                    </MudText>
+                }
                 @if (ShowsEaten && dayPlan.Day.SlotEntries.Count > 0)
                 {
                     <div class="d-flex align-center pl-3 pr-1 day-eaten">
@@ -583,6 +656,109 @@ else if (_view is not null)
     };
 
     /// <summary>
+    /// The shopping list: one card per Food Carry, headed "Kennedy Meadows · days 5–9" with its food weight, calories and
+    /// how much is bought, then one line per Food Item with its servings and weight, ticked as bought with a tap
+    /// (read-only on a Completed Trip). Food Carries that are over start collapsed; tapping a heading opens or closes it.
+    /// </summary>
+    private RenderFragment Shopping(MealPlanView plan) => __builder =>
+    {
+        @foreach (var carry in plan.FoodCarries)
+        {
+            var open = IsOpen(carry);
+            var title = $"{FoodCarryName(carry)} · {DaysText(carry)}";
+            <MudPaper Class="mb-3 food-carry" data-date="@carry.FirstDate.ToString("yyyy-MM-dd")">
+                <div class="d-flex align-center pa-3 pick-row food-carry-heading" role="button" tabindex="0"
+                     aria-expanded="@(open ? "true" : "false")" aria-label="@title" @onclick="() => ToggleCarry(carry)">
+                    <div class="flex-grow-1">
+                        <MudText Typo="Typo.subtitle2" HtmlTag="h3">@title</MudText>
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary food-carry-totals">
+                            @UnitFormat.Weight(carry.FoodGrams, _unitSystem) food · @NutritionInput.Calories(carry.Calories)@(carry.Lines.Count == 0 ? "" : $" · {carry.BoughtCount} of {carry.Lines.Count} bought")
+                        </MudText>
+                    </div>
+                    <MudIcon Icon="@(open ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ExpandMore)" />
+                </div>
+                @if (open)
+                {
+                    <MudDivider />
+                    @if (carry.Lines.Count == 0)
+                    {
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary pa-3">Nothing planned for these days.</MudText>
+                    }
+                    @foreach (var line in carry.Lines)
+                    {
+                        var name = line.Name ?? "Deleted Food Item";
+                        <div class="d-flex align-center px-2 py-1 shopping-line @(Completed ? "" : "pick-row") @(line.Bought ? "bought" : "")"
+                             role="checkbox" aria-checked="@(line.Bought ? "true" : "false")" aria-readonly="@(Completed ? "true" : "false")"
+                             tabindex="@(Completed ? -1 : 0)" aria-label="@name"
+                             @onclick="() => Completed ? Task.CompletedTask : TryAsync(() => App.Trips.SetBoughtAsync(TripId, carry.FirstDate, line.FoodItemId, !line.Bought))">
+                            <MudIcon Icon="@(line.Bought ? Icons.Material.Filled.CheckBox : Icons.Material.Filled.CheckBoxOutlineBlank)"
+                                     Color="@(line.Bought ? Color.Primary : Color.Default)" Class="mr-3" />
+                            <MudText Typo="Typo.body2" Class="flex-grow-1 shopping-name">@name</MudText>
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary text-nowrap shopping-amount">
+                                @ServingsText(line.Servings) · @UnitFormat.Weight(line.WeightGrams, _unitSystem)
+                            </MudText>
+                        </div>
+                    }
+                    @if (!Completed && carry.BoughtCount > 0)
+                    {
+                        <div class="d-flex justify-end pa-1">
+                            <MudButton Variant="Variant.Text" Size="Size.Small" StartIcon="@Icons.Material.Filled.RestartAlt" Class="reset-bought"
+                                       OnClick="() => ResetBoughtAsync(carry)">Reset</MudButton>
+                        </div>
+                    }
+                }
+            </MudPaper>
+        }
+    };
+
+    /// <summary>"From home", the Resupply's place (or its day's start), or "Day 5 resupply" when neither is filled in.</summary>
+    private static string FoodCarryName(FoodCarry carry) =>
+        carry.FromHome ? "From home" : carry.Place ?? $"Day {carry.FirstDayNumber} resupply";
+
+    /// <summary>"days 5–9", or "day 5" for a one-day Food Carry.</summary>
+    private static string DaysText(FoodCarry carry) =>
+        carry.FirstDayNumber == carry.LastDayNumber ? $"day {carry.FirstDayNumber}" : $"days {carry.FirstDayNumber}–{carry.LastDayNumber}";
+
+    private static string ServingsText(decimal servings) => $"{ServingsInput.Format(servings)} serving{(servings == 1m ? "" : "s")}";
+
+    /// <summary>A Resupply day's place, or its start when the place is blank; null when both are.</summary>
+    private static string? ResupplyName(TripDay day) => day.ResupplyPlace ?? day.Start;
+
+    /// <summary>Whether a Food Carry's card is open: those that are over start closed, the rest open, until tapped.</summary>
+    private bool IsOpen(FoodCarry carry) => (carry.LastDate < _view!.Today) == _toggledCarries.Contains(carry.FirstDate);
+
+    private void ToggleCarry(FoodCarry carry)
+    {
+        if (!_toggledCarries.Remove(carry.FirstDate))
+        {
+            _toggledCarries.Add(carry.FirstDate);
+        }
+    }
+
+    private async Task ResetBoughtAsync(FoodCarry carry)
+    {
+        var confirmed = await DialogService.ShowMessageBoxAsync(
+            "Reset shopping list", $"Untick all {carry.BoughtCount} bought for {FoodCarryName(carry)}?", yesText: "Reset", cancelText: "Cancel");
+        if (confirmed == true)
+        {
+            await TryAsync(() => App.Trips.ResetBoughtAsync(TripId, carry.FirstDate));
+        }
+    }
+
+    /// <summary>Opens Meals → Shopping scrolled to the Food Carry, opening its card if it was closed.</summary>
+    private void OpenShopping(FoodCarry carry)
+    {
+        _tabName = MealsTab;
+        _shopping = true;
+        if (!IsOpen(carry))
+        {
+            ToggleCarry(carry);
+        }
+
+        _pendingDay = carry.FirstDate;
+    }
+
+    /// <summary>
     /// The Trip's stats: its length, then the route totals typed in on the Itinerary, then the calculated pack
     /// weights and food (frozen on a Completed Trip). A total with nothing filled in shows as a dash.
     /// </summary>
@@ -631,6 +807,12 @@ else if (_view is not null)
             </MudText>
             @StatLine(("Calories per day", "stat-calories-per-day", stats.CaloriesPerDay is { } perDay ? NutritionInput.Calories(Math.Round(perDay, 0, MidpointRounding.AwayFromZero)) : "—"))
             @StatLine(("Food cost", "stat-food-cost", stats.FoodCost is { } cost ? PriceInput.Format(cost) : "—"))
+            @if (stats.LongestFoodCarry is { } longest)
+            {
+                <MudText Typo="Typo.body2" Class="mt-2 stat-resupplies">
+                    @longest.Resupplies @(longest.Resupplies == 1 ? "resupply" : "resupplies") · longest Food Carry @Plural(longest.Days, "day") (@UnitFormat.Weight(longest.FoodGrams, _unitSystem))
+                </MudText>
+            }
             @if (stats.Eaten is { } eaten)
             {
                 <MudText Typo="Typo.body2" Class="mt-2 stat-eaten">
@@ -724,7 +906,8 @@ else if (_view is not null)
         {
             // The Meals tab may take another render to draw its days; try a few times, then give up.
             await using var module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/scrollTo.js");
-            if (await module.InvokeAsync<bool>("scrollTo", $".meal-plan-day[data-date=\"{date:yyyy-MM-dd}\"]") || ++_scrollTries > 5)
+            var card = _shopping ? "food-carry" : "meal-plan-day";
+            if (await module.InvokeAsync<bool>("scrollTo", $".{card}[data-date=\"{date:yyyy-MM-dd}\"]") || ++_scrollTries > 5)
             {
                 _pendingDay = null;
                 _scrollTries = 0;
@@ -752,6 +935,8 @@ else if (_view is not null)
             { d => d.Day, day },
             { d => d.UnitSystem, _unitSystem },
             { d => d.CanSkip, _view!.HasStarted },
+            { d => d.IsFirstDay, dayNumber == 1 },
+            { d => d.Locked, Completed },
         };
         var options = new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Small };
         var dialog = await DialogService.ShowAsync<TripDayDialog>($"Day {dayNumber} · {TripDates.Day(day.Date)}", parameters, options);
@@ -887,10 +1072,11 @@ else if (_view is not null)
         await LoadAsync();
     }
 
-    /// <summary>Opens the Meals tab scrolled to the day.</summary>
+    /// <summary>Opens the Meals tab's days scrolled to the day.</summary>
     private void OpenMeals(DateOnly date)
     {
         _tabName = MealsTab;
+        _shopping = false;
         _pendingDay = date;
     }
 

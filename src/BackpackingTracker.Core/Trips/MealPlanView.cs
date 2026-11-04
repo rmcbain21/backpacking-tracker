@@ -27,12 +27,18 @@ public sealed record DayMealPlan(TripDay Day, int DayNumber, IReadOnlyList<MealS
 
 /// <summary>
 /// A Trip's Meal Plan: every Trip Day's slots together, with calories and food weight per day, from each Meal's and
-/// Food Item's current values (frozen ones on a Completed Trip). Its total food weight counts in the Trip's
-/// Consumable Weight.
+/// Food Item's current values (frozen ones on a Completed Trip), and the days split into Food Carries at each Resupply.
+/// Only the first Food Carry's food counts in the Trip's Consumable Weight (ADR 0007).
 /// </summary>
-public sealed record MealPlanView(IReadOnlyList<DayMealPlan> Days)
+public sealed record MealPlanView(IReadOnlyList<DayMealPlan> Days, IReadOnlyList<FoodCarry> FoodCarries)
 {
     public decimal FoodGrams => Days.Sum(day => day.FoodGrams);
+
+    /// <summary>The food carried from the trailhead: the first Food Carry's, counted in Consumable Weight.</summary>
+    public decimal StartingFoodGrams => FoodCarries.Count == 0 ? 0m : FoodCarries[0].FoodGrams;
+
+    /// <summary>How many Resupplies split the Trip.</summary>
+    public int Resupplies => Math.Max(FoodCarries.Count - 1, 0);
 
     public decimal Calories => Days.Sum(day => day.Calories);
 
@@ -73,7 +79,8 @@ public sealed record MealPlanView(IReadOnlyList<DayMealPlan> Days)
                 .ToList();
             return new DayMealPlan(day, i + 1, slots, entries.Sum(e => e.Calories), entries.Sum(e => e.WeightGrams));
         });
-        return new MealPlanView(days.ToList());
+        var dayPlans = days.ToList();
+        return new MealPlanView(dayPlans, FoodCarry.For(dayPlans, meals, foodItems));
     }
 
     /// <summary>One Meal's totals or one serving of the Food Item, as they are now; null if it was deleted.</summary>

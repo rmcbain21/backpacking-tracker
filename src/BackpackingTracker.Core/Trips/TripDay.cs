@@ -33,6 +33,22 @@ public sealed record TripDay
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool Skipped { get; init; }
 
+    /// <summary>
+    /// Food is restocked before this day's hiking, so a new Food Carry starts here. Never on day 1 (a Resupply that
+    /// ends up on day 1 after a date change is ignored). Locks with the Meal Plan, since it changes Starting Pack Weight.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool Resupply { get; init; }
+
+    /// <summary>Where a Resupply is, such as "Kennedy Meadows"; null when blank (the day's start is shown instead).</summary>
+    public string? ResupplyPlace { get; init; }
+
+    /// <summary>
+    /// On the first day of a Food Carry (day 1 or a Resupply day): the shopping list lines ticked as bought, each
+    /// with the servings it had when ticked.
+    /// </summary>
+    public IReadOnlyList<BoughtFood> Bought { get; init; } = [];
+
     /// <summary>The day's Meal Plan: what's in its Breakfast, Lunch, Dinner and Snacks slots, in the order added.</summary>
     public IReadOnlyList<SlotEntry> SlotEntries { get; init; } = [];
 
@@ -40,17 +56,22 @@ public sealed record TripDay
     public bool HasContent() =>
         Start is not null || End is not null || Campsite is not null ||
         PlannedDistanceMetres is not null || ActualDistanceMetres is not null || ElevationGainMetres is not null ||
-        JournalNotes is not null || SlotEntries.Count > 0 || Skipped;
+        JournalNotes is not null || SlotEntries.Count > 0 || Skipped || Resupply;
 
-    /// <summary>Compares the slot entries one by one, so two days with the same plan are equal.</summary>
+    /// <summary>Compares the slot entries and bought ticks one by one, so two days with the same plan are equal.</summary>
     public bool Equals(TripDay? other) =>
         other is not null &&
         (Date, Start, End, Campsite, PlannedDistanceMetres, ActualDistanceMetres, ElevationGainMetres, JournalNotes, Skipped) ==
         (other.Date, other.Start, other.End, other.Campsite, other.PlannedDistanceMetres, other.ActualDistanceMetres, other.ElevationGainMetres, other.JournalNotes, other.Skipped) &&
-        SlotEntries.SequenceEqual(other.SlotEntries);
+        (Resupply, ResupplyPlace) == (other.Resupply, other.ResupplyPlace) &&
+        SlotEntries.SequenceEqual(other.SlotEntries) &&
+        Bought.SequenceEqual(other.Bought);
 
     public override int GetHashCode() => HashCode.Combine(Date, Start, End, Campsite, JournalNotes, SlotEntries.Count);
 }
+
+/// <summary>A Food Item ticked as bought on a Food Carry's shopping list, with the servings the line had then.</summary>
+public sealed record BoughtFood(string FoodItemId, decimal Servings);
 
 /// <summary>What can be typed in on a Trip Day. Blank text and missing numbers leave a field empty.</summary>
 public sealed record TripDayDetails(

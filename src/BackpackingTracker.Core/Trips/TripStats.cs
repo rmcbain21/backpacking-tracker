@@ -29,7 +29,8 @@ public sealed record TripStats(
     decimal? FoodCost,
     TripProgress? Progress,
     FinishEstimate? FinishEstimate,
-    FoodEaten? Eaten)
+    FoodEaten? Eaten,
+    LongestFoodCarry? LongestFoodCarry)
 {
     /// <summary>The hiked days with an actual distance needed before an Open-ended Trip's finish is estimated.</summary>
     internal const int DaysForFinishEstimate = 3;
@@ -61,8 +62,19 @@ public sealed record TripStats(
             mealPlan.Cost,
             progress,
             trip.OpenEnded && progress is not null ? EstimateFinish(trip, hiked, progress) : null,
-            EatenFor(trip, mealPlan, today));
+            EatenFor(trip, mealPlan, today),
+            LongestFoodCarryOf(mealPlan));
     }
+
+    /// <summary>With any Resupply, the Food Carry with the most days (the heavier one on a tie); otherwise null.</summary>
+    private static LongestFoodCarry? LongestFoodCarryOf(MealPlanView mealPlan) =>
+        mealPlan.Resupplies == 0
+            ? null
+            : mealPlan.FoodCarries
+                .OrderByDescending(carry => carry.Days.Count)
+                .ThenByDescending(carry => carry.FoodGrams)
+                .Select(carry => new LongestFoodCarry(mealPlan.Resupplies, carry.Days.Count, carry.FoodGrams))
+                .First();
 
     /// <summary>
     /// The calories eaten against those planned, over the days up to and including today on a Planned Trip, or every
@@ -119,6 +131,9 @@ public sealed record TripProgress(decimal ActualMetres, decimal ExpectedMetres)
     /// <summary>The share hiked, as a whole percentage; over 100 when the Trip went further than expected.</summary>
     public int Percent => (int)Math.Round(ActualMetres / ExpectedMetres * 100m, 0, MidpointRounding.AwayFromZero);
 }
+
+/// <summary>A Trip's Resupplies, and its longest Food Carry: "3 resupplies · longest Food Carry 6 days (8.1 lb)".</summary>
+public sealed record LongestFoodCarry(int Resupplies, int Days, decimal FoodGrams);
 
 /// <summary>The calories ticked as eaten and those planned, over the days counted.</summary>
 public sealed record FoodEaten(decimal EatenCalories, decimal PlannedCalories, int Days)

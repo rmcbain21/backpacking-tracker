@@ -480,6 +480,59 @@ public sealed class TripPlanner : IGearItemReferences, IFoodItemReferences, IMea
         await ChangeDayAsync(tripId, date, change);
     }
 
+    // ----- Resupplies and Food Carries -----
+
+    /// <summary>
+    /// Marks the Trip Day for that date a Resupply (food is restocked before its hiking, starting a new Food Carry),
+    /// with an optional place name, or unmarks it. Refused on day 1, and locked with the Meal Plan on a Completed
+    /// Trip, since it changes Starting Pack Weight (ADR 0007). Unmarking drops the place and the Food Carry's bought ticks.
+    /// </summary>
+    public async Task SetResupplyAsync(string tripId, DateOnly date, bool resupply, string? place = null)
+    {
+        var trip = await GetPlannedTripAsync(tripId, "its Resupplies");
+        if (resupply && trip.Days.Count > 0 && trip.Days[0].Date == date)
+        {
+            throw new RuleViolationException("Day 1 can't be a Resupply: its food is bought before the Trip.");
+        }
+
+        await ChangeDayAsync(tripId, date, day => resupply
+            ? day with { Resupply = true, ResupplyPlace = Trimmed(place) }
+            : day with { Resupply = false, ResupplyPlace = null, Bought = [] });
+    }
+
+    /// <summary>
+    /// Ticks a Food Item on the shopping list of the Food Carry starting on that date as bought, or unticks it. The tick
+    /// holds the line's servings now, so it's lost if they go up. Ticks for lines no longer on the list are dropped.
+    /// </summary>
+    public async Task SetBoughtAsync(string tripId, DateOnly foodCarryStart, string foodItemId, bool bought)
+    {
+        var (_, carry) = await GetFoodCarryAsync(tripId, foodCarryStart);
+        var line = carry.Lines.SingleOrDefault(l => l.FoodItemId == foodItemId)
+            ?? throw new RuleViolationException("That is no longer on the shopping list.");
+
+        var kept = carry.Lines
+            .Where(l => l.Bought && l.FoodItemId != foodItemId)
+            .Select(l => new BoughtFood(l.FoodItemId, l.Servings));
+        var ticks = bought ? kept.Append(new BoughtFood(foodItemId, line.Servings)) : kept;
+        await ChangeDayAsync(tripId, foodCarryStart, day => day with { Bought = ticks.ToList() });
+    }
+
+    /// <summary>Unticks everything on the shopping list of the Food Carry starting on that date.</summary>
+    public async Task ResetBoughtAsync(string tripId, DateOnly foodCarryStart)
+    {
+        await GetFoodCarryAsync(tripId, foodCarryStart);
+        await ChangeDayAsync(tripId, foodCarryStart, day => day with { Bought = [] });
+    }
+
+    private async Task<(TripView View, FoodCarry Carry)> GetFoodCarryAsync(string tripId, DateOnly foodCarryStart)
+    {
+        await GetPlannedTripAsync(tripId, "its shopping list");
+        var view = (await GetTripAsync(tripId))!;
+        var carry = view.MealPlan.FoodCarries.SingleOrDefault(c => c.FirstDate == foodCarryStart)
+            ?? throw new RuleViolationException("That Food Carry is no longer part of the Trip.");
+        return (view, carry);
+    }
+
     /// <summary>Changes the Meal Plan of the Trip Day for that date; refused on a Completed Trip.</summary>
     private async Task ChangeDayAsync(string tripId, DateOnly date, Func<TripDay, TripDay> change)
     {
@@ -665,7 +718,7 @@ public sealed class TripPlanner : IGearItemReferences, IFoodItemReferences, IMea
         return trips.Select(trip =>
         {
             var mealPlan = MealPlanView.For(trip, meals, foodItems);
-            var view = trip.PackingList.View(items, trip.WaterCarriedGrams ?? 0m, mealPlan.FoodGrams);
+            var view = trip.PackingList.View(items, trip.WaterCarriedGrams ?? 0m, mealPlan.StartingFoodGrams);
             return new TripView(trip, view.Entries, view.Sections, view.Weight, mealPlan, _clock.Today);
         }).ToList();
     }

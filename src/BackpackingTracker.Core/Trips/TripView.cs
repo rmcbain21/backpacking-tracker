@@ -57,6 +57,24 @@ public sealed record TripView(
         }
     }
 
+    /// <summary>The Food Carry today falls in, or null when today isn't one of the Trip's days.</summary>
+    public FoodCarry? CurrentFoodCarry =>
+        MealPlan.FoodCarries.FirstOrDefault(carry => carry.FirstDate <= Today && Today <= carry.LastDate);
+
+    /// <summary>
+    /// The food still to eat in the current Food Carry: today's and the rest of its days', less slot entries ticked as
+    /// eaten. Null when today isn't one of the Trip's days.
+    /// </summary>
+    public decimal? FoodLeftGrams => CurrentFoodCarry?.Days
+        .Where(day => day.Day.Date >= Today)
+        .SelectMany(day => day.Slots)
+        .SelectMany(slot => slot.Entries)
+        .Where(entry => !entry.Entry.Eaten)
+        .Sum(entry => entry.WeightGrams);
+
+    /// <summary>The first Food Carry starting at a Resupply today or later, or null when there's none.</summary>
+    public FoodCarry? NextResupply => MealPlan.FoodCarries.FirstOrDefault(carry => !carry.FromHome && carry.FirstDate >= Today);
+
     /// <summary>Days from today until the start date: 1 when it starts tomorrow.</summary>
     public int DaysToStart => Trip.StartDate.DayNumber - Today.DayNumber;
 

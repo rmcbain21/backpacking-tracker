@@ -395,6 +395,15 @@ h1:focus {
 }
 
 /* Food ticked as eaten: the name and figures fade so what's left stands out */
+.shopping-line {
+    min-height: 40px;
+}
+
+.shopping-line.bought .shopping-name {
+    text-decoration: line-through;
+    opacity: 0.6;
+}
+
 .slot-entry.eaten .mud-typography,
 .today-slot-entry.eaten .mud-typography {
     opacity: 0.6;
