@@ -10,6 +10,7 @@ namespace BackpackingTracker.Core.Trips;
 /// Skipped Trip Days are left out of what was hiked (days, nights, actual distance, elevation gain) but kept in
 /// what was planned (planned days and nights, planned distance) and in the food, which was still carried.
 /// With an Expected Distance there is progress too, and on an Open-ended Trip, once enough is hiked, a finish estimate.
+/// Once anything is ticked as eaten, the food eaten against what was planned.
 /// </summary>
 /// <param name="Days">Days hiked: every Trip Day not Skipped.</param>
 /// <param name="Nights">Nights out over the days hiked: one fewer than the days, never below zero.</param>
@@ -27,7 +28,8 @@ public sealed record TripStats(
     decimal? CaloriesPerDay,
     decimal? FoodCost,
     TripProgress? Progress,
-    FinishEstimate? FinishEstimate)
+    FinishEstimate? FinishEstimate,
+    FoodEaten? Eaten)
 {
     /// <summary>The hiked days with an actual distance needed before an Open-ended Trip's finish is estimated.</summary>
     internal const int DaysForFinishEstimate = 3;
@@ -37,7 +39,8 @@ public sealed record TripStats(
 
     /// <param name="weight">The Trip's pack weight, from frozen weights on a Completed Trip.</param>
     /// <param name="mealPlan">The Trip's Meal Plan, from frozen food figures on a Completed Trip.</param>
-    internal static TripStats For(Trip trip, PackWeight weight, MealPlanView mealPlan)
+    /// <param name="today">The date it's looked at: a Planned Trip's food eaten counts the days up to it.</param>
+    internal static TripStats For(Trip trip, PackWeight weight, MealPlanView mealPlan, DateOnly today)
     {
         var hiked = trip.Days.Where(day => !day.Skipped).ToList();
         var actualDistance = Sum(hiked.Select(day => day.ActualDistanceMetres));
@@ -57,7 +60,23 @@ public sealed record TripStats(
             mealPlan.IsEmpty || trip.Days.Count == 0 ? null : mealPlan.Calories / trip.Days.Count,
             mealPlan.Cost,
             progress,
-            trip.OpenEnded && progress is not null ? EstimateFinish(trip, hiked, progress) : null);
+            trip.OpenEnded && progress is not null ? EstimateFinish(trip, hiked, progress) : null,
+            EatenFor(trip, mealPlan, today));
+    }
+
+    /// <summary>
+    /// The calories eaten against those planned, over the days up to and including today on a Planned Trip, or every
+    /// day once Completed; Skipped days count, since their food was still carried. Null until anything is ticked.
+    /// </summary>
+    private static FoodEaten? EatenFor(Trip trip, MealPlanView mealPlan, DateOnly today)
+    {
+        var days = mealPlan.Days.Where(day => trip.Status == TripStatus.Completed || day.Day.Date <= today).ToList();
+        if (!days.Any(day => day.Day.SlotEntries.Any(entry => entry.Eaten)))
+        {
+            return null;
+        }
+
+        return new FoodEaten(days.Sum(day => day.EatenCalories), days.Sum(day => day.Calories), days.Count);
     }
 
     /// <summary>
@@ -99,6 +118,16 @@ public sealed record TripProgress(decimal ActualMetres, decimal ExpectedMetres)
 
     /// <summary>The share hiked, as a whole percentage; over 100 when the Trip went further than expected.</summary>
     public int Percent => (int)Math.Round(ActualMetres / ExpectedMetres * 100m, 0, MidpointRounding.AwayFromZero);
+}
+
+/// <summary>The calories ticked as eaten and those planned, over the days counted.</summary>
+public sealed record FoodEaten(decimal EatenCalories, decimal PlannedCalories, int Days)
+{
+    /// <summary>The share of the planned calories eaten, as a whole percentage; null when nothing was planned.</summary>
+    public int? Percent => PlannedCalories == 0 ? null : (int)Math.Round(EatenCalories / PlannedCalories * 100m, 0, MidpointRounding.AwayFromZero);
+
+    /// <summary>The calories eaten per day counted.</summary>
+    public decimal CaloriesPerDay => Days == 0 ? 0m : EatenCalories / Days;
 }
 
 /// <summary>When an Open-ended Trip would finish at the pace so far, and how many days after its last day that is.</summary>

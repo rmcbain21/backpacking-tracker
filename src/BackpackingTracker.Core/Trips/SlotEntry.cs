@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace BackpackingTracker.Core.Trips;
 
 /// <summary>
@@ -21,4 +23,11 @@ public sealed record SlotEntry
     /// uses each Meal's and Food Item's current values.
     /// </summary>
     public FoodFigures? Frozen { get; init; }
+
+    /// <summary>
+    /// Ticked as eaten, covering the whole quantity: once the Trip has started, on any of its days. Only shows
+    /// progress; no weight changes. Never copied with the entry.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool Eaten { get; init; }
 }

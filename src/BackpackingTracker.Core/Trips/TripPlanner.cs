@@ -293,7 +293,7 @@ public sealed class TripPlanner : IGearItemReferences, IFoodItemReferences, IMea
 
     /// <summary>
     /// Puts a Meal in one of the Trip Day's slots with the quantity (1 unless given). If the slot already has that
-    /// Meal, adds to its quantity instead. Retired Meals can't be added.
+    /// Meal, adds to its quantity instead (and unticks it if eaten). Retired Meals can't be added.
     /// </summary>
     public async Task<SlotEntry> AddMealToSlotAsync(string tripId, DateOnly date, MealSlot slot, string mealId, decimal quantity = 1m)
     {
@@ -309,7 +309,7 @@ public sealed class TripPlanner : IGearItemReferences, IFoodItemReferences, IMea
 
     /// <summary>
     /// Puts servings of a Food Item in one of the Trip Day's slots (1 unless given). If the slot already has that
-    /// Food Item, adds to its servings instead. Retired Food Items can't be added.
+    /// Food Item, adds to its servings instead (and unticks it if eaten). Retired Food Items can't be added.
     /// </summary>
     public async Task<SlotEntry> AddFoodItemToSlotAsync(string tripId, DateOnly date, MealSlot slot, string foodItemId, decimal quantity = 1m)
     {
@@ -337,7 +337,8 @@ public sealed class TripPlanner : IGearItemReferences, IFoodItemReferences, IMea
                 return day with { SlotEntries = [.. day.SlotEntries, added] };
             }
 
-            added = existing with { Quantity = existing.Quantity + amount };
+            // What's added isn't eaten yet, and a tick covers the whole quantity, so the entry is unticked.
+            added = existing with { Quantity = existing.Quantity + amount, Eaten = false };
             return day with { SlotEntries = day.SlotEntries.Select(entry => entry.Id == existing.Id ? added : entry).ToList() };
         });
         return added;
@@ -373,7 +374,7 @@ public sealed class TripPlanner : IGearItemReferences, IFoodItemReferences, IMea
 
     /// <summary>
     /// Copies the source Trip's Meal Plan onto this Trip as PlanMealPlanCopyAsync describes: each copied entry refers to
-    /// the same Meal or Food Item with the same quantity, gets a new id, and carries no frozen figures. If that replaces
+    /// the same Meal or Food Item with the same quantity, gets a new id, and carries no frozen figures or eaten tick. If that replaces
     /// days with food planned, it's refused unless replaceExisting confirms it.
     /// </summary>
     public async Task CopyMealPlanAsync(string tripId, string sourceTripId, bool replaceExisting = false)
@@ -434,7 +435,7 @@ public sealed class TripPlanner : IGearItemReferences, IFoodItemReferences, IMea
         var copiedDays = source.Days.Take(dayCount)
             .Select(day => (IReadOnlyList<SlotEntry>)day.SlotEntries
                 .Where(Keep)
-                .Select(entry => entry with { Id = Guid.NewGuid().ToString(), Frozen = null })
+                .Select(CopyOf)
                 .ToList())
             .ToList();
         var replacedDays = trip.Days.Take(dayCount)
@@ -444,6 +445,39 @@ public sealed class TripPlanner : IGearItemReferences, IFoodItemReferences, IMea
             .ToList();
 
         return (trip, new MealPlanCopyPlan(source.Name, dayCount, replacedDays, skipped), copiedDays);
+    }
+
+    /// <summary>A copy of a slot entry for another day or Trip: a new id, and neither frozen figures nor an eaten tick.</summary>
+    private static SlotEntry CopyOf(SlotEntry entry) => entry with { Id = Guid.NewGuid().ToString(), Frozen = null, Eaten = false };
+
+    /// <summary>
+    /// Ticks a slot entry as eaten (its whole quantity), or unticks it. Once the Trip has started, on any of its days,
+    /// so past days can be caught up; locked with the Meal Plan on a Completed Trip.
+    /// </summary>
+    public async Task SetSlotEntryEatenAsync(string tripId, DateOnly date, string slotEntryId, bool eaten) =>
+        await ChangeEatenAsync(tripId, date, day =>
+        {
+            FindSlotEntry(day, slotEntryId);
+            return day with
+            {
+                SlotEntries = day.SlotEntries.Select(entry => entry.Id == slotEntryId ? entry with { Eaten = eaten } : entry).ToList(),
+            };
+        });
+
+    /// <summary>Ticks every slot entry on the Trip Day as eaten, as SetSlotEntryEatenAsync would one by one.</summary>
+    public async Task SetDayEatenAsync(string tripId, DateOnly date) =>
+        await ChangeEatenAsync(tripId, date, day =>
+            day with { SlotEntries = day.SlotEntries.Select(entry => entry with { Eaten = true }).ToList() });
+
+    private async Task ChangeEatenAsync(string tripId, DateOnly date, Func<TripDay, TripDay> change)
+    {
+        var trip = await GetPlannedTripAsync(tripId, "its Meal Plan");
+        if (!HasStarted(trip))
+        {
+            throw new RuleViolationException("Food can be ticked as eaten once the Trip has started.");
+        }
+
+        await ChangeDayAsync(tripId, date, change);
     }
 
     /// <summary>Changes the Meal Plan of the Trip Day for that date; refused on a Completed Trip.</summary>
@@ -571,7 +605,7 @@ public sealed class TripPlanner : IGearItemReferences, IFoodItemReferences, IMea
     {
         Date = previous.Date.AddDays(1),
         SlotEntries = copyMeals
-            ? previous.SlotEntries.Select(entry => entry with { Id = Guid.NewGuid().ToString(), Frozen = null }).ToList()
+            ? previous.SlotEntries.Select(CopyOf).ToList()
             : [],
     };
 

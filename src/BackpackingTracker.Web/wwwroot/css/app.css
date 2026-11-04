@@ -394,6 +394,12 @@ h1:focus {
     min-height: 36px;
 }
 
+/* Food ticked as eaten: the name and figures fade so what's left stands out */
+.slot-entry.eaten .mud-typography,
+.today-slot-entry.eaten .mud-typography {
+    opacity: 0.6;
+}
+
 /* A Sync Conflict's two versions side by side: label, this device, other device. Differing lines are bold and tinted. */
 .conflict-line {
     display: grid;

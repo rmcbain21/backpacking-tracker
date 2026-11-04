@@ -67,7 +67,7 @@ public sealed record TripView(
     public int ChecklistCount => Trip.PackingList.Entries.Count;
 
     /// <summary>Days and nights, route totals, pack weights and food, to review and compare Trips.</summary>
-    public TripStats Stats => TripStats.For(Trip, Weight, MealPlan);
+    public TripStats Stats => TripStats.For(Trip, Weight, MealPlan, Today);
 }
 
 /// <summary>

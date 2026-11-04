@@ -45,6 +45,10 @@ public static class NutritionInput
 
     public static string Calories(decimal calories) => $"{calories.ToString("#,0", Culture)} cal";
 
+    /// <summary>"Eaten 1,850 of 2,900 cal".</summary>
+    public static string Eaten(decimal eatenCalories, decimal plannedCalories) =>
+        $"Eaten {eatenCalories.ToString("#,0", Culture)} of {Calories(plannedCalories)}";
+
     public static string Protein(decimal grams) => $"{grams.ToString("0.#", Culture)} g protein";
 
     public static string TextForEditing(decimal? amount) => amount?.ToString("0.#", Culture) ?? "";

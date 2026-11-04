@@ -1,6 +1,6 @@
 # 26: Mark food eaten on a Trip Day
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Idea:** While On Trail, tick off the Meals and Food Items in a Trip Day's slots as I eat them, to see what's left and whether I'm eating to plan.
 
@@ -37,3 +37,10 @@
 
 *Calories only*
 - Only calories are tracked as eaten. Protein and Custom Fields (12) stay plan-only: an exception to 12's "mirror protein everywhere".
+
+*Implemented (2026-11-04)*
+- Core: `SlotEntry.Eaten` (left out of the JSON when false). `TripPlanner.SetSlotEntryEatenAsync` ticks or unticks one entry and `SetDayEatenAsync` ticks a whole day; both refused before `HasStarted` and on a Completed Trip. Reopen keeps the ticks. Both meal copies (01's Add day and 21's Meal Plan copy) go through one `CopyOf`, which drops the tick along with the frozen figures.
+- Decided while building: adding more of something already in a slot merges into that entry, as before, but **unticks** it, since the added food isn't eaten yet and a tick covers the whole quantity. Changing an entry's quantity keeps its tick (the "change to 1, then tick" case).
+- `DayMealPlan.EatenCalories` / `AllEaten`; `TripStats.Eaten` (`FoodEaten`: eaten and planned calories, days counted, percent, cal/day eaten). Days up to and including today while Planned, every day once Completed (frozen calories), Skipped days included. Null until anything is ticked, so old Trips don't show "Eaten 0 of …".
+- Trip page: Meals tab shows a tick on each entry once started (tapping the tick doesn't open the entry dialog; a plain icon on a Completed Trip), plus "Eaten 1,850 of 2,900 cal" and **All eaten** under each day's heading. Ticked entries fade. The Today tab's meals now list one entry per line with its tick, and the header shows the eaten line; tapping elsewhere still opens the Meals tab. Stats tab: "Eaten … of … cal planned (90%) · 2,600 cal/day eaten", with a caption for which days count.
+- Tests: `FoodEatenTests` (15). Checked in headless Chromium at phone width with a seeded 3-day Trip: tick on Today stays on Today and updates the header; All eaten on day 1; per-day lines; Stats line counts only days up to today; no console errors.

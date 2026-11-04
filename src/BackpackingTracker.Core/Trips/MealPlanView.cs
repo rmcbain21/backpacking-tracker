@@ -16,7 +16,14 @@ public sealed record SlotEntryView(SlotEntry Entry, string? Name, decimal Weight
 public sealed record MealSlotView(MealSlot Slot, IReadOnlyList<SlotEntryView> Entries);
 
 /// <summary>A Trip Day's Meal Plan: all four slots in order, and the day's calories and food weight.</summary>
-public sealed record DayMealPlan(TripDay Day, int DayNumber, IReadOnlyList<MealSlotView> Slots, decimal Calories, decimal FoodGrams);
+public sealed record DayMealPlan(TripDay Day, int DayNumber, IReadOnlyList<MealSlotView> Slots, decimal Calories, decimal FoodGrams)
+{
+    /// <summary>The calories of the slot entries ticked as eaten.</summary>
+    public decimal EatenCalories => Slots.SelectMany(slot => slot.Entries).Where(e => e.Entry.Eaten).Sum(e => e.Calories);
+
+    /// <summary>True when the day has food planned and every entry is ticked as eaten.</summary>
+    public bool AllEaten => Day.SlotEntries.Count > 0 && Day.SlotEntries.All(entry => entry.Eaten);
+}
 
 /// <summary>
 /// A Trip's Meal Plan: every Trip Day's slots together, with calories and food weight per day, from each Meal's and

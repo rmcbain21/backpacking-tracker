@@ -215,18 +215,23 @@ else if (_view is not null)
                   @onclick="() => OpenMeals(today.Date)">
             <div class="d-flex justify-space-between">
                 <MudText Typo="Typo.subtitle2" HtmlTag="h2">Today's meals</MudText>
-                <MudText Typo="Typo.body2" Class="mud-text-secondary text-nowrap">
-                    @(today.SlotEntries.Count == 0 ? "Nothing planned" : NutritionInput.Calories(todayPlan.Calories))
+                <MudText Typo="Typo.body2" Class="mud-text-secondary text-nowrap today-eaten">
+                    @(today.SlotEntries.Count == 0 ? "Nothing planned" : NutritionInput.Eaten(todayPlan.EatenCalories, todayPlan.Calories))
                 </MudText>
             </div>
             @foreach (var slotView in todayPlan.Slots.Where(slotView => slotView.Entries.Count > 0))
             {
-                <MudText Typo="Typo.body2" Class="today-slot">
-                    <span class="mud-text-secondary">@slotView.Slot:</span>
-                    @string.Join(", ", slotView.Entries.Select(entryView =>
-                        (entryView.Name ?? (entryView.IsMeal ? "Deleted Meal" : "Deleted Food Item")) +
-                        (entryView.Entry.Quantity == 1m ? "" : $" ×{ServingsInput.Format(entryView.Entry.Quantity)}")))
-                </MudText>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mt-1 today-slot">@slotView.Slot</MudText>
+                @foreach (var entryView in slotView.Entries)
+                {
+                    var name = entryView.Name ?? (entryView.IsMeal ? "Deleted Meal" : "Deleted Food Item");
+                    <div class="d-flex align-center ml-n2 today-slot-entry @(entryView.Entry.Eaten ? "eaten" : "")">
+                        @EatenTick(todayPlan, entryView, name)
+                        <MudText Typo="Typo.body2">
+                            @name@(entryView.Entry.Quantity == 1m ? "" : $" ×{ServingsInput.Format(entryView.Entry.Quantity)}")
+                        </MudText>
+                    </div>
+                }
             }
         </MudPaper>
 
@@ -466,7 +471,8 @@ else if (_view is not null)
 
     /// <summary>
     /// The Meal Plan: each Trip Day's Breakfast, Lunch, Dinner and Snacks with what's in them, and the day's calories
-    /// and food weight. On a Planned Trip, a slot's + adds to it and tapping an entry changes or removes it.
+    /// and food weight. On a Planned Trip, a slot's + adds to it and tapping an entry changes or removes it. Once the
+    /// Trip has started, each entry has an eaten tick, and each day its calories eaten and an All eaten action.
     /// </summary>
     private RenderFragment MealPlan() => __builder =>
     {
@@ -497,6 +503,19 @@ else if (_view is not null)
                         @(dayPlan.Day.SlotEntries.Count == 0 ? "Nothing planned" : $"{NutritionInput.Calories(dayPlan.Calories)} · {UnitFormat.Weight(dayPlan.FoodGrams, _unitSystem)}")
                     </MudText>
                 </div>
+                @if (ShowsEaten && dayPlan.Day.SlotEntries.Count > 0)
+                {
+                    <div class="d-flex align-center pl-3 pr-1 day-eaten">
+                        <MudText Typo="Typo.body2" Class="flex-grow-1 day-eaten-calories">
+                            @NutritionInput.Eaten(dayPlan.EatenCalories, dayPlan.Calories)
+                        </MudText>
+                        @if (CanTickEaten && !dayPlan.AllEaten)
+                        {
+                            <MudButton Variant="Variant.Text" Size="Size.Small" StartIcon="@Icons.Material.Filled.DoneAll" Class="all-eaten"
+                                       OnClick="() => TryAsync(() => App.Trips.SetDayEatenAsync(TripId, dayPlan.Day.Date))">All eaten</MudButton>
+                        }
+                    </div>
+                }
                 @foreach (var slotView in dayPlan.Slots)
                 {
                     var slot = slotView.Slot;
@@ -512,9 +531,10 @@ else if (_view is not null)
                     @foreach (var entryView in slotView.Entries)
                     {
                         var name = entryView.Name ?? (entryView.IsMeal ? "Deleted Meal" : "Deleted Food Item");
-                        <div class="d-flex align-center px-3 py-1 gap-2 slot-entry @(Completed ? "" : "pick-row")"
+                        <div class="d-flex align-center @(ShowsEaten ? "pl-1" : "pl-3") pr-3 py-1 gap-2 slot-entry @(Completed ? "" : "pick-row") @(entryView.Entry.Eaten ? "eaten" : "")"
                              role="button" tabindex="@(Completed ? -1 : 0)" aria-label="@($"Change {name}")"
                              @onclick="() => Completed ? Task.CompletedTask : EditSlotEntryAsync(dayPlan, entryView, name)">
+                            @EatenTick(dayPlan, entryView, name)
                             <MudText Typo="Typo.body2" Class="flex-grow-1">
                                 @name@(entryView.Entry.Quantity == 1m ? "" : $" ×{ServingsInput.Format(entryView.Entry.Quantity)}")
                             </MudText>
@@ -527,6 +547,39 @@ else if (_view is not null)
                 <div class="pb-2"></div>
             </MudPaper>
         }
+    };
+
+    /// <summary>Food can be ticked as eaten: the Trip has started and isn't Completed.</summary>
+    private bool CanTickEaten => _view!.HasStarted && !Completed;
+
+    /// <summary>The eaten ticks show once the Trip has started, read-only on a Completed Trip.</summary>
+    private bool ShowsEaten => _view!.HasStarted;
+
+    /// <summary>
+    /// A slot entry's eaten tick: tapping it ticks or unticks the entry without opening anything else. Nothing before
+    /// the Trip has started; read-only on a Completed Trip.
+    /// </summary>
+    private RenderFragment EatenTick(DayMealPlan dayPlan, SlotEntryView entryView, string name) => __builder =>
+    {
+        if (!ShowsEaten)
+        {
+            return;
+        }
+
+        var eaten = entryView.Entry.Eaten;
+        var icon = eaten ? Icons.Material.Filled.CheckCircle : Icons.Material.Outlined.Circle;
+        var color = eaten ? Color.Primary : Color.Default;
+        if (!CanTickEaten)
+        {
+            <MudIcon Icon="@icon" Color="@color" Size="Size.Small" Class="mx-2 eaten-tick" aria-label="@(eaten ? "Eaten" : "Not eaten")" />
+            return;
+        }
+
+        <span class="eaten-tick" @onclick:stopPropagation="true">
+            <MudIconButton Icon="@icon" Color="@color" Size="Size.Small"
+                           aria-label="@($"{name} eaten")" aria-pressed="@(eaten ? "true" : "false")"
+                           OnClick="() => TryAsync(() => App.Trips.SetSlotEntryEatenAsync(TripId, dayPlan.Day.Date, entryView.Entry.Id, !eaten))" />
+        </span>
     };
 
     /// <summary>
@@ -578,6 +631,16 @@ else if (_view is not null)
             </MudText>
             @StatLine(("Calories per day", "stat-calories-per-day", stats.CaloriesPerDay is { } perDay ? NutritionInput.Calories(Math.Round(perDay, 0, MidpointRounding.AwayFromZero)) : "—"))
             @StatLine(("Food cost", "stat-food-cost", stats.FoodCost is { } cost ? PriceInput.Format(cost) : "—"))
+            @if (stats.Eaten is { } eaten)
+            {
+                <MudText Typo="Typo.body2" Class="mt-2 stat-eaten">
+                    @NutritionInput.Eaten(eaten.EatenCalories, eaten.PlannedCalories) planned@(eaten.Percent is { } percent ? $" ({percent}%)" : "")
+                    · @NutritionInput.Calories(Math.Round(eaten.CaloriesPerDay, 0, MidpointRounding.AwayFromZero))/day eaten
+                </MudText>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">
+                    @(Completed ? "Over every day of the Trip." : "Over the days up to today.")
+                </MudText>
+            }
         </MudPaper>
     };
 
