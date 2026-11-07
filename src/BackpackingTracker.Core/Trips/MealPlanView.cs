@@ -15,6 +15,9 @@ public sealed record SlotEntryView(SlotEntry Entry, string? Name, decimal Weight
 
     public bool IsPlaceholder => Entry.IsPlaceholder;
 
+    /// <summary>A Food Item's servings per package, when recorded, so its amount can show as packages.</summary>
+    public decimal? ServingsPerPackage { get; init; }
+
     /// <summary>A Placeholder with no estimated weight, so it counts as zero.</summary>
     public bool WithoutWeight => Entry.Placeholder is { WeightGrams: null };
 
@@ -106,11 +109,12 @@ public sealed record MealPlanView(IReadOnlyList<DayMealPlan> Days, IReadOnlyList
                 : entry.MealId is { } mealId ? meals.GetValueOrDefault(mealId)?.Meal.Name
                 : foodItems.GetValueOrDefault(entry.FoodItemId ?? "")?.Name;
             var figures = entry.Frozen ?? CurrentFigures(entry, meals, foodItems);
-            return figures is null
+            var view = figures is null
                 ? new SlotEntryView(entry, name, 0m, 0m, null, null)
                 : new SlotEntryView(entry, name,
                     figures.WeightGrams * entry.Quantity, figures.Calories * entry.Quantity,
                     figures.ProteinGrams * entry.Quantity, figures.Cost * entry.Quantity);
+            return view with { ServingsPerPackage = entry.FoodItemId is { } id ? foodItems.GetValueOrDefault(id)?.ServingsPerPackage : null };
         }
 
         var days = trip.Days.Select((day, i) =>

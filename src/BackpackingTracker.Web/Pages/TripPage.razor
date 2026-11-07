@@ -759,7 +759,7 @@ else if (_view is not null)
                                      Color="@(line.Bought ? Color.Primary : Color.Default)" Class="mr-3" />
                             <MudText Typo="Typo.body2" Class="flex-grow-1 shopping-name">@name</MudText>
                             <MudText Typo="Typo.body2" Class="mud-text-secondary text-nowrap shopping-amount">
-                                @ServingsText(line.Servings) · @UnitFormat.Weight(line.WeightGrams, _unitSystem)
+                                @ServingsInput.ToBuy(line.Servings, line.ServingsPerPackage) · @UnitFormat.Weight(line.WeightGrams, _unitSystem)
                             </MudText>
                         </div>
                     }
@@ -814,7 +814,6 @@ else if (_view is not null)
             ? "no weight"
             : $"~{WeightTotal(line.WeightGrams, line.WithoutWeight)}";
 
-    private static string ServingsText(decimal servings) => $"{ServingsInput.Format(servings)} serving{(servings == 1m ? "" : "s")}";
 
     /// <summary>A Resupply day's place, or its start when the place is blank; null when both are.</summary>
     private static string? ResupplyName(TripDay day) => day.ResupplyPlace ?? day.Start;
@@ -1076,6 +1075,7 @@ else if (_view is not null)
             { d => d.Date, dayPlan.Day.Date },
             { d => d.Entry, entryView.Entry },
             { d => d.UnitSystem, _unitSystem },
+            { d => d.ServingsPerPackage, entryView.ServingsPerPackage },
         };
         var options = new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.ExtraSmall };
         var dialog = await DialogService.ShowAsync<SlotEntryDialog>(name, parameters, options);
@@ -1106,7 +1106,9 @@ else if (_view is not null)
     /// <summary>A slot entry's name and quantity; a Placeholder's in italics with a small ? icon.</summary>
     private static RenderFragment EntryName(SlotEntryView entryView, string name) => __builder =>
     {
-        var quantity = entryView.Entry.Quantity == 1m ? "" : $" ×{ServingsInput.Format(entryView.Entry.Quantity)}";
+        var quantity = entryView.ServingsPerPackage is { } perPackage
+            ? $" · {ServingsInput.Amount(entryView.Entry.Quantity, perPackage)}"
+            : entryView.Entry.Quantity == 1m ? "" : $" ×{ServingsInput.Format(entryView.Entry.Quantity)}";
         if (entryView.IsPlaceholder)
         {
             <span class="placeholder-name"><MudIcon Icon="@Icons.Material.Outlined.HelpOutline" Size="Size.Small" Class="placeholder-icon" aria-label="Placeholder" /><em>@name</em>@quantity</span>

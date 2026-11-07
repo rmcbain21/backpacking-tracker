@@ -117,12 +117,12 @@ public sealed record FoodCarry(
     private static IReadOnlyList<ShoppingLine> ShoppingLinesFor(
         IReadOnlyList<DayMealPlan> days, IReadOnlyDictionary<string, MealView> meals, IReadOnlyDictionary<string, FoodItem> foodItems)
     {
-        var totals = new Dictionary<string, (string? Name, decimal Servings, decimal Grams)>();
+        var totals = new Dictionary<string, (string? Name, decimal Servings, decimal Grams, decimal? PerPackage)>();
 
-        void Add(string foodItemId, string? name, decimal servings, decimal grams)
+        void Add(string foodItemId, string? name, decimal servings, decimal grams, decimal? perPackage)
         {
-            var (_, servingsSoFar, gramsSoFar) = totals.GetValueOrDefault(foodItemId);
-            totals[foodItemId] = (name, servingsSoFar + servings, gramsSoFar + grams);
+            var (_, servingsSoFar, gramsSoFar, _) = totals.GetValueOrDefault(foodItemId);
+            totals[foodItemId] = (name, servingsSoFar + servings, gramsSoFar + grams, perPackage);
         }
 
         foreach (var entryView in days.SelectMany(day => day.Slots).SelectMany(slot => slot.Entries))
@@ -130,14 +130,15 @@ public sealed record FoodCarry(
             var entry = entryView.Entry;
             if (entry.FoodItemId is { } foodItemId)
             {
-                Add(foodItemId, entryView.Name, entry.Quantity, entryView.WeightGrams);
+                Add(foodItemId, entryView.Name, entry.Quantity, entryView.WeightGrams, entryView.ServingsPerPackage);
             }
             else if (entry.MealId is { } mealId && meals.TryGetValue(mealId, out var meal))
             {
                 foreach (var component in meal.Components)
                 {
                     var servings = component.Component.Servings * entry.Quantity;
-                    Add(component.Component.FoodItemId, component.FoodItem?.Name, servings, (component.FoodItem?.ServingWeightGrams ?? 0m) * servings);
+                    Add(component.Component.FoodItemId, component.FoodItem?.Name, servings, (component.FoodItem?.ServingWeightGrams ?? 0m) * servings,
+                        component.FoodItem?.ServingsPerPackage);
                 }
             }
         }
@@ -149,6 +150,7 @@ public sealed record FoodCarry(
                 total.Value.Name,
                 total.Value.Servings,
                 total.Value.Grams,
+                total.Value.PerPackage,
                 bought.Any(tick => tick.FoodItemId == total.Key && tick.Servings >= total.Value.Servings)))
             .OrderBy(line => line.Name is null)
             .ThenBy(line => line.Name, StringComparer.OrdinalIgnoreCase)
@@ -161,7 +163,12 @@ public sealed record FoodCarry(
 /// ticked with at least as many servings as it has now, so a line whose servings go up is unticked.
 /// </summary>
 /// <param name="Name">Null if the Food Item was deleted on another device.</param>
-public sealed record ShoppingLine(string FoodItemId, string? Name, decimal Servings, decimal WeightGrams, bool Bought);
+/// <param name="ServingsPerPackage">The Food Item's, when recorded, so the line rounds up to whole packages.</param>
+public sealed record ShoppingLine(string FoodItemId, string? Name, decimal Servings, decimal WeightGrams, decimal? ServingsPerPackage, bool Bought)
+{
+    /// <summary>Whole packages to buy, rounded up; null without servings per package.</summary>
+    public decimal? Packages => ServingsPerPackage is { } size ? ServingsInput.WholePackages(Servings, size) : null;
+}
 
 /// <summary>
 /// Placeholders to choose at the store for a Food Carry, those in one slot with one label (or none): "Breakfast ×3 · ~12 oz",

@@ -82,7 +82,7 @@ else
                     <div class="flex-grow-1">
                         <MudText>@item.Name</MudText>
                         <MudText Typo="Typo.body2" Class="mud-text-secondary">
-                            @Nutrition(item.CaloriesPerServing, item.ProteinGramsPerServing, item.CostPerServing)
+                            @Nutrition(item.CaloriesPerServing, item.ProteinGramsPerServing, item.CostPerServing)@(item.ServingsPerPackage is { } perPackage ? $" · {ServingsInput.Servings(perPackage)} a package" : "")
                         </MudText>
                         @Tags(item.Tags)
                     </div>

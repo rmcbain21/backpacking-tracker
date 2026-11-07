@@ -111,6 +111,7 @@ internal sealed class ConflictDescriber
                 lines.Put("Calories per serving", $"{Number(item.CaloriesPerServing)} cal");
                 lines.Put("Protein per serving", item.ProteinGramsPerServing is { } protein ? $"{Number(protein)} g" : null);
                 lines.Put("Cost per serving", Money(item.CostPerServing));
+                lines.Put("Servings per package", item.ServingsPerPackage is { } perPackage ? Number(perPackage) : null);
                 lines.Put("Tags", string.Join(", ", item.Tags));
                 lines.Put("Retired", YesNo(item.Retired));
                 break;

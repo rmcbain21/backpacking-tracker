@@ -27,6 +27,9 @@
                               Validation="@(new Func<string?, string?>(text => PriceInput.Parse(text).Error))" />
             </div>
             <MudText Typo="Typo.caption" Class="mud-text-secondary">Protein and cost are optional, per serving.</MudText>
+            <MudTextField @bind-Value="_perPackageText" Label="Servings per package (optional)" InputMode="@(InputMode.@decimal)"
+                          Class="servings-per-package" HelperText="Such as 2 for a two-serving pouch."
+                          Validation="@(new Func<string?, string?>(text => ServingsInput.ParsePerPackage(text).Error))" />
             <TagEditor @ref="_tagEditor" @bind-Tags="_tags" TagsInUse="_tagsInUse" />
         </MudForm>
         @if (_problem is not null)
@@ -65,6 +68,7 @@
     private string? _caloriesText;
     private string? _proteinText;
     private string? _costText;
+    private string? _perPackageText;
     private IReadOnlyList<string> _tags = [];
     private IReadOnlyList<string> _tagsInUse = [];
     private string? _problem;
@@ -85,6 +89,7 @@
         _caloriesText = NutritionInput.TextForEditing(FoodItem.CaloriesPerServing);
         _proteinText = NutritionInput.TextForEditing(FoodItem.ProteinGramsPerServing);
         _costText = PriceInput.TextForEditing(FoodItem.CostPerServing);
+        _perPackageText = FoodItem.ServingsPerPackage is { } perPackage ? ServingsInput.Format(perPackage) : null;
         _tags = FoodItem.Tags;
     }
 
@@ -112,14 +117,16 @@
         var calories = NutritionInput.ParseCalories(_caloriesText);
         var protein = NutritionInput.ParseProtein(_proteinText);
         var cost = PriceInput.Parse(_costText);
-        if (!_form.IsValid || weight.Grams is null || calories.Amount is null || protein.Error is not null || cost.Error is not null)
+        var perPackage = ServingsInput.ParsePerPackage(_perPackageText);
+        if (!_form.IsValid || weight.Grams is null || calories.Amount is null || protein.Error is not null || cost.Error is not null
+            || perPackage.Error is not null)
         {
             return;
         }
 
         var details = new FoodItemDetails(
             _name ?? "", weight.Grams.Value, calories.Amount.Value,
-            protein.Amount, cost.Price, _tagEditor.TagsIncludingTyped());
+            protein.Amount, cost.Price, _tagEditor.TagsIncludingTyped(), perPackage.Servings);
 
         await RunAsync(async () =>
         {

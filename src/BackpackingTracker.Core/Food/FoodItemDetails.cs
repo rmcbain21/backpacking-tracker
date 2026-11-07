@@ -7,4 +7,5 @@ public sealed record FoodItemDetails(
     decimal CaloriesPerServing,
     decimal? ProteinGramsPerServing = null,
     decimal? CostPerServing = null,
-    IReadOnlyList<string>? Tags = null);
+    IReadOnlyList<string>? Tags = null,
+    decimal? ServingsPerPackage = null);

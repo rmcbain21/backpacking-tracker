@@ -17,6 +17,12 @@ public sealed record FoodItem : StoredRecord
     /// <summary>What one serving costs, if recorded.</summary>
     public decimal? CostPerServing { get; init; }
 
+    /// <summary>
+    /// How many servings come in a package, such as 2 for a two-serving pouch, if recorded. Amounts are still stored as
+    /// servings; this only lets them be entered and shown as packages, and rounds the shopping list up to whole packages.
+    /// </summary>
+    public decimal? ServingsPerPackage { get; init; }
+
     /// <summary>Free-form labels used to find food, such as "no-cook" or "breakfast".</summary>
     public IReadOnlyList<string> Tags { get; init; } = [];
 

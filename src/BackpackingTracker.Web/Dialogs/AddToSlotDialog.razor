@@ -41,7 +41,7 @@
                 <MudText Typo="Typo.subtitle2" Class="mt-2">Food Items</MudText>
                 @foreach (var item in foodItems)
                 {
-                    @PickRow(item.Name, $"{NutritionInput.Calories(item.CaloriesPerServing)} · {UnitFormat.Weight(item.ServingWeightGrams, UnitSystem)} a serving",
+                    @PickRow(item.Name, $"{NutritionInput.Calories(item.CaloriesPerServing)} · {UnitFormat.Weight(item.ServingWeightGrams, UnitSystem)} a serving{(item.ServingsPerPackage is { } perPackage ? $" · {ServingsInput.Format(perPackage)} a package" : "")}",
                              _inSlot.GetValueOrDefault(item.Id), () => AddFoodItemAsync(item))
                 }
             }

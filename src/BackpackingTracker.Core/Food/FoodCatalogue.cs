@@ -69,9 +69,16 @@ public sealed class FoodCatalogue
             throw new RuleViolationException("A cost can't be negative.");
         }
 
+        var perPackage = details.ServingsPerPackage is { } servings ? ServingsInput.Round(servings) : (decimal?)null;
+        if (perPackage <= 0)
+        {
+            throw new RuleViolationException("Servings per package must be more than zero.");
+        }
+
         return item with
         {
             Name = details.Name.Trim(),
+            ServingsPerPackage = perPackage,
             ServingWeightGrams = servingWeight,
             CaloriesPerServing = Math.Round(details.CaloriesPerServing, 0, MidpointRounding.AwayFromZero),
             ProteinGramsPerServing = details.ProteinGramsPerServing is { } protein ? Math.Round(protein, 1, MidpointRounding.AwayFromZero) : null,

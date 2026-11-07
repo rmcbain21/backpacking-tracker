@@ -6,8 +6,17 @@
 
 <MudDialog>
     <DialogContent>
-        <MudTextField @bind-Value="_quantityText" Label="@(Entry.FoodItemId is null ? "How many" : "Servings")" InputMode="@(InputMode.@decimal)"
-                      Immediate="true" Validation="@(new Func<string?, string?>(text => ServingsInput.Parse(text).Error))" Class="slot-quantity" />
+        @if (ServingsPerPackage is { } perPackage)
+        {
+            <MudToggleGroup T="bool" Value="_byPackage" ValueChanged="SwitchUnit" Color="Color.Primary" Size="Size.Small" Class="mb-1 amount-unit">
+                <MudToggleItem Value="false" Text="Servings" />
+                <MudToggleItem Value="true" Text="Packages" />
+            </MudToggleGroup>
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">@ServingsInput.Servings(perPackage) a package</MudText>
+        }
+        <MudTextField @bind-Value="_quantityText" Label="@(Entry.FoodItemId is null ? "How many" : _byPackage ? "Packages" : "Servings")" InputMode="@(InputMode.@decimal)"
+                      Immediate="true" Validation="@(new Func<string?, string?>(text => ServingsInput.Parse(text).Error))" Class="slot-quantity"
+                      HelperText="@AmountHelp" />
         @if (_placeholder is not null)
         {
             <PlaceholderEditor Fields="_placeholder" />
@@ -48,6 +57,11 @@
     [Parameter]
     public UnitSystem UnitSystem { get; set; }
 
+    /// <summary>The Food Item's servings per package, when recorded, so the amount can be typed in packages.</summary>
+    [Parameter]
+    public decimal? ServingsPerPackage { get; set; }
+
+    private bool _byPackage;
     private string? _quantityText;
     private PlaceholderFields? _placeholder;
     private string? _problem;
@@ -59,9 +73,31 @@
         _placeholder = Entry.Placeholder is { } placeholder ? new PlaceholderFields(UnitSystem, placeholder) : null;
     }
 
+    /// <summary>The typed amount in servings: packages × servings per package when typing packages.</summary>
+    private decimal? TypedServings =>
+        ServingsInput.Parse(_quantityText).Servings is { } typed
+            ? _byPackage && ServingsPerPackage is { } perPackage ? typed * perPackage : typed
+            : null;
+
+    /// <summary>"1.5 packages (3 servings)" under the field, once a Food Item with servings per package has an amount.</summary>
+    private string? AmountHelp => ServingsPerPackage is { } perPackage && TypedServings is { } servings
+        ? ServingsInput.Amount(servings, perPackage)
+        : null;
+
+    /// <summary>Switching unit shows the same amount in the other one.</summary>
+    private void SwitchUnit(bool byPackage)
+    {
+        if (byPackage != _byPackage && ServingsPerPackage is { } perPackage && ServingsInput.Parse(_quantityText).Servings is { } typed)
+        {
+            _quantityText = ServingsInput.Format(byPackage ? Math.Round(typed / perPackage, 2) : typed * perPackage);
+        }
+
+        _byPackage = byPackage;
+    }
+
     private Task SaveAsync()
     {
-        if (ServingsInput.Parse(_quantityText).Servings is not { } amount)
+        if (TypedServings is not { } amount)
         {
             return Task.CompletedTask;
         }
