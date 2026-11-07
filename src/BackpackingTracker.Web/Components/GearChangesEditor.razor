@@ -1,0 +1,179 @@
+@using BackpackingTracker.Core.Lists
+@using BackpackingTracker.Core.Trips
+@* A Resupply day's Gear Changes (idea 29): pick up gear, send gear home or change how many are carried. Each change saves
+   as it's made. Read-only on a Completed Trip. *@
+@inject AppCore App
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<div class="gear-changes mt-3">
+    <MudText Typo="Typo.subtitle2">Gear changes</MudText>
+    @if (_changes is null)
+    {
+        <MudProgressLinear Indeterminate="true" />
+    }
+    else
+    {
+        @if (_changes.Count == 0)
+        {
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">None. Pick up gear here, or send some home.</MudText>
+        }
+        @foreach (var view in _changes)
+        {
+            var change = view.Change;
+            <div class="d-flex align-center gap-1 gear-change-row">
+                <div class="flex-grow-1">
+                    <MudText Typo="Typo.body2">@GearChangeText.Short(view)</MudText>
+                    @if (view.Problem is not null)
+                    {
+                        <MudText Typo="Typo.caption" Color="Color.Warning" Class="gear-change-problem">@view.Problem. Not counted until fixed.</MudText>
+                    }
+                </div>
+                @if (!Locked)
+                {
+                    @if (change.Kind != GearChangeKind.Remove)
+                    {
+                        <MudIconButton Icon="@Icons.Material.Filled.Remove" Size="Size.Small" Disabled="change.Quantity <= 1"
+                                       aria-label="@($"Fewer {view.Name}")" OnClick="() => UpdateAsync(change, change.Quantity - 1, change.CarryMode)" />
+                        <MudIconButton Icon="@Icons.Material.Filled.Add" Size="Size.Small"
+                                       aria-label="@($"More {view.Name}")" OnClick="() => UpdateAsync(change, change.Quantity + 1, change.CarryMode)" />
+                    }
+                    @if (change.Kind == GearChangeKind.Add)
+                    {
+                        <MudButton Variant="Variant.Text" Size="Size.Small" EndIcon="@Icons.Material.Filled.ArrowDropDown"
+                                   aria-label="@($"Carry Mode: {change.CarryMode}")" OnClick="() => PickCarryModeAsync(change)">@change.CarryMode</MudButton>
+                    }
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" aria-label="@($"Remove the change to {view.Name}")"
+                                   OnClick="() => RunAsync(() => App.Trips.RemoveGearChangeAsync(TripId, Date, change.Id))" />
+                }
+            </div>
+        }
+        @if (!Locked)
+        {
+            <div class="d-flex flex-wrap gap-2 mt-1">
+                <MudButton Variant="Variant.Text" Size="Size.Small" StartIcon="@Icons.Material.Filled.AddCircleOutline"
+                           Class="pick-up-gear" OnClick="PickUpAsync">Pick up gear</MudButton>
+                <MudButton Variant="Variant.Text" Size="Size.Small" StartIcon="@Icons.Material.Filled.SwapVert"
+                           Class="send-home-gear" OnClick="SendHomeOrChangeAsync" Disabled="_before is null || _before.Count == 0">Send home or change…</MudButton>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public string TripId { get; set; } = "";
+
+    [Parameter, EditorRequired]
+    public DateOnly Date { get; set; }
+
+    /// <summary>The Trip is Completed, so its Gear Changes are locked.</summary>
+    [Parameter]
+    public bool Locked { get; set; }
+
+    private IReadOnlyList<GearChangeView>? _changes;
+
+    /// <summary>The gear carried just before this Resupply, to send home or change.</summary>
+    private IReadOnlyList<CarriedEntry>? _before;
+
+    /// <summary>The gear carried from this Resupply on, to mark what's picked up already.</summary>
+    private IReadOnlyList<CarriedEntry> _after = [];
+
+    private IReadOnlyList<Category> _categories = [];
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        var view = await App.Trips.GetTripAsync(TripId);
+        var carry = view?.MealPlan.FoodCarries.FirstOrDefault(c => !c.FromHome && c.FirstDate == Date);
+        _changes = carry?.Gear.Changes ?? [];
+        _after = carry?.Gear.Entries ?? [];
+        _before = view?.MealPlan.GearBefore(Date);
+        _categories = view?.Trip.PackingList.Categories ?? [];
+    }
+
+    private async Task PickUpAsync()
+    {
+        if (_categories.Count == 0)
+        {
+            Snackbar.Add("Add a Category to the Packing List first.", Severity.Warning);
+            return;
+        }
+
+        var parameters = new DialogParameters<AddGearDialog>
+        {
+            { d => d.Add, (gearItemId, categoryId) => App.Trips.AddGearPickUpAsync(TripId, Date, gearItemId, categoryId, 1, CarryMode.Base) },
+            { d => d.LoadEntries, LoadCarriedAsync },
+            { d => d.Categories, _categories },
+            { d => d.CategoryId, _categories[0].Id },
+        };
+        var options = new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Small };
+        var dialog = await DialogService.ShowAsync<AddGearDialog>("Pick up gear", parameters, options);
+        await dialog.Result;
+        await LoadAsync();
+    }
+
+    /// <summary>The gear carried from here on, shown as "On list" in the picker.</summary>
+    private async Task<IReadOnlyList<ListEntry>> LoadCarriedAsync()
+    {
+        await LoadAsync();
+        return _after.Select(entry => new ListEntry { Id = entry.GearItemId, GearItemId = entry.GearItemId, Quantity = entry.Quantity }).ToList();
+    }
+
+    /// <summary>Picks gear carried before this Resupply, then whether to send it home or carry a different number.</summary>
+    private async Task SendHomeOrChangeAsync()
+    {
+        var choices = (_before ?? []).Select(entry => ($"{entry.Name}{(entry.Quantity == 1 ? "" : $" ×{entry.Quantity}")}", entry)).ToList();
+        if (await PickAsync("Send home or change", choices) is not (true, { } entry))
+        {
+            return;
+        }
+
+        var actions = new List<(string, int)> { ($"Send {entry.Name} home", 0) };
+        actions.AddRange(Enumerable.Range(1, entry.Quantity + 3).Where(n => n != entry.Quantity).Select(n => ($"Carry ×{n}", n)));
+        if (await PickAsync(entry.Name, actions) is not (true, var quantity))
+        {
+            return;
+        }
+
+        await RunAsync(() => quantity == 0
+            ? App.Trips.SendGearHomeAsync(TripId, Date, entry.GearItemId)
+            : App.Trips.ChangeGearQuantityAsync(TripId, Date, entry.GearItemId, quantity));
+    }
+
+    private async Task PickCarryModeAsync(GearChange change)
+    {
+        var choices = Enum.GetValues<CarryMode>().Select(mode => (mode.ToString(), mode)).ToList();
+        if (await PickAsync("Carry Mode", choices) is (true, var mode) && mode != change.CarryMode)
+        {
+            await UpdateAsync(change, change.Quantity, mode);
+        }
+    }
+
+    private Task UpdateAsync(GearChange change, int quantity, CarryMode carryMode) =>
+        RunAsync(() => App.Trips.UpdateGearChangeAsync(TripId, Date, change.Id, quantity, carryMode));
+
+    /// <summary>Shows a picker; Picked is false when cancelled.</summary>
+    private async Task<(bool Picked, T? Value)> PickAsync<T>(string title, IReadOnlyList<(string, T)> choices)
+    {
+        var parameters = new DialogParameters<PickDialog<T>> { { d => d.Choices, choices } };
+        var options = new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.ExtraSmall };
+        var result = await (await DialogService.ShowAsync<PickDialog<T>>(title, parameters, options)).Result;
+        return result is { Canceled: false, Data: T picked } ? (true, picked) : (false, default);
+    }
+
+    private async Task RunAsync(Func<Task> change)
+    {
+        try
+        {
+            await change();
+        }
+        catch (RuleViolationException ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Warning);
+        }
+
+        await LoadAsync();
+    }
+}

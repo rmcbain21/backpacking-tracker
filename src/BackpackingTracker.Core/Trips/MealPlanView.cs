@@ -1,4 +1,5 @@
 using BackpackingTracker.Core.Food;
+using BackpackingTracker.Core.Gear;
 
 namespace BackpackingTracker.Core.Trips;
 
@@ -76,6 +77,24 @@ public sealed record MealPlanView(IReadOnlyList<DayMealPlan> Days, IReadOnlyList
     }
 
     public bool IsEmpty => Days.All(day => day.Day.SlotEntries.Count == 0);
+
+    /// <summary>The same Meal Plan with each Food Carry's gear worked out from the Packing List and Gear Changes.</summary>
+    /// <param name="items">The Gear Items the Packing List and Gear Changes use, by id.</param>
+    internal MealPlanView WithGear(Trip trip, IReadOnlyDictionary<string, GearItem> items)
+    {
+        var gear = CarriedGear.For(trip, FoodCarries, items);
+        return this with { FoodCarries = FoodCarries.Select((carry, i) => carry with { Gear = gear[i] }).ToList() };
+    }
+
+    /// <summary>
+    /// The gear carried just before the Resupply on that date (the Food Carry before its own), to pick from for a Remove
+    /// or ChangeQuantity there; null when the date doesn't start a Food Carry after a Resupply.
+    /// </summary>
+    public IReadOnlyList<CarriedEntry>? GearBefore(DateOnly resupplyDate)
+    {
+        var index = FoodCarries.ToList().FindIndex(carry => !carry.FromHome && carry.FirstDate == resupplyDate);
+        return index < 1 ? null : FoodCarries[index - 1].Gear.Entries;
+    }
 
     /// <param name="meals">The Meals the Trip's slot entries use, by id; a missing one was deleted on another device.</param>
     /// <param name="foodItems">The Food Items they use, likewise.</param>

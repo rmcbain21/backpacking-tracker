@@ -4,6 +4,7 @@
    Trip has started, whether it was Skipped.
    Distances and elevation are typed in the chosen units. A refusal is shown here so nothing typed is lost. *@
 @inject AppCore App
+@inject IDialogService DialogService
 
 <MudDialog>
     <DialogContent>
@@ -24,6 +25,14 @@
                 {
                     <MudTextField @bind-Value="_resupplyPlace" Label="Resupply place (optional)" Class="day-resupply-place"
                                   Disabled="Locked" HelperText="Blank shows the day's start." />
+                    @if (Day.Resupply)
+                    {
+                        <GearChangesEditor TripId="@TripId" Date="Day.Date" Locked="Locked" />
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">Save, then open the day again to add gear changes.</MudText>
+                    }
                 }
             }
             <MudTextField @bind-Value="_start" Label="Start (optional)" Class="day-start" />
@@ -122,6 +131,11 @@
             return;
         }
 
+        if (!Locked && Day.Resupply && !_resupply && !await ConfirmDroppingGearChangesAsync())
+        {
+            return;
+        }
+
         try
         {
             await App.Trips.UpdateDayAsync(TripId, Day.Date, new TripDayDetails(
@@ -143,5 +157,22 @@
         {
             _refusal = ex.Message;
         }
+    }
+
+    /// <summary>Turning off a Resupply removes its Gear Changes, so with any, it asks first. True to go ahead.</summary>
+    private async Task<bool> ConfirmDroppingGearChangesAsync()
+    {
+        var day = (await App.Trips.GetTripAsync(TripId))?.Trip.Days.FirstOrDefault(d => d.Date == Day.Date);
+        var count = day?.GearChanges.Count ?? 0;
+        if (count == 0)
+        {
+            return true;
+        }
+
+        var confirmed = await DialogService.ShowMessageBoxAsync(
+            "Turn off Resupply",
+            $"This Resupply has {count} gear change{(count == 1 ? "" : "s")}. Turning it off removes {(count == 1 ? "it" : "them")}.",
+            yesText: "Turn off", cancelText: "Cancel");
+        return confirmed == true;
     }
 }

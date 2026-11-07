@@ -293,11 +293,14 @@ else if (_view is not null)
             <MudText Typo="Typo.body2" Class="food-left">
                 Food left: @UnitFormat.Weight(left, _unitSystem)@(later is null ? "" : $" · {Plural(daysTo, "day")} to {FoodCarryName(later)}")
             </MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary current-base">
+                Base Weight: @UnitFormat.Weight(current.Gear.BaseGrams, _unitSystem)
+            </MudText>
             @if (next is not null)
             {
                 <MudText Typo="Typo.body2" Class="mud-text-secondary next-resupply">
                     @(next.FirstDate == view.Today
-                        ? $"Resupply today: {FoodCarryName(next)} · {next.BoughtCount} of {next.LineCount} bought"
+                        ? $"Resupply today: {FoodCarryName(next)} · {next.BoughtCount} of {next.LineCount} {(next.Gear.Changes.Count == 0 ? "" : "food ")}bought{(next.Gear.Changes.Count == 0 ? "" : $" · {next.Gear.DoneCount} of {next.Gear.Changes.Count} gear changes done")}"
                         : $"Next resupply: {FoodCarryName(next)}, day {next.FirstDayNumber} (in {Plural(daysTo, "day")})")
                 </MudText>
             }
@@ -380,6 +383,38 @@ else if (_view is not null)
                 </MudPaper>
             }
         }
+
+        @GearChangeSummaries()
+    };
+
+    /// <summary>The Food Carries starting at a Resupply with Gear Changes.</summary>
+    private IEnumerable<FoodCarry> CarriesWithGearChanges => _view!.MealPlan.FoodCarries.Where(carry => carry.Gear.Changes.Count > 0);
+
+    /// <summary>
+    /// After the trailhead Packing List, one block per Resupply with Gear Changes: "At Kennedy Meadows (day 5):
+    /// + Bear canister · − Puffy", flagging any that no longer apply. Tapping one opens that day.
+    /// </summary>
+    private RenderFragment GearChangeSummaries() => __builder =>
+    {
+        @foreach (var carry in CarriesWithGearChanges)
+        {
+            <MudPaper Class="pa-3 mt-4 pick-row gear-change-summary" role="button" tabindex="0"
+                      aria-label="@($"Gear changes at {FoodCarryName(carry)}")"
+                      @onclick="() => EditDayAsync(carry.FirstDay, carry.FirstDayNumber)">
+                <div class="d-flex align-center gap-2">
+                    <MudIcon Icon="@Icons.Material.Filled.SwapVert" Size="Size.Small" Color="Color.Primary" />
+                    <MudText Typo="Typo.subtitle2" HtmlTag="h3" Class="flex-grow-1">At @FoodCarryName(carry) (day @carry.FirstDayNumber)</MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary text-nowrap">Base @UnitFormat.Weight(carry.Gear.BaseGrams, _unitSystem)</MudText>
+                </div>
+                <MudText Typo="Typo.body2" Class="gear-change-line">
+                    @string.Join(" · ", carry.Gear.Changes.Select(GearChangeText.Short))
+                </MudText>
+                @foreach (var problem in carry.Gear.Changes.Where(change => !change.Applies))
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Warning" Class="d-block gear-change-problem">@problem.Problem. Not counted until fixed.</MudText>
+                }
+            </MudPaper>
+        }
     };
 
     /// <summary>
@@ -427,6 +462,35 @@ else if (_view is not null)
                         {
                             <MudChip T="string" Size="Size.Small" Class="ml-2">Worn</MudChip>
                         }
+                    </div>
+                    <MudDivider />
+                }
+            </MudPaper>
+        }
+
+        @foreach (var carry in CarriesWithGearChanges)
+        {
+            <MudText Typo="Typo.subtitle2" HtmlTag="h3" Class="mt-4 mb-1 pl-1 gear-change-group">
+                @FoodCarryName(carry): pick up / send home · @carry.Gear.DoneCount of @carry.Gear.Changes.Count done
+            </MudText>
+            <MudPaper>
+                @foreach (var view in carry.Gear.Changes)
+                {
+                    var change = view.Change;
+                    var label = GearChangeText.Task(view);
+                    <div class="d-flex align-center px-2 checklist-row gear-change-check @(Completed ? "" : "pick-row") @(change.Done ? "packed" : "")"
+                         role="checkbox" aria-checked="@(change.Done ? "true" : "false")" aria-readonly="@(Completed ? "true" : "false")"
+                         tabindex="@(Completed ? -1 : 0)" aria-label="@label"
+                         @onclick="() => Completed ? Task.CompletedTask : TryAsync(() => App.Trips.SetGearChangeDoneAsync(TripId, carry.FirstDate, change.Id, !change.Done))">
+                        <MudIcon Icon="@(change.Done ? Icons.Material.Filled.CheckBox : Icons.Material.Filled.CheckBoxOutlineBlank)"
+                                 Color="@(change.Done ? Color.Primary : Color.Default)" Class="mr-3" />
+                        <div class="flex-grow-1">
+                            <MudText Class="checklist-name">@label</MudText>
+                            @if (view.Problem is not null)
+                            {
+                                <MudText Typo="Typo.caption" Color="Color.Warning">@view.Problem</MudText>
+                            }
+                        </div>
                     </div>
                     <MudDivider />
                 }
@@ -672,7 +736,7 @@ else if (_view is not null)
                     <div class="flex-grow-1">
                         <MudText Typo="Typo.subtitle2" HtmlTag="h3">@title</MudText>
                         <MudText Typo="Typo.body2" Class="mud-text-secondary food-carry-totals">
-                            @UnitFormat.Weight(carry.FoodGrams, _unitSystem) food@(Without(carry.WithoutWeight, "a weight")) · @NutritionInput.Calories(carry.Calories)@Without(carry.WithoutCalories, "calories")@(carry.LineCount == 0 ? "" : $" · {carry.BoughtCount} of {carry.LineCount} bought")
+                            @UnitFormat.Weight(carry.FoodGrams, _unitSystem) food@(Without(carry.WithoutWeight, "a weight")) · @UnitFormat.Weight(carry.PackOutGrams, _unitSystem) pack · @NutritionInput.Calories(carry.Calories)@Without(carry.WithoutCalories, "calories")@(carry.LineCount == 0 ? "" : $" · {carry.BoughtCount} of {carry.LineCount} bought")
                         </MudText>
                     </div>
                     <MudIcon Icon="@(open ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ExpandMore)" />
@@ -829,6 +893,11 @@ else if (_view is not null)
             </MudText>
             @StatLine(("Starting Pack Weight", "stat-starting", UnitFormat.Weight(stats.StartingPackGrams, _unitSystem)))
             @StatLine(("Base Weight", "stat-base", UnitFormat.Weight(stats.BaseGrams, _unitSystem)))
+            @if (stats.HeaviestPack is { } heaviest)
+            {
+                @StatLine(("Heaviest pack", "stat-heaviest",
+                    $"{UnitFormat.Weight(heaviest.PackOutGrams, _unitSystem)} {(heaviest.FromHome ? "from the trailhead" : $"out of {FoodCarryName(heaviest)}")}"))
+            }
         </MudPaper>
 
         <MudPaper Class="pa-3 mb-4 food-stats">

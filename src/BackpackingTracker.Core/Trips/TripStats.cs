@@ -12,6 +12,7 @@ namespace BackpackingTracker.Core.Trips;
 /// With an Expected Distance there is progress too, and on an Open-ended Trip, once enough is hiked, a finish estimate.
 /// Once anything is ticked as eaten, the food eaten against what was planned.
 /// </summary>
+/// <param name="HeaviestPack">With any Resupply, the Food Carry setting out with the heaviest pack (the first on a tie).</param>
 /// <param name="Days">Days hiked: every Trip Day not Skipped.</param>
 /// <param name="Nights">Nights out over the days hiked: one fewer than the days, never below zero.</param>
 /// <param name="PlannedDays">Every Trip Day, Skipped or not; the same as <paramref name="Days"/> when none is Skipped.</param>
@@ -30,7 +31,8 @@ public sealed record TripStats(
     TripProgress? Progress,
     FinishEstimate? FinishEstimate,
     FoodEaten? Eaten,
-    LongestFoodCarry? LongestFoodCarry)
+    LongestFoodCarry? LongestFoodCarry,
+    FoodCarry? HeaviestPack)
 {
     /// <summary>The hiked days with an actual distance needed before an Open-ended Trip's finish is estimated.</summary>
     internal const int DaysForFinishEstimate = 3;
@@ -63,7 +65,8 @@ public sealed record TripStats(
             progress,
             trip.OpenEnded && progress is not null ? EstimateFinish(trip, hiked, progress) : null,
             EatenFor(trip, mealPlan, today),
-            LongestFoodCarryOf(mealPlan));
+            LongestFoodCarryOf(mealPlan),
+            mealPlan.Resupplies == 0 ? null : mealPlan.FoodCarries.MaxBy(carry => carry.PackOutGrams));
     }
 
     /// <summary>With any Resupply, the Food Carry with the most days (the heavier one on a tie); otherwise null.</summary>

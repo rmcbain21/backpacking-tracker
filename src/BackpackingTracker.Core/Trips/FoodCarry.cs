@@ -32,6 +32,15 @@ public sealed record FoodCarry(
 
     public decimal Calories => Days.Sum(day => day.Calories);
 
+    /// <summary>The gear carried in this Food Carry, with its Resupply's Gear Changes (idea 29).</summary>
+    public CarriedGear Gear { get; init; } = CarriedGear.None;
+
+    /// <summary>
+    /// The pack weight setting out: this Food Carry's gear (base and consumable entries), its food and water carried.
+    /// The first Food Carry's is the Starting Pack Weight.
+    /// </summary>
+    public decimal PackOutGrams => Gear.BaseGrams + Gear.ConsumableGrams + Gear.WaterGrams + FoodGrams;
+
     /// <summary>The Placeholders without an estimated weight, counted as zero in <see cref="FoodGrams"/>.</summary>
     public int WithoutWeight => Days.Sum(day => day.WithoutWeight);
 

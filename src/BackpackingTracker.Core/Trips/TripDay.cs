@@ -55,6 +55,9 @@ public sealed record TripDay
     /// </summary>
     public IReadOnlyList<BoughtPlaceholder> BoughtPlaceholders { get; init; } = [];
 
+    /// <summary>On a Resupply day: gear picked up, sent home or changed in quantity there, in the order made.</summary>
+    public IReadOnlyList<GearChange> GearChanges { get; init; } = [];
+
     /// <summary>The day's Meal Plan: what's in its Breakfast, Lunch, Dinner and Snacks slots, in the order added.</summary>
     public IReadOnlyList<SlotEntry> SlotEntries { get; init; } = [];
 
@@ -62,7 +65,7 @@ public sealed record TripDay
     public bool HasContent() =>
         Start is not null || End is not null || Campsite is not null ||
         PlannedDistanceMetres is not null || ActualDistanceMetres is not null || ElevationGainMetres is not null ||
-        JournalNotes is not null || SlotEntries.Count > 0 || Skipped || Resupply;
+        JournalNotes is not null || SlotEntries.Count > 0 || Skipped || Resupply || GearChanges.Count > 0;
 
     /// <summary>Compares the slot entries and bought ticks one by one, so two days with the same plan are equal.</summary>
     public bool Equals(TripDay? other) =>
@@ -72,7 +75,8 @@ public sealed record TripDay
         (Resupply, ResupplyPlace) == (other.Resupply, other.ResupplyPlace) &&
         SlotEntries.SequenceEqual(other.SlotEntries) &&
         Bought.SequenceEqual(other.Bought) &&
-        BoughtPlaceholders.SequenceEqual(other.BoughtPlaceholders);
+        BoughtPlaceholders.SequenceEqual(other.BoughtPlaceholders) &&
+        GearChanges.SequenceEqual(other.GearChanges);
 
     public override int GetHashCode() => HashCode.Combine(Date, Start, End, Campsite, JournalNotes, SlotEntries.Count);
 }

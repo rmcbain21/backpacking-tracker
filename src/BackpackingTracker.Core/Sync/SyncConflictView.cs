@@ -190,6 +190,12 @@ internal sealed class ConflictDescriber
         lines.Put($"{day} notes", tripDay.JournalNotes);
         lines.Put($"{day} skipped", YesNo(tripDay.Skipped));
         lines.Put($"{day} resupply", tripDay.Resupply ? tripDay.ResupplyPlace ?? "Yes" : "No");
+        lines.Put($"{day} gear changes", string.Join(", ", tripDay.GearChanges.Select(change => change.Kind switch
+        {
+            GearChangeKind.Add => $"+ {NameFor(change.GearItemId)} ×{change.Quantity}",
+            GearChangeKind.Remove => $"− {NameFor(change.GearItemId)}",
+            _ => $"{NameFor(change.GearItemId)} → ×{change.Quantity}",
+        } + (change.Done ? " (done)" : ""))));
         foreach (var slot in Enum.GetValues<MealSlot>())
         {
             var food = tripDay.SlotEntries

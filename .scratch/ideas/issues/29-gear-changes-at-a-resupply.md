@@ -1,6 +1,6 @@
 # 29: Gear changes at a Resupply
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Idea:** On a long Trip, change gear partway through: pick up a bear canister for the Sierra, send the puffy home in Oregon. The natural place is a Resupply day (27): "at Kennedy Meadows: + bear canister, − puffy", so the pack weight for each Food Carry reflects the gear carried then.
 
@@ -43,3 +43,11 @@
 - Refresh from Gear List (15) and "Save as Gear List" work on the trailhead Packing List only.
 - Trip Review (23): gear added by a Gear Change appears in "Gear used".
 - Fuel: a Gear Change can change how much is carried, but the shopping list stays food only.
+
+*Implemented (2026-11-06)*
+- Core: `GearChange` on `TripDay.GearChanges` (kind Add / Remove / ChangeQuantity, Gear Item, quantity, Carry Mode and Category for an Add, done tick, frozen weight for an Add once Completed). **One change per Gear Item at a Resupply**: picking up the same item again adds to its quantity (and unticks it); a send-home replaces a quantity change of the same item and vice versa; mixing an Add with either is refused. Only gear carried just before the Resupply can be sent home or changed, and a ChangeQuantity to the same number is refused. `TripPlanner.AddGearPickUpAsync`, `SendGearHomeAsync`, `ChangeGearQuantityAsync`, `UpdateGearChangeAsync` (a different quantity unticks), `RemoveGearChangeAsync`, `SetGearChangeDoneAsync`; all refused off a Resupply day and on a Completed Trip.
+- `CarriedGear` on each `FoodCarry` (`FoodCarry.Gear`): the Packing List with each Resupply's changes folded in, in order. An Add of gear already carried adds to it; a Remove or ChangeQuantity of gear no longer carried keeps a `Problem` ("Puffy isn't carried by day 15") and is skipped in weights. `FoodCarry.PackOutGrams` = base + consumable gear + food + water carried (the first Food Carry's equals Starting Pack Weight, which is unchanged). `MealPlanView.GearBefore(date)` gives the gear to pick from. `TripStats.HeaviestPack` (null without a Resupply).
+- Hooks: Mark Completed freezes picked-up gear's weight, Reopen clears it; turning off a Resupply drops its Gear Changes (the dialog warns first); Gear Item deletion counts Gear Changes as uses; Merge (30) repoints them (keeping the first if two land on one Gear Item at a Resupply); the sync conflict view has a "Day N gear changes" line; `TripDay.HasContent` counts them.
+- Web: the Trip Day dialog on a saved Resupply day has a **Gear changes** section (`GearChangesEditor`, saving as you go): Pick up gear (the gear picker, into a Packing List Category; Carry Mode and −/+ on the row), Send home or change… (pick from gear carried by then, then "Send … home" or "Carry ×n"), delete, and flagged problems. Packing List tab: one block per Resupply with changes, "At Kennedy Meadows (day 4) · Base 4 lb 3.0 oz · + Bear canister · − Puffy", opening that day. Checklist tab: "Kennedy Meadows: pick up / send home · 1 of 2 done" with tap-to-tick rows ("Pick up Bear canister", "Send home Puffy", "Fuel canister ×1 → ×2"). Today tab: "Base Weight: …" under Food left, and "Resupply today: … · 0 of 1 food bought · 1 of 2 gear changes done". Shopping headings add "… pack". Stats: "Heaviest pack: 8 lb 8.6 oz out of Lone Pine".
+- Not done here: Trip Review (23) and Refresh from Gear List (15) aren't built yet; whichever lands second ties in ("Gear used" includes picked-up gear; refresh works on the trailhead list only). Hiking Partners (24) don't get Gear Changes.
+- Tests: `GearChangeTests` (14). Checked in headless Chromium at 390 px with a seeded 7-day Trip, two Resupplies and changes: Today lines, Packing List summary, checklist ticks, Send home or change → Carry ×2 and Pick up through the dialog, Shopping pack weights, Stats heaviest pack; no console errors.

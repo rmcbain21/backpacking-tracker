@@ -107,18 +107,27 @@ public sealed class TripPlanner : IGearItemReferences, IFoodItemReferences, IMea
             throw new RuleViolationException("This Trip is already Completed.");
         }
 
-        var items = await _gear.GetGearItemsAsync(trip.PackingList.Entries.Select(entry => entry.GearItemId));
+        var items = await _gear.GetGearItemsAsync(GearItemIds([trip]));
         var (meals, foodItems) = await LookUpFoodAsync([trip]);
         await SaveAsync(trip with
         {
             Status = TripStatus.Completed,
             OpenEnded = false,
             PackingList = trip.PackingList.Freeze(items),
-            // A slot entry whose Meal or Food Item is gone is left unfrozen, so it still counts for nothing. A
-            // Placeholder is left as it is: its estimates are already fixed numbers.
-            Days = WithSlotEntries(trip, entry => entry.IsPlaceholder
-                ? entry
-                : entry with { Frozen = MealPlanView.CurrentFigures(entry, meals, foodItems) }),
+            Days = trip.Days.Select(day => day with
+            {
+                // A slot entry whose Meal or Food Item is gone is left unfrozen, so it still counts for nothing. A
+                // Placeholder is left as it is: its estimates are already fixed numbers.
+                SlotEntries = day.SlotEntries
+                    .Select(entry => entry.IsPlaceholder ? entry : entry with { Frozen = MealPlanView.CurrentFigures(entry, meals, foodItems) })
+                    .ToList(),
+                // Gear picked up at a Resupply freezes like the Packing List; a gone Gear Item stays unfrozen.
+                GearChanges = day.GearChanges
+                    .Select(change => change.Kind == GearChangeKind.Add
+                        ? change with { FrozenWeightGrams = items.GetValueOrDefault(change.GearItemId)?.WeightGrams }
+                        : change)
+                    .ToList(),
+            }).ToList(),
         });
     }
 
@@ -138,12 +147,18 @@ public sealed class TripPlanner : IGearItemReferences, IFoodItemReferences, IMea
         {
             Status = TripStatus.Planned,
             PackingList = trip.PackingList.Unfreeze(),
-            Days = WithSlotEntries(trip, entry => entry with { Frozen = null }),
+            Days = trip.Days.Select(day => day with
+            {
+                SlotEntries = day.SlotEntries.Select(entry => entry with { Frozen = null }).ToList(),
+                GearChanges = day.GearChanges.Select(change => change with { FrozenWeightGrams = null }).ToList(),
+            }).ToList(),
         });
     }
 
-    private static IReadOnlyList<TripDay> WithSlotEntries(Trip trip, Func<SlotEntry, SlotEntry> change) =>
-        trip.Days.Select(day => day with { SlotEntries = day.SlotEntries.Select(change).ToList() }).ToList();
+    /// <summary>The Gear Items the Trips' Packing Lists and Gear Changes use.</summary>
+    private static IEnumerable<string> GearItemIds(IEnumerable<Trip> trips) =>
+        trips.SelectMany(trip => trip.PackingList.Entries.Select(entry => entry.GearItemId)
+            .Concat(trip.Days.SelectMany(day => day.GearChanges).Select(change => change.GearItemId)));
 
     /// <summary>
     /// A new Gear List with copies of the Packing List's Categories and entries (Gear Item, quantity and Carry
@@ -613,7 +628,7 @@ public sealed class TripPlanner : IGearItemReferences, IFoodItemReferences, IMea
 
         await ChangeDayAsync(tripId, date, day => resupply
             ? day with { Resupply = true, ResupplyPlace = Trimmed(place) }
-            : day with { Resupply = false, ResupplyPlace = null, Bought = [], BoughtPlaceholders = [] });
+            : day with { Resupply = false, ResupplyPlace = null, Bought = [], BoughtPlaceholders = [], GearChanges = [] });
     }
 
     /// <summary>
@@ -655,6 +670,180 @@ public sealed class TripPlanner : IGearItemReferences, IFoodItemReferences, IMea
     {
         await GetFoodCarryAsync(tripId, foodCarryStart);
         await ChangeDayAsync(tripId, foodCarryStart, day => day with { Bought = [], BoughtPlaceholders = [] });
+    }
+
+    // ----- Gear Changes at a Resupply -----
+
+    /// <summary>
+    /// Picks up a Gear Item at the Resupply on that date: quantity (1 unless given), Carry Mode and one of the Packing
+    /// List's Categories. Picking up the same Gear Item there again adds to its quantity (and unticks it). Retired gear
+    /// can't be picked up, and a Gear Item already sent home or changed at this Resupply can't be added too.
+    /// </summary>
+    public async Task<GearChange> AddGearPickUpAsync(
+        string tripId, DateOnly date, string gearItemId, string categoryId, int quantity = 1, CarryMode carryMode = CarryMode.Base)
+    {
+        CheckGearQuantity(quantity);
+        CheckCarryMode(carryMode);
+        var item = await _gear.GetGearItemAsync(gearItemId) ?? throw new RuleViolationException("That Gear Item no longer exists.");
+        if (item.Retired)
+        {
+            throw new RuleViolationException($"{item.Name} is Retired. Un-retire it to pick it up at a Resupply.");
+        }
+
+        var trip = await GetPlannedTripAsync(tripId, "its Gear Changes");
+        if (trip.PackingList.Categories.All(category => category.Id != categoryId))
+        {
+            throw new RuleViolationException("Choose a Category on the Packing List.");
+        }
+
+        GearChange saved = new()
+        {
+            Id = Guid.NewGuid().ToString(), Kind = GearChangeKind.Add, GearItemId = gearItemId,
+            Quantity = quantity, CarryMode = carryMode, CategoryId = categoryId,
+        };
+        await ChangeResupplyDayAsync(tripId, date, day =>
+        {
+            var existing = day.GearChanges.FirstOrDefault(change => change.GearItemId == gearItemId);
+            if (existing is null)
+            {
+                return day with { GearChanges = [.. day.GearChanges, saved] };
+            }
+
+            if (existing.Kind != GearChangeKind.Add)
+            {
+                throw new RuleViolationException($"{item.Name} already has a change at this Resupply.");
+            }
+
+            saved = existing with { Quantity = existing.Quantity + quantity, Done = false };
+            return day with { GearChanges = day.GearChanges.Select(change => change.Id == existing.Id ? saved : change).ToList() };
+        });
+        return saved;
+    }
+
+    /// <summary>
+    /// Sends a Gear Item home at the Resupply on that date. It must be carried just before the Resupply; it replaces a
+    /// quantity change of the same Gear Item there.
+    /// </summary>
+    public Task<GearChange> SendGearHomeAsync(string tripId, DateOnly date, string gearItemId) =>
+        SetCarriedGearChangeAsync(tripId, date, gearItemId, GearChangeKind.Remove, 0);
+
+    /// <summary>
+    /// Changes how many of a Gear Item are carried from the Resupply on that date, such as Fuel canister ×1 → ×2. It must
+    /// be carried just before the Resupply, and the quantity must differ from that; it replaces a send-home of the same
+    /// Gear Item there.
+    /// </summary>
+    public Task<GearChange> ChangeGearQuantityAsync(string tripId, DateOnly date, string gearItemId, int quantity)
+    {
+        CheckGearQuantity(quantity);
+        return SetCarriedGearChangeAsync(tripId, date, gearItemId, GearChangeKind.ChangeQuantity, quantity);
+    }
+
+    private async Task<GearChange> SetCarriedGearChangeAsync(string tripId, DateOnly date, string gearItemId, GearChangeKind kind, int quantity)
+    {
+        await GetPlannedTripAsync(tripId, "its Gear Changes");
+        var view = (await GetTripAsync(tripId))!;
+        var before = view.MealPlan.GearBefore(date) ?? throw new RuleViolationException("Gear can only change at a Resupply.");
+        var carried = before.FirstOrDefault(entry => entry.GearItemId == gearItemId)
+            ?? throw new RuleViolationException("That gear isn't carried by then.");
+        if (kind == GearChangeKind.ChangeQuantity && quantity == carried.Quantity)
+        {
+            throw new RuleViolationException($"{carried.Name} is already carried ×{quantity}.");
+        }
+
+        GearChange saved = new() { Id = Guid.NewGuid().ToString(), Kind = kind, GearItemId = gearItemId, Quantity = quantity };
+        await ChangeResupplyDayAsync(tripId, date, day =>
+        {
+            var existing = day.GearChanges.FirstOrDefault(change => change.GearItemId == gearItemId);
+            if (existing is null)
+            {
+                return day with { GearChanges = [.. day.GearChanges, saved] };
+            }
+
+            if (existing.Kind == GearChangeKind.Add)
+            {
+                throw new RuleViolationException($"{carried.Name} is picked up at this Resupply. Change that instead.");
+            }
+
+            saved = saved with { Id = existing.Id };
+            return day with { GearChanges = day.GearChanges.Select(change => change.Id == existing.Id ? saved : change).ToList() };
+        });
+        return saved;
+    }
+
+    /// <summary>
+    /// Changes a pick-up's quantity and Carry Mode, or a quantity change's quantity (its Carry Mode is ignored). A
+    /// different quantity unticks it. A send-home has nothing to change.
+    /// </summary>
+    public async Task UpdateGearChangeAsync(string tripId, DateOnly date, string gearChangeId, int quantity, CarryMode carryMode)
+    {
+        CheckGearQuantity(quantity);
+        CheckCarryMode(carryMode);
+        await ChangeResupplyDayAsync(tripId, date, day =>
+        {
+            var change = FindGearChange(day, gearChangeId);
+            var changed = change.Kind switch
+            {
+                GearChangeKind.Add => change with { Quantity = quantity, CarryMode = carryMode },
+                GearChangeKind.ChangeQuantity => change with { Quantity = quantity },
+                _ => throw new RuleViolationException("Sending gear home has no quantity to change."),
+            };
+            changed = changed with { Done = change.Done && changed.Quantity == change.Quantity };
+            return day with { GearChanges = day.GearChanges.Select(c => c.Id == gearChangeId ? changed : c).ToList() };
+        });
+    }
+
+    public async Task RemoveGearChangeAsync(string tripId, DateOnly date, string gearChangeId) =>
+        await ChangeResupplyDayAsync(tripId, date, day =>
+        {
+            FindGearChange(day, gearChangeId);
+            return day with { GearChanges = day.GearChanges.Where(change => change.Id != gearChangeId).ToList() };
+        });
+
+    /// <summary>Ticks a Gear Change as done (picked up, sent home or changed) on the checklist, or unticks it.</summary>
+    public async Task SetGearChangeDoneAsync(string tripId, DateOnly date, string gearChangeId, bool done) =>
+        await ChangeResupplyDayAsync(tripId, date, day =>
+        {
+            FindGearChange(day, gearChangeId);
+            return day with { GearChanges = day.GearChanges.Select(change => change.Id == gearChangeId ? change with { Done = done } : change).ToList() };
+        });
+
+    /// <summary>Changes a Resupply day's Gear Changes; refused on a Completed Trip, or on a day that isn't a Resupply.</summary>
+    private async Task ChangeResupplyDayAsync(string tripId, DateOnly date, Func<TripDay, TripDay> change)
+    {
+        var trip = await GetPlannedTripAsync(tripId, "its Gear Changes");
+        var index = trip.Days.ToList().FindIndex(day => day.Date == date);
+        if (index < 0)
+        {
+            throw new RuleViolationException("That day is no longer part of the Trip.");
+        }
+
+        if (!trip.Days[index].Resupply || index == 0)
+        {
+            throw new RuleViolationException("Gear can only change at a Resupply.");
+        }
+
+        var changed = change(trip.Days[index]);
+        await SaveAsync(trip with { Days = trip.Days.Select((d, i) => i == index ? changed : d).ToList() });
+    }
+
+    private static GearChange FindGearChange(TripDay day, string gearChangeId) =>
+        day.GearChanges.SingleOrDefault(change => change.Id == gearChangeId)
+            ?? throw new RuleViolationException("That Gear Change is no longer there.");
+
+    private static void CheckGearQuantity(int quantity)
+    {
+        if (quantity < 1)
+        {
+            throw new RuleViolationException("Quantity must be 1 or more.");
+        }
+    }
+
+    private static void CheckCarryMode(CarryMode carryMode)
+    {
+        if (!Enum.IsDefined(carryMode))
+        {
+            throw new RuleViolationException("Choose base, worn or consumable.");
+        }
     }
 
     private async Task<(TripView View, FoodCarry Carry)> GetFoodCarryAsync(string tripId, DateOnly foodCarryStart)
@@ -845,12 +1034,12 @@ public sealed class TripPlanner : IGearItemReferences, IFoodItemReferences, IMea
     /// <summary>The Trips as views, looking up the Gear Items, Meals and Food Items they use once for all of them.</summary>
     private async Task<IReadOnlyList<TripView>> ViewAsync(IReadOnlyList<Trip> trips)
     {
-        var items = await _gear.GetGearItemsAsync(trips.SelectMany(trip => trip.PackingList.Entries).Select(entry => entry.GearItemId));
+        var items = await _gear.GetGearItemsAsync(GearItemIds(trips));
         var (meals, foodItems) = await LookUpFoodAsync(trips);
 
         return trips.Select(trip =>
         {
-            var mealPlan = MealPlanView.For(trip, meals, foodItems);
+            var mealPlan = MealPlanView.For(trip, meals, foodItems).WithGear(trip, items);
             var view = trip.PackingList.View(items, trip.WaterCarriedGrams ?? 0m, mealPlan.StartingFoodGrams);
             return new TripView(trip, view.Entries, view.Sections, view.Weight, mealPlan, _clock.Today);
         }).ToList();
@@ -903,14 +1092,45 @@ public sealed class TripPlanner : IGearItemReferences, IFoodItemReferences, IMea
     /// </summary>
     internal async Task<IReadOnlyList<Trip>> RepointAsync(IReadOnlyDictionary<string, string> mergedInto) =>
         (await LoadTripsAsync())
-            .Where(trip => trip.PackingList.Uses(mergedInto))
-            .Select(trip => trip with { PackingList = trip.PackingList.Repoint(mergedInto), UpdatedAt = _clock.UtcNow })
+            .Where(trip => trip.PackingList.Uses(mergedInto) || GearItemIds([trip]).Any(mergedInto.ContainsKey))
+            .Select(trip => trip with
+            {
+                PackingList = trip.PackingList.Repoint(mergedInto),
+                Days = trip.Days.Select(day => day with { GearChanges = RepointGearChanges(day.GearChanges, mergedInto) }).ToList(),
+                UpdatedAt = _clock.UtcNow,
+            })
             .ToList();
 
-    /// <summary>The Trips whose Packing Lists use the Gear Item, by name, each once, so it can't be deleted from under them.</summary>
+    /// <summary>
+    /// A Resupply's Gear Changes moved onto the Gear Items merged into; where two end up on the same Gear Item, the first
+    /// is kept, as there's one change per Gear Item at a Resupply.
+    /// </summary>
+    private static IReadOnlyList<GearChange> RepointGearChanges(IReadOnlyList<GearChange> changes, IReadOnlyDictionary<string, string> mergedInto)
+    {
+        string Final(string id)
+        {
+            for (var step = 0; step < mergedInto.Count && mergedInto.TryGetValue(id, out var next); step++)
+            {
+                id = next;
+            }
+
+            return id;
+        }
+
+        return changes
+            .Select(change => change with { GearItemId = Final(change.GearItemId) })
+            .GroupBy(change => change.GearItemId)
+            .Select(group => group.First())
+            .ToList();
+    }
+
+    /// <summary>
+    /// The Trips whose Packing Lists or Gear Changes use the Gear Item, by name, each once, so it can't be deleted from
+    /// under them.
+    /// </summary>
     public async Task<IReadOnlyList<string>> FindUsesAsync(string gearItemId) =>
         (await LoadTripsAsync())
-            .Where(trip => trip.PackingList.Entries.Any(entry => entry.GearItemId == gearItemId))
+            .Where(trip => GearItemIds([trip]).Contains(gearItemId))
             .OrderBy(trip => trip.Name, StringComparer.OrdinalIgnoreCase)
             .Select(trip => $"Trip \"{trip.Name}\"")
             .ToList();
