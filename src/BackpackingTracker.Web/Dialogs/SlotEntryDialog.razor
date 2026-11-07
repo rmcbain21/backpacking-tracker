@@ -1,11 +1,21 @@
 @using BackpackingTracker.Core.Trips
-@* Changes how many of a Meal (or servings of a Food Item) a meal slot has, or takes it out of the slot. *@
+@* Changes how many of a Meal (or servings of a Food Item) a meal slot has, or takes it out of the slot. On a
+   Placeholder, also its label and estimates, and "Replace with…", which closes with ReplaceResult so the page can
+   open the picker. *@
 @inject AppCore App
 
 <MudDialog>
     <DialogContent>
-        <MudTextField @bind-Value="_quantityText" Label="@(Entry.MealId is null ? "Servings" : "How many")" InputMode="@(InputMode.@decimal)"
+        <MudTextField @bind-Value="_quantityText" Label="@(Entry.FoodItemId is null ? "How many" : "Servings")" InputMode="@(InputMode.@decimal)"
                       Immediate="true" Validation="@(new Func<string?, string?>(text => ServingsInput.Parse(text).Error))" Class="slot-quantity" />
+        @if (_placeholder is not null)
+        {
+            <PlaceholderEditor Fields="_placeholder" />
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.SwapHoriz" FullWidth="true"
+                       Class="mt-3 replace-placeholder" OnClick="() => MudDialog.Close(DialogResult.Ok(ReplaceResult))" Disabled="_busy">
+                Replace with…
+            </MudButton>
+        }
         @if (_problem is not null)
         {
             <MudAlert Severity="Severity.Warning" Class="mt-3" Dense="true">@_problem</MudAlert>
@@ -20,6 +30,9 @@
 </MudDialog>
 
 @code {
+    /// <summary>The dialog's result when "Replace with…" is tapped.</summary>
+    public const string ReplaceResult = "replace";
+
     [CascadingParameter]
     private IMudDialogInstance MudDialog { get; set; } = default!;
 
@@ -32,17 +45,38 @@
     [Parameter, EditorRequired]
     public SlotEntry Entry { get; set; } = default!;
 
+    [Parameter]
+    public UnitSystem UnitSystem { get; set; }
+
     private string? _quantityText;
+    private PlaceholderFields? _placeholder;
     private string? _problem;
     private bool _busy;
 
-    protected override void OnInitialized() => _quantityText = ServingsInput.Format(Entry.Quantity);
+    protected override void OnInitialized()
+    {
+        _quantityText = ServingsInput.Format(Entry.Quantity);
+        _placeholder = Entry.Placeholder is { } placeholder ? new PlaceholderFields(UnitSystem, placeholder) : null;
+    }
 
     private Task SaveAsync()
     {
-        var quantity = ServingsInput.Parse(_quantityText);
-        return quantity.Servings is { } amount
-            ? RunAsync(() => App.Trips.UpdateSlotEntryAsync(TripId, Date, Entry.Id, amount))
+        if (ServingsInput.Parse(_quantityText).Servings is not { } amount)
+        {
+            return Task.CompletedTask;
+        }
+
+        if (_placeholder is null)
+        {
+            return RunAsync(() => App.Trips.UpdateSlotEntryAsync(TripId, Date, Entry.Id, amount));
+        }
+
+        return _placeholder.Read() is { } placeholder
+            ? RunAsync(async () =>
+            {
+                await App.Trips.UpdatePlaceholderAsync(TripId, Date, Entry.Id, placeholder);
+                await App.Trips.UpdateSlotEntryAsync(TripId, Date, Entry.Id, amount);
+            })
             : Task.CompletedTask;
     }
 

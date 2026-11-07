@@ -49,6 +49,12 @@ public sealed record TripDay
     /// </summary>
     public IReadOnlyList<BoughtFood> Bought { get; init; } = [];
 
+    /// <summary>
+    /// On the first day of a Food Carry: its "To choose at the store" lines ticked as bought, each with its quantity when
+    /// ticked.
+    /// </summary>
+    public IReadOnlyList<BoughtPlaceholder> BoughtPlaceholders { get; init; } = [];
+
     /// <summary>The day's Meal Plan: what's in its Breakfast, Lunch, Dinner and Snacks slots, in the order added.</summary>
     public IReadOnlyList<SlotEntry> SlotEntries { get; init; } = [];
 
@@ -65,13 +71,22 @@ public sealed record TripDay
         (other.Date, other.Start, other.End, other.Campsite, other.PlannedDistanceMetres, other.ActualDistanceMetres, other.ElevationGainMetres, other.JournalNotes, other.Skipped) &&
         (Resupply, ResupplyPlace) == (other.Resupply, other.ResupplyPlace) &&
         SlotEntries.SequenceEqual(other.SlotEntries) &&
-        Bought.SequenceEqual(other.Bought);
+        Bought.SequenceEqual(other.Bought) &&
+        BoughtPlaceholders.SequenceEqual(other.BoughtPlaceholders);
 
     public override int GetHashCode() => HashCode.Combine(Date, Start, End, Campsite, JournalNotes, SlotEntries.Count);
 }
 
 /// <summary>A Food Item ticked as bought on a Food Carry's shopping list, with the servings the line had then.</summary>
 public sealed record BoughtFood(string FoodItemId, decimal Servings);
+
+/// <summary>A "To choose at the store" line ticked as bought: its slot and label, and the quantity it had then.</summary>
+public sealed record BoughtPlaceholder(MealSlot Slot, string? Label, decimal Quantity)
+{
+    /// <summary>The same line: the same slot and label, ignoring case.</summary>
+    public bool Matches(MealSlot slot, string? label) =>
+        Slot == slot && string.Equals(Label, label, StringComparison.OrdinalIgnoreCase);
+}
 
 /// <summary>What can be typed in on a Trip Day. Blank text and missing numbers leave a field empty.</summary>
 public sealed record TripDayDetails(

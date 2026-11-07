@@ -194,7 +194,7 @@ internal sealed class ConflictDescriber
         {
             var food = tripDay.SlotEntries
                 .Where(entry => entry.Slot == slot)
-                .Select(entry => $"{NameFor(entry.MealId ?? entry.FoodItemId ?? "")} ×{Number(entry.Quantity)}");
+                .Select(entry => $"{entry.Placeholder?.NameIn(slot) ?? NameFor(entry.MealId ?? entry.FoodItemId ?? "")} ×{Number(entry.Quantity)}");
             lines.Put($"{day} {slot.ToString().ToLowerInvariant()}", string.Join(", ", food));
         }
     }

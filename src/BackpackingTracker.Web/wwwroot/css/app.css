@@ -482,3 +482,11 @@ h1:focus {
 .meal-plan-day {
     scroll-margin-top: calc(var(--mud-appbar-height) + 8px);
 }
+
+/* A Placeholder (food not chosen yet): in italics after a small ? icon. */
+.placeholder-name .placeholder-icon {
+    font-size: 1rem;
+    vertical-align: -0.2em;
+    margin-right: 0.2em;
+    opacity: 0.7;
+}

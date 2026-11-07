@@ -220,6 +220,27 @@ public class SyncConflictTests
     }
 
     [Fact]
+    public async Task A_trip_conflict_shows_a_placeholder_by_its_label_or_its_slot()
+    {
+        await _phone.Sync.ConnectAsync();
+        await _laptop.Sync.ConnectAsync();
+        var day = new DateOnly(2026, 7, 1);
+        var trip = await _phone.Trips.CreateTripAsync("Wind Rivers", day, day);
+        await SyncAllAsync(_phone, _laptop);
+        Later();
+        await _phone.Trips.AddPlaceholderToSlotAsync(trip.Id, day, MealSlot.Breakfast, new PlaceholderFood(), 2m);
+        Later();
+        await _laptop.Trips.AddPlaceholderToSlotAsync(trip.Id, day, MealSlot.Breakfast, new PlaceholderFood("Diner"));
+
+        await SyncAllAsync(_phone, _laptop);
+
+        var conflict = Assert.Single(await _laptop.Sync.ListConflictsAsync());
+        Assert.Equal(
+            [("Day 1 breakfast", "Diner ×1", "Any breakfast ×2")],
+            conflict.Lines.Select(line => (line.Label, line.ThisDevice, line.OtherDevice)));
+    }
+
+    [Fact]
     public async Task A_record_that_differs_on_a_devices_first_sync_is_a_conflict()
     {
         // The laptop got the phone's tent from a backup, so it has the record but no sync history for it.

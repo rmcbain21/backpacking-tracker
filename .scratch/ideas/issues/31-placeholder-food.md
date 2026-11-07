@@ -1,6 +1,6 @@
 # 31: Placeholder food for a town Resupply
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Idea:** Came up after 27 shipped (2026-11-04). The shopping list works when every Food Item is known ahead of time: food from home, or a mail drop. A town Resupply is often different. I'm going to a store and don't know what it has, only that I need "3 breakfasts and a couple of dinners". I'd like to enter placeholders instead of picking exact Food Items, perhaps on the Shopping view.
 
@@ -53,3 +53,12 @@ Running example: a Resupply at **Kennedy Meadows on day 6**, days 6–8 in that 
 
 *Not tied in*
 - 18 (servings per package): no tie-in. A Placeholder has no package; only Food Item lines round up.
+
+*Implemented (2026-11-06)*
+- Core: `SlotEntry.Placeholder` (`PlaceholderFood`: label, estimated calories and weight for one, all optional); exactly one of MealId, FoodItemId and Placeholder is set. `PlaceholderFood.NameIn(slot)` gives the label or "Any breakfast" ("Any snack" for Snacks). `TripPlanner.AddPlaceholderToSlotAsync` (label trimmed, negative estimates refused; the same slot and label, ignoring case, adds to its quantity and unticks it), `UpdatePlaceholderAsync` (label and estimates; added so a wrong guess can be fixed), `ReplacePlaceholderWithMealAsync` / `ReplacePlaceholderWithFoodItemAsync` (same slot, quantity and eaten tick; merging with the same item already in the slot keeps the existing entry, eaten only if both were; Retired refused).
+- Counting: `MealPlanView.CurrentFigures` gives a Placeholder's estimates (blank as zero), so the day, Food Carry, food left, Consumable / Starting Pack Weight and eaten stats all include it. `WithoutWeight` / `WithoutCalories` counts on `SlotEntryView`, `DayMealPlan`, `FoodCarry` and `MealPlanView` drive the "(1 without a weight)" flags. Mark Completed skips Placeholders (never frozen); Reopen leaves them as they are. Meal Plan copy and Add day copy them, unticked.
+- Shopping: `FoodCarry.PlaceholderLines` (one `PlaceholderLine` per slot and label, in slot order, unlabelled first), `LineCount`, and `BoughtCount` over both kinds of line. Ticks are stored as `TripDay.BoughtPlaceholders` (slot, label, quantity when ticked) on the Food Carry's first day, next to the Food Item ticks; same rule (unticked when the quantity goes up). `SetPlaceholderBoughtAsync`; Reset and unmarking a Resupply clear them too.
+- Sync conflict view shows a Placeholder by its label or "Any breakfast".
+- Web: the slot's + dialog has a **Placeholder** row opening a small form (label, estimated calories, estimated weight with unit). The add dialog also crashed on two Placeholders in one slot (it keyed by Meal/Food Item id); fixed. Tapping a Placeholder opens its dialog with the same fields plus **Replace with…**, which reopens the picker in replace mode. Meals and Today tabs show Placeholders in italics after a ? icon, with "~400 cal · ~4.0 oz", "no weight", "no cal" or "no estimate". Day, Trip and Food Carry totals are flagged. Shopping adds a "To choose at the store" subheading: "Breakfast ×3 · ~12.0 oz", "Dinner: pizza in town ×1 · no weight". Bought counts include it.
+- Not done: Food left on the Today tab isn't flagged for Placeholders without a weight; a default estimate per slot (Settings) as noted above.
+- Tests: `PlaceholderTests` (17) and one in `SyncConflictTests`. Checked in headless Chromium at 390 px with a seeded 5-day Trip and a Resupply today: Today tab, By day figures and flags, adding a Placeholder through the dialog, Replace with Clif Bar, Shopping lines and a tick; no console errors.

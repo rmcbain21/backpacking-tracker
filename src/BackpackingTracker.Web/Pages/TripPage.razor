@@ -234,7 +234,7 @@ else if (_view is not null)
                     <div class="d-flex align-center ml-n2 today-slot-entry @(entryView.Entry.Eaten ? "eaten" : "")">
                         @EatenTick(todayPlan, entryView, name)
                         <MudText Typo="Typo.body2">
-                            @name@(entryView.Entry.Quantity == 1m ? "" : $" ×{ServingsInput.Format(entryView.Entry.Quantity)}")
+                            @EntryName(entryView, name)
                         </MudText>
                     </div>
                 }
@@ -297,7 +297,7 @@ else if (_view is not null)
             {
                 <MudText Typo="Typo.body2" Class="mud-text-secondary next-resupply">
                     @(next.FirstDate == view.Today
-                        ? $"Resupply today: {FoodCarryName(next)} · {next.BoughtCount} of {next.Lines.Count} bought"
+                        ? $"Resupply today: {FoodCarryName(next)} · {next.BoughtCount} of {next.LineCount} bought"
                         : $"Next resupply: {FoodCarryName(next)}, day {next.FirstDayNumber} (in {Plural(daysTo, "day")})")
                 </MudText>
             }
@@ -538,7 +538,7 @@ else if (_view is not null)
             <div class="d-flex justify-space-between">
                 <MudText Typo="Typo.body2">Food for the Trip</MudText>
                 <MudText Typo="Typo.body2" Class="text-nowrap">
-                    @NutritionInput.Calories(plan.Calories) · @UnitFormat.Weight(plan.FoodGrams, _unitSystem)
+                    @FoodTotals(plan.Calories, plan.WithoutCalories, plan.FoodGrams, plan.WithoutWeight)
                 </MudText>
             </div>
             <MudText Typo="Typo.caption" Class="mud-text-secondary">
@@ -566,7 +566,7 @@ else if (_view is not null)
                 <div class="d-flex align-center px-3 pt-3 pb-1">
                     <MudText Typo="Typo.subtitle2" Class="flex-grow-1">Day @dayPlan.DayNumber · @TripDates.Day(dayPlan.Day.Date)</MudText>
                     <MudText Typo="Typo.body2" Class="mud-text-secondary text-nowrap day-food-total">
-                        @(dayPlan.Day.SlotEntries.Count == 0 ? "Nothing planned" : $"{NutritionInput.Calories(dayPlan.Calories)} · {UnitFormat.Weight(dayPlan.FoodGrams, _unitSystem)}")
+                        @(dayPlan.Day.SlotEntries.Count == 0 ? "Nothing planned" : FoodTotals(dayPlan.Calories, dayPlan.WithoutCalories, dayPlan.FoodGrams, dayPlan.WithoutWeight))
                     </MudText>
                 </div>
                 @if (dayPlan.Day.Resupply && dayPlan.DayNumber > 1)
@@ -609,10 +609,10 @@ else if (_view is not null)
                              @onclick="() => Completed ? Task.CompletedTask : EditSlotEntryAsync(dayPlan, entryView, name)">
                             @EatenTick(dayPlan, entryView, name)
                             <MudText Typo="Typo.body2" Class="flex-grow-1">
-                                @name@(entryView.Entry.Quantity == 1m ? "" : $" ×{ServingsInput.Format(entryView.Entry.Quantity)}")
+                                @EntryName(entryView, name)
                             </MudText>
-                            <MudText Typo="Typo.body2" Class="mud-text-secondary text-nowrap">
-                                @NutritionInput.Calories(entryView.Calories) · @UnitFormat.Weight(entryView.WeightGrams, _unitSystem)
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary text-nowrap slot-entry-figures">
+                                @EntryFigures(entryView)
                             </MudText>
                         </div>
                     }
@@ -672,7 +672,7 @@ else if (_view is not null)
                     <div class="flex-grow-1">
                         <MudText Typo="Typo.subtitle2" HtmlTag="h3">@title</MudText>
                         <MudText Typo="Typo.body2" Class="mud-text-secondary food-carry-totals">
-                            @UnitFormat.Weight(carry.FoodGrams, _unitSystem) food · @NutritionInput.Calories(carry.Calories)@(carry.Lines.Count == 0 ? "" : $" · {carry.BoughtCount} of {carry.Lines.Count} bought")
+                            @UnitFormat.Weight(carry.FoodGrams, _unitSystem) food@(Without(carry.WithoutWeight, "a weight")) · @NutritionInput.Calories(carry.Calories)@Without(carry.WithoutCalories, "calories")@(carry.LineCount == 0 ? "" : $" · {carry.BoughtCount} of {carry.LineCount} bought")
                         </MudText>
                     </div>
                     <MudIcon Icon="@(open ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ExpandMore)" />
@@ -680,7 +680,7 @@ else if (_view is not null)
                 @if (open)
                 {
                     <MudDivider />
-                    @if (carry.Lines.Count == 0)
+                    @if (carry.LineCount == 0)
                     {
                         <MudText Typo="Typo.body2" Class="mud-text-secondary pa-3">Nothing planned for these days.</MudText>
                     }
@@ -698,6 +698,25 @@ else if (_view is not null)
                                 @ServingsText(line.Servings) · @UnitFormat.Weight(line.WeightGrams, _unitSystem)
                             </MudText>
                         </div>
+                    }
+                    @if (carry.PlaceholderLines.Count > 0)
+                    {
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary d-block px-3 pt-2 to-choose-heading" HtmlTag="h4">To choose at the store</MudText>
+                        @foreach (var line in carry.PlaceholderLines)
+                        {
+                            var name = PlaceholderLineName(line);
+                            <div class="d-flex align-center px-2 py-1 shopping-line placeholder-line @(Completed ? "" : "pick-row") @(line.Bought ? "bought" : "")"
+                                 role="checkbox" aria-checked="@(line.Bought ? "true" : "false")" aria-readonly="@(Completed ? "true" : "false")"
+                                 tabindex="@(Completed ? -1 : 0)" aria-label="@name"
+                                 @onclick="() => Completed ? Task.CompletedTask : TryAsync(() => App.Trips.SetPlaceholderBoughtAsync(TripId, carry.FirstDate, line.Slot, line.Label, !line.Bought))">
+                                <MudIcon Icon="@(line.Bought ? Icons.Material.Filled.CheckBox : Icons.Material.Filled.CheckBoxOutlineBlank)"
+                                         Color="@(line.Bought ? Color.Primary : Color.Default)" Class="mr-3" />
+                                <MudText Typo="Typo.body2" Class="flex-grow-1 shopping-name"><em>@name</em> ×@ServingsInput.Format(line.Quantity)</MudText>
+                                <MudText Typo="Typo.body2" Class="mud-text-secondary text-nowrap shopping-amount">
+                                    @PlaceholderLineWeight(line)
+                                </MudText>
+                            </div>
+                        }
                     }
                     @if (!Completed && carry.BoughtCount > 0)
                     {
@@ -718,6 +737,18 @@ else if (_view is not null)
     /// <summary>"days 5–9", or "day 5" for a one-day Food Carry.</summary>
     private static string DaysText(FoodCarry carry) =>
         carry.FirstDayNumber == carry.LastDayNumber ? $"day {carry.FirstDayNumber}" : $"days {carry.FirstDayNumber}–{carry.LastDayNumber}";
+
+    /// <summary>"Breakfast", or "Dinner: pizza in town" for a labelled one.</summary>
+    private static string PlaceholderLineName(PlaceholderLine line) =>
+        line.Label is null ? line.Slot.ToString() : $"{line.Slot}: {line.Label}";
+
+    /// <summary>
+    /// "~12 oz", "~12 oz (1 without a weight)" when some have no estimate, or "no weight" when none has one.
+    /// </summary>
+    private string PlaceholderLineWeight(PlaceholderLine line) =>
+        line.WeightGrams == 0 && line.WithoutWeight > 0
+            ? "no weight"
+            : $"~{WeightTotal(line.WeightGrams, line.WithoutWeight)}";
 
     private static string ServingsText(decimal servings) => $"{ServingsInput.Format(servings)} serving{(servings == 1m ? "" : "s")}";
 
@@ -967,6 +998,7 @@ else if (_view is not null)
         await LoadAsync();
     }
 
+    /// <summary>Opens a slot entry's dialog; for a Placeholder, "Replace with…" there opens the Meal and food picker.</summary>
     private async Task EditSlotEntryAsync(DayMealPlan dayPlan, SlotEntryView entryView, string name)
     {
         var parameters = new DialogParameters<SlotEntryDialog>
@@ -974,12 +1006,78 @@ else if (_view is not null)
             { d => d.TripId, TripId },
             { d => d.Date, dayPlan.Day.Date },
             { d => d.Entry, entryView.Entry },
+            { d => d.UnitSystem, _unitSystem },
         };
         var options = new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.ExtraSmall };
         var dialog = await DialogService.ShowAsync<SlotEntryDialog>(name, parameters, options);
+        if (await dialog.Result is { Canceled: false, Data: SlotEntryDialog.ReplaceResult })
+        {
+            await ReplacePlaceholderAsync(dayPlan, entryView, name);
+            return;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task ReplacePlaceholderAsync(DayMealPlan dayPlan, SlotEntryView entryView, string name)
+    {
+        var parameters = new DialogParameters<AddToSlotDialog>
+        {
+            { d => d.TripId, TripId },
+            { d => d.Date, dayPlan.Day.Date },
+            { d => d.Slot, entryView.Entry.Slot },
+            { d => d.ReplaceEntryId, entryView.Entry.Id },
+        };
+        var options = new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Small };
+        var dialog = await DialogService.ShowAsync<AddToSlotDialog>($"Replace {name}", parameters, options);
         await dialog.Result;
         await LoadAsync();
     }
+
+    /// <summary>A slot entry's name and quantity; a Placeholder's in italics with a small ? icon.</summary>
+    private static RenderFragment EntryName(SlotEntryView entryView, string name) => __builder =>
+    {
+        var quantity = entryView.Entry.Quantity == 1m ? "" : $" ×{ServingsInput.Format(entryView.Entry.Quantity)}";
+        if (entryView.IsPlaceholder)
+        {
+            <span class="placeholder-name"><MudIcon Icon="@Icons.Material.Outlined.HelpOutline" Size="Size.Small" Class="placeholder-icon" aria-label="Placeholder" /><em>@name</em>@quantity</span>
+        }
+        else
+        {
+            @name@quantity
+        }
+    };
+
+    /// <summary>
+    /// A slot entry's calories and weight: "~400 cal · ~4 oz" for a Placeholder's estimates, with "no cal" or "no weight"
+    /// for a blank one, or "no estimate" when both are.
+    /// </summary>
+    private string EntryFigures(SlotEntryView entryView)
+    {
+        if (!entryView.IsPlaceholder)
+        {
+            return $"{NutritionInput.Calories(entryView.Calories)} · {UnitFormat.Weight(entryView.WeightGrams, _unitSystem)}";
+        }
+
+        if (entryView.WithoutCalories && entryView.WithoutWeight)
+        {
+            return "no estimate";
+        }
+
+        var calories = entryView.WithoutCalories ? "no cal" : $"~{NutritionInput.Calories(entryView.Calories)}";
+        var weight = entryView.WithoutWeight ? "no weight" : $"~{UnitFormat.Weight(entryView.WeightGrams, _unitSystem)}";
+        return $"{calories} · {weight}";
+    }
+
+    /// <summary>"1,700 cal · 2 lb 2 oz", flagging Placeholders without an estimate: "2 lb 2 oz (1 without a weight)".</summary>
+    private string FoodTotals(decimal calories, int withoutCalories, decimal grams, int withoutWeight) =>
+        $"{NutritionInput.Calories(calories)}{Without(withoutCalories, "calories")} · {WeightTotal(grams, withoutWeight)}";
+
+    /// <summary>"2 lb 2 oz", or "2 lb 2 oz (1 without a weight)" when Placeholders without a weight count as zero.</summary>
+    private string WeightTotal(decimal grams, int withoutWeight) =>
+        $"{UnitFormat.Weight(grams, _unitSystem)}{Without(withoutWeight, "a weight")}";
+
+    private static string Without(int count, string what) => count == 0 ? "" : $" ({count} without {what})";
 
     private async Task SetWaterAsync()
     {

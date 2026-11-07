@@ -11,7 +11,9 @@ namespace BackpackingTracker.Core.Trips;
 /// <param name="Place">The Resupply's place name, or its day's start when blank; null from home or when both are blank.</param>
 /// <param name="Days">Its days' Meal Plans, in order; never empty.</param>
 /// <param name="Lines">Its shopping list: one line per Food Item, by name.</param>
-public sealed record FoodCarry(int Number, string? Place, IReadOnlyList<DayMealPlan> Days, IReadOnlyList<ShoppingLine> Lines)
+/// <param name="PlaceholderLines">Its Placeholders, "To choose at the store": one line per slot and label, in slot order.</param>
+public sealed record FoodCarry(
+    int Number, string? Place, IReadOnlyList<DayMealPlan> Days, IReadOnlyList<ShoppingLine> Lines, IReadOnlyList<PlaceholderLine> PlaceholderLines)
 {
     public bool FromHome => Number == 1;
 
@@ -30,7 +32,16 @@ public sealed record FoodCarry(int Number, string? Place, IReadOnlyList<DayMealP
 
     public decimal Calories => Days.Sum(day => day.Calories);
 
-    public int BoughtCount => Lines.Count(line => line.Bought);
+    /// <summary>The Placeholders without an estimated weight, counted as zero in <see cref="FoodGrams"/>.</summary>
+    public int WithoutWeight => Days.Sum(day => day.WithoutWeight);
+
+    /// <summary>The Placeholders without estimated calories, counted as zero in <see cref="Calories"/>.</summary>
+    public int WithoutCalories => Days.Sum(day => day.WithoutCalories);
+
+    /// <summary>Every line on the shopping list: Food Items and Placeholders.</summary>
+    public int LineCount => Lines.Count + PlaceholderLines.Count;
+
+    public int BoughtCount => Lines.Count(line => line.Bought) + PlaceholderLines.Count(line => line.Bought);
 
     /// <summary>
     /// Splits the Trip's days into Food Carries at each Resupply day (one Food Carry when there's none), each with its
@@ -54,7 +65,38 @@ public sealed record FoodCarry(int Number, string? Place, IReadOnlyList<DayMealP
                 i + 1,
                 i == 0 ? null : run[0].Day.ResupplyPlace ?? run[0].Day.Start,
                 run,
-                ShoppingLinesFor(run, meals, foodItems)))
+                ShoppingLinesFor(run, meals, foodItems),
+                PlaceholderLinesFor(run)))
+            .ToList();
+    }
+
+    /// <summary>
+    /// The days' Placeholders totalled per slot and label (ignoring case): their quantities, and their estimated weights
+    /// and calories (a blank one as zero, and counted). In slot order, unlabelled first, then by label.
+    /// </summary>
+    private static IReadOnlyList<PlaceholderLine> PlaceholderLinesFor(IReadOnlyList<DayMealPlan> days)
+    {
+        var bought = days[0].Day.BoughtPlaceholders;
+        return days
+            .SelectMany(day => day.Entries)
+            .Where(e => e.IsPlaceholder)
+            .GroupBy(e => (e.Entry.Slot, Label: e.Entry.Placeholder!.Label?.ToUpperInvariant()))
+            .Select(group =>
+            {
+                var (slot, label) = (group.Key.Slot, group.First().Entry.Placeholder!.Label);
+                var quantity = group.Sum(e => e.Entry.Quantity);
+                return new PlaceholderLine(
+                    slot,
+                    label,
+                    quantity,
+                    group.Sum(e => e.WeightGrams),
+                    group.Sum(e => e.Calories),
+                    group.Count(e => e.WithoutWeight),
+                    bought.Any(tick => tick.Matches(slot, label) && tick.Quantity >= quantity));
+            })
+            .OrderBy(line => line.Slot)
+            .ThenBy(line => line.Label is not null)
+            .ThenBy(line => line.Label, StringComparer.OrdinalIgnoreCase)
             .ToList();
     }
 
@@ -111,3 +153,11 @@ public sealed record FoodCarry(int Number, string? Place, IReadOnlyList<DayMealP
 /// </summary>
 /// <param name="Name">Null if the Food Item was deleted on another device.</param>
 public sealed record ShoppingLine(string FoodItemId, string? Name, decimal Servings, decimal WeightGrams, bool Bought);
+
+/// <summary>
+/// Placeholders to choose at the store for a Food Carry, those in one slot with one label (or none): "Breakfast ×3 · ~12 oz",
+/// "Dinner: pizza in town ×1". Bought on the same rule as a Food Item line: it's unticked if its quantity goes up.
+/// </summary>
+/// <param name="WithoutWeight">How many of its Placeholders have no estimated weight, counted as zero.</param>
+public sealed record PlaceholderLine(
+    MealSlot Slot, string? Label, decimal Quantity, decimal WeightGrams, decimal Calories, int WithoutWeight, bool Bought);

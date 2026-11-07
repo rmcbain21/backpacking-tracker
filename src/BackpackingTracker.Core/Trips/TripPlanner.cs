@@ -114,8 +114,11 @@ public sealed class TripPlanner : IGearItemReferences, IFoodItemReferences, IMea
             Status = TripStatus.Completed,
             OpenEnded = false,
             PackingList = trip.PackingList.Freeze(items),
-            // A slot entry whose Meal or Food Item is gone is left unfrozen, so it still counts for nothing.
-            Days = WithSlotEntries(trip, entry => entry with { Frozen = MealPlanView.CurrentFigures(entry, meals, foodItems) }),
+            // A slot entry whose Meal or Food Item is gone is left unfrozen, so it still counts for nothing. A
+            // Placeholder is left as it is: its estimates are already fixed numbers.
+            Days = WithSlotEntries(trip, entry => entry.IsPlaceholder
+                ? entry
+                : entry with { Frozen = MealPlanView.CurrentFigures(entry, meals, foodItems) }),
         });
     }
 
@@ -323,6 +326,114 @@ public sealed class TripPlanner : IGearItemReferences, IFoodItemReferences, IMea
             new SlotEntry { Id = Guid.NewGuid().ToString(), Slot = slot, FoodItemId = foodItemId, Quantity = quantity });
     }
 
+    /// <summary>
+    /// Puts a Placeholder (food not chosen yet) in one of the Trip Day's slots, with its label and estimates for one
+    /// (all optional) and the quantity (1 unless given). If the slot already has a Placeholder with that label (ignoring
+    /// case, or both unlabelled), adds to its quantity instead (and unticks it if eaten), keeping its estimates.
+    /// </summary>
+    public async Task<SlotEntry> AddPlaceholderToSlotAsync(
+        string tripId, DateOnly date, MealSlot slot, PlaceholderFood placeholder, decimal quantity = 1m)
+    {
+        var checkedPlaceholder = Checked(placeholder);
+        return await AddToSlotAsync(tripId, date, slot, quantity,
+            entry => entry.Placeholder is { } other && SameLabel(other.Label, checkedPlaceholder.Label),
+            new SlotEntry { Id = Guid.NewGuid().ToString(), Slot = slot, Placeholder = checkedPlaceholder, Quantity = quantity });
+    }
+
+    /// <summary>Changes a Placeholder's label and estimates, keeping its slot, quantity and eaten tick.</summary>
+    public async Task UpdatePlaceholderAsync(string tripId, DateOnly date, string slotEntryId, PlaceholderFood placeholder)
+    {
+        var checkedPlaceholder = Checked(placeholder);
+        await ChangeDayAsync(tripId, date, day =>
+        {
+            FindPlaceholder(day, slotEntryId);
+            return day with
+            {
+                SlotEntries = day.SlotEntries.Select(entry => entry.Id == slotEntryId ? entry with { Placeholder = checkedPlaceholder } : entry).ToList(),
+            };
+        });
+    }
+
+    /// <summary>
+    /// Replaces a Placeholder with a Meal in the same slot, keeping its quantity and eaten tick ("Dinner ×2" becomes
+    /// "Ramen Bomb ×2"). If the slot already has that Meal, the two become one entry, ticked as eaten only if both were.
+    /// Retired Meals can't be chosen.
+    /// </summary>
+    public async Task ReplacePlaceholderWithMealAsync(string tripId, DateOnly date, string slotEntryId, string mealId)
+    {
+        var meal = await _meals.GetMealAsync(mealId) ?? throw new RuleViolationException("That Meal no longer exists.");
+        if (meal.Meal.Retired)
+        {
+            throw new RuleViolationException($"{meal.Meal.Name} is Retired, so it can't be added to the Meal Plan.");
+        }
+
+        await ReplacePlaceholderAsync(tripId, date, slotEntryId, entry => entry.MealId == mealId,
+            placeholder => placeholder with { Placeholder = null, MealId = mealId });
+    }
+
+    /// <summary>Replaces a Placeholder with a Food Item, as ReplacePlaceholderWithMealAsync does with a Meal.</summary>
+    public async Task ReplacePlaceholderWithFoodItemAsync(string tripId, DateOnly date, string slotEntryId, string foodItemId)
+    {
+        var item = await _food.GetFoodItemAsync(foodItemId) ?? throw new RuleViolationException("That Food Item no longer exists.");
+        if (item.Retired)
+        {
+            throw new RuleViolationException($"{item.Name} is Retired, so it can't be added to the Meal Plan.");
+        }
+
+        await ReplacePlaceholderAsync(tripId, date, slotEntryId, entry => entry.FoodItemId == foodItemId,
+            placeholder => placeholder with { Placeholder = null, FoodItemId = foodItemId });
+    }
+
+    private async Task ReplacePlaceholderAsync(
+        string tripId, DateOnly date, string slotEntryId, Func<SlotEntry, bool> sameThing, Func<SlotEntry, SlotEntry> replace) =>
+        await ChangeDayAsync(tripId, date, day =>
+        {
+            var placeholder = FindPlaceholder(day, slotEntryId);
+            var existing = day.SlotEntries.FirstOrDefault(entry => entry.Slot == placeholder.Slot && sameThing(entry));
+            if (existing is null)
+            {
+                return day with { SlotEntries = day.SlotEntries.Select(entry => entry.Id == slotEntryId ? replace(entry) : entry).ToList() };
+            }
+
+            // A swap, not more food: the merged entry stays eaten only if both were.
+            var merged = existing with
+            {
+                Quantity = existing.Quantity + placeholder.Quantity,
+                Eaten = existing.Eaten && placeholder.Eaten,
+            };
+            return day with
+            {
+                SlotEntries = day.SlotEntries
+                    .Where(entry => entry.Id != slotEntryId)
+                    .Select(entry => entry.Id == existing.Id ? merged : entry)
+                    .ToList(),
+            };
+        });
+
+    private static SlotEntry FindPlaceholder(TripDay day, string slotEntryId)
+    {
+        var entry = FindSlotEntry(day, slotEntryId);
+        return entry.IsPlaceholder ? entry : throw new RuleViolationException("That isn't a Placeholder.");
+    }
+
+    /// <summary>A Placeholder as typed in: its label trimmed (blank is none), its estimates not negative.</summary>
+    private static PlaceholderFood Checked(PlaceholderFood placeholder)
+    {
+        if (placeholder.Calories < 0)
+        {
+            throw new RuleViolationException("Calories can't be negative.");
+        }
+
+        if (placeholder.WeightGrams < 0)
+        {
+            throw new RuleViolationException("A weight can't be negative.");
+        }
+
+        return placeholder with { Label = Trimmed(placeholder.Label) };
+    }
+
+    private static bool SameLabel(string? label, string? other) => string.Equals(label, other, StringComparison.OrdinalIgnoreCase);
+
     private async Task<SlotEntry> AddToSlotAsync(
         string tripId, DateOnly date, MealSlot slot, decimal quantity, Func<SlotEntry, bool> sameThing, SlotEntry newEntry)
     {
@@ -418,6 +529,11 @@ public sealed class TripPlanner : IGearItemReferences, IFoodItemReferences, IMea
         // Kept: what's still in use. Retired things are hidden from new plans; deleted ones can't be referred to.
         bool Keep(SlotEntry entry)
         {
+            if (entry.IsPlaceholder)
+            {
+                return true;
+            }
+
             if (Describe(entry) is not { } found)
             {
                 return false;
@@ -497,7 +613,7 @@ public sealed class TripPlanner : IGearItemReferences, IFoodItemReferences, IMea
 
         await ChangeDayAsync(tripId, date, day => resupply
             ? day with { Resupply = true, ResupplyPlace = Trimmed(place) }
-            : day with { Resupply = false, ResupplyPlace = null, Bought = [] });
+            : day with { Resupply = false, ResupplyPlace = null, Bought = [], BoughtPlaceholders = [] });
     }
 
     /// <summary>
@@ -517,11 +633,28 @@ public sealed class TripPlanner : IGearItemReferences, IFoodItemReferences, IMea
         await ChangeDayAsync(tripId, foodCarryStart, day => day with { Bought = ticks.ToList() });
     }
 
+    /// <summary>
+    /// Ticks a "To choose at the store" line (its slot and label) on the shopping list of the Food Carry starting on that
+    /// date as bought, or unticks it, on the same rule as SetBoughtAsync: the tick is lost if its quantity goes up.
+    /// </summary>
+    public async Task SetPlaceholderBoughtAsync(string tripId, DateOnly foodCarryStart, MealSlot slot, string? label, bool bought)
+    {
+        var (_, carry) = await GetFoodCarryAsync(tripId, foodCarryStart);
+        var line = carry.PlaceholderLines.SingleOrDefault(l => l.Slot == slot && SameLabel(l.Label, Trimmed(label)))
+            ?? throw new RuleViolationException("That is no longer on the shopping list.");
+
+        var kept = carry.PlaceholderLines
+            .Where(l => l.Bought && l != line)
+            .Select(l => new BoughtPlaceholder(l.Slot, l.Label, l.Quantity));
+        var ticks = bought ? kept.Append(new BoughtPlaceholder(line.Slot, line.Label, line.Quantity)) : kept;
+        await ChangeDayAsync(tripId, foodCarryStart, day => day with { BoughtPlaceholders = ticks.ToList() });
+    }
+
     /// <summary>Unticks everything on the shopping list of the Food Carry starting on that date.</summary>
     public async Task ResetBoughtAsync(string tripId, DateOnly foodCarryStart)
     {
         await GetFoodCarryAsync(tripId, foodCarryStart);
-        await ChangeDayAsync(tripId, foodCarryStart, day => day with { Bought = [] });
+        await ChangeDayAsync(tripId, foodCarryStart, day => day with { Bought = [], BoughtPlaceholders = [] });
     }
 
     private async Task<(TripView View, FoodCarry Carry)> GetFoodCarryAsync(string tripId, DateOnly foodCarryStart)

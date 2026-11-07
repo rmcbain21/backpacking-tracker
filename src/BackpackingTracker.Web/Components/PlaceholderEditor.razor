@@ -1,0 +1,22 @@
+@* A Placeholder's fields: an optional label, and optional estimates of the calories and weight of one. *@
+
+<MudTextField @bind-Value="Fields.Label" Label="Label (optional, such as pizza in town)" Immediate="true" Class="placeholder-label" />
+<MudTextField @bind-Value="Fields.CaloriesText" Label="Estimated calories" InputMode="@(InputMode.@decimal)" Immediate="true"
+              Class="placeholder-calories"
+              Validation="@(new Func<string?, string?>(text => NutritionInput.ParseEstimatedCalories(text).Error))" />
+<div class="d-flex gap-3">
+    <MudTextField @bind-Value="Fields.WeightText" Label="Estimated weight" InputMode="@(InputMode.@decimal)" Immediate="true"
+                  Class="flex-grow-1 placeholder-weight" Validation="@(new Func<string?, string?>(Fields.ValidateWeight))" />
+    <MudSelect T="WeightUnit" Value="Fields.WeightUnit" ValueChanged="Fields.ChangeWeightUnit" Label="Unit" Class="weight-unit">
+        @foreach (var unit in WeightInput.GearUnits)
+        {
+            <MudSelectItem Value="unit">@WeightInput.Label(unit)</MudSelectItem>
+        }
+    </MudSelect>
+</div>
+<MudText Typo="Typo.caption" Class="mud-text-secondary">Estimates are for one. Leave one blank if unsure; it counts as zero.</MudText>
+
+@code {
+    [Parameter, EditorRequired]
+    public PlaceholderFields Fields { get; set; } = default!;
+}

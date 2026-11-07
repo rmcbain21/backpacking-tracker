@@ -25,6 +25,12 @@ public static class NutritionInput
         return ParseAmount(text, "Enter a number, like 250.", "Calories can't be negative.", decimals: 0);
     }
 
+    /// <summary>An estimate of calories, such as a Placeholder's: optional, to the nearest whole calorie; blank means none.</summary>
+    public static NutritionParseResult ParseEstimatedCalories(string? text) =>
+        string.IsNullOrWhiteSpace(text)
+            ? new NutritionParseResult(null, null)
+            : ParseAmount(text, "Enter a number, like 400.", "Calories can't be negative.", decimals: 0);
+
     /// <summary>Protein is optional, in grams to 0.1 g; blank means not recorded.</summary>
     public static NutritionParseResult ParseProtein(string? text) =>
         string.IsNullOrWhiteSpace(text)
